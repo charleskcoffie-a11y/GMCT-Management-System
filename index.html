@@ -7,6 +7,8 @@
     <link rel="manifest" href="./manifest.json" />
     <meta name="theme-color" content="#4338ca" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Add Babel Standalone for in-browser TSX and JSX transpilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script type="importmap">
       {
         "imports": {
@@ -43,7 +45,12 @@
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    <!-- 
+      Update script type to "text/babel" and add data-presets to tell Babel
+      how to translate the React (JSX) and TypeScript code.
+      data-type="module" is added to ensure import/export statements work correctly.
+    -->
+    <script type="text/babel" data-presets="react,typescript" data-type="module" src="./index.tsx"></script>
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>
