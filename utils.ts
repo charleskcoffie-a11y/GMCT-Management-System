@@ -2,6 +2,36 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Entry, EntryType, Member, Method, User, UserRole, AttendanceStatus, Settings, WeeklyHistoryRecord } from './types';
 
+// --- URL & Path Helpers ---
+
+/**
+ * Calculates the absolute base URL of the application.
+ * This is crucial for routing and asset loading, especially on platforms
+ * like GitHub Pages where the app lives in a subdirectory.
+ * @returns {string} The absolute base URL, ending with a slash.
+ */
+export function getAppBaseUrl(): string {
+  const loc = window.location;
+  
+  // Handling for GitHub Pages: https://<user>.github.io/<repo>/...
+  if (loc.hostname.endsWith('github.io')) {
+    const segments = loc.pathname.split('/');
+    const repoName = segments[1]; // The first part of the path is the repo name
+    if (repoName) {
+      // The base URL is the origin + repo name
+      return `${loc.origin}/${repoName}/`;
+    }
+  }
+
+  // For all other environments (local dev, standard hosting), the base is the
+  // directory containing the current HTML file.
+  const path = loc.pathname;
+  const basePath = path.substring(0, path.lastIndexOf('/') + 1);
+  
+  return `${loc.origin}${basePath}`;
+}
+
+
 // --- String & Sanitization ---
 
 export function sanitizeString(input: any): string {
