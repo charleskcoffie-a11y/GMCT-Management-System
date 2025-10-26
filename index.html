@@ -2,6 +2,19 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- This script dynamically sets the <base> tag, which is crucial for routing on GitHub Pages -->
+    <script>
+      (function() {
+        const path = window.location.pathname;
+        const repoName = path.split('/')[1];
+        if (repoName) {
+          const base = document.createElement('base');
+          // The href needs to start and end with a slash for correct path resolution.
+          base.href = '/' + repoName + '/';
+          document.head.prepend(base);
+        }
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GMCT Management System</title>
     <link rel="manifest" href="./manifest.json" />
