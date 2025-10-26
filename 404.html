@@ -4,19 +4,24 @@
     <meta charset="UTF-8" />
     <!--
       This inline script is the definitive fix for GitHub Pages deployment.
-      It runs before any other script, calculates the absolute base path of the app,
-      and injects a <base> tag. This ensures all relative paths for assets
-      (like ./index.tsx) resolve correctly from the very start.
+      It's simpler and more robust, specifically targeting the GH Pages URL structure.
+      It correctly identifies the base path (e.g., /repo-name/) and injects a <base> tag,
+      which fixes the "Invalid URL" crash and allows all assets to load correctly.
     -->
     <script>
       (function() {
         const loc = window.location;
         const path = loc.pathname;
-        // Handles both root deployment and sub-directory deployment (like GitHub Pages)
-        const basePath = path.substring(0, path.lastIndexOf('/') + 1);
-        // The base tag must have an absolute URL
-        const absoluteUrl = loc.origin + basePath;
+        // The goal is to find the base directory path, which must end with a '/'.
+        // For 'https://user.github.io/repo/page', the base path is '/repo/'.
+        const segments = path.split('/').filter(Boolean);
+        let basePath = '/'; // Default for root deployment
+        if (loc.hostname.includes('github.io') && segments.length > 0) {
+          // On GitHub Pages, the base path is always '/<repo-name>/'
+          basePath = '/' + segments[0] + '/';
+        }
         
+        const absoluteUrl = loc.origin + basePath;
         const baseTag = document.createElement('base');
         baseTag.href = absoluteUrl;
         document.head.prepend(baseTag);
