@@ -2,7 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- The <base> tag is now injected dynamically by index.tsx to ensure correct pathing -->
+    <!--
+      This inline script is the definitive fix for GitHub Pages deployment.
+      It runs before any other script, calculates the absolute base path of the app,
+      and injects a <base> tag. This ensures all relative paths for assets
+      (like ./index.tsx) resolve correctly from the very start.
+    -->
+    <script>
+      (function() {
+        const loc = window.location;
+        const path = loc.pathname;
+        // Handles both root deployment and sub-directory deployment (like GitHub Pages)
+        const basePath = path.substring(0, path.lastIndexOf('/') + 1);
+        // The base tag must have an absolute URL
+        const absoluteUrl = loc.origin + basePath;
+        
+        const baseTag = document.createElement('base');
+        baseTag.href = absoluteUrl;
+        document.head.prepend(baseTag);
+      }());
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GMCT Management System</title>
     <link rel="manifest" href="./manifest.json" />

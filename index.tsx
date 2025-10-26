@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { getAppBaseUrl } from './utils';
 
 // --- Global Failsafe Error Handler ---
 // This code runs before React and will catch any critical startup errors.
@@ -55,23 +54,11 @@ window.addEventListener('unhandledrejection', handleError);
 // --- End of Failsafe ---
 
 try {
-  // --- Dynamic Base URL Injection ---
-  // This is the definitive fix for GitHub Pages deployment. It programmatically
-  // calculates the correct base URL and injects the <base> tag, which must
-  // happen before any other script relies on relative paths.
-  const baseUrl = getAppBaseUrl();
-  if (!document.querySelector('base')) {
-    const baseTag = document.createElement('base');
-    baseTag.href = baseUrl;
-    document.head.prepend(baseTag);
-  }
-  // --- End of Injection ---
-
   // Register Service Worker for PWA Offline Functionality
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      // Use the calculated baseUrl to correctly resolve the sw.js path.
-      const swUrl = new URL('sw.js', baseUrl).href;
+      // document.baseURI is now guaranteed to be correct because of the inline script in index.html
+      const swUrl = new URL('sw.js', document.baseURI).href;
       navigator.serviceWorker.register(swUrl)
         .then(registration => {
           console.log('Service Worker registered with scope:', registration.scope);
