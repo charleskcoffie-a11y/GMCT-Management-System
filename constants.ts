@@ -22,5 +22,5 @@ export const SHAREPOINT_ENTRIES_LIST_NAME = "Finance_Records";
 export const SHAREPOINT_GRAPH_URL = "https://graph.microsoft.com/v1.0";
 
 // --- App Defaults ---
-export const DEFAULT_CURRENCY = 'CAD';
+export const DEFAULT_CURRENCY = 'USD';
 export const DEFAULT_MAX_CLASSES = 14;

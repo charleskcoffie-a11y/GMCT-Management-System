@@ -21,7 +21,10 @@ export function capitalize(str: string): string {
 // --- Data Type Sanitizers ---
 
 export function sanitizeEntry(raw: any): Entry {
-    const date = raw.date ? new Date(raw.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const parsedDate = new Date(raw.date);
+    const date = (raw.date && !isNaN(parsedDate.getTime()))
+        ? parsedDate.toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
     
     return {
         id: sanitizeString(raw.id) || uuidv4(),
@@ -64,10 +67,15 @@ export function sanitizeSettings(raw: any): Settings {
 
 export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
     const attendance = raw.attendance && typeof raw.attendance === 'object' ? raw.attendance : {};
+
+    const parsedDate = new Date(raw.dateOfService);
+    const dateOfService = (raw.dateOfService && !isNaN(parsedDate.getTime()))
+        ? parsedDate.toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
     
     return {
         id: sanitizeString(raw.id) || uuidv4(),
-        dateOfService: raw.dateOfService ? new Date(raw.dateOfService).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+        dateOfService: dateOfService,
         societyName: sanitizeString(raw.societyName),
         officiant: sanitizeString(raw.officiant),
         liturgist: sanitizeString(raw.liturgist),

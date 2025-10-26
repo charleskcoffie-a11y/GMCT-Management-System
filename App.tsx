@@ -63,7 +63,7 @@ const App: React.FC = () => {
             if (session) {
                 setCloud({ ready: true, signedIn: true, account: session.account, accessToken: session.accessToken, message: "Signed in silently." });
             } else {
-                setCloud(c => ({...c, ready: true, message: "Ready for manual sign-in."}));
+                setCloud({ ready: true, signedIn: false, message: "Ready for manual sign-in." });
             }
         };
         attemptSilentSignin();
