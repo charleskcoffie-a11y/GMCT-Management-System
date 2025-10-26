@@ -53,24 +53,54 @@ window.addEventListener('error', handleError);
 window.addEventListener('unhandledrejection', handleError);
 // --- End of Failsafe ---
 
-try {
-  // Register Service Worker for PWA Offline Functionality
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      // document.baseURI is now guaranteed to be correct because of the inline script in index.html
-      const swUrl = new URL('sw.js', document.baseURI).href;
-      navigator.serviceWorker.register(swUrl)
-        .then(registration => {
-          console.log('Service Worker registered with scope:', registration.scope);
-        })
-        .catch(error => {
-          console.error('Service Worker registration failed:', error);
-        });
-    });
+const registerServiceWorker = () => {
+  // A robust check to determine if the app is running inside a sandboxed or
+  // cross-origin iframe. Service Worker registration is blocked by browsers in
+  // these environments for security reasons, which causes the "invalid state" error.
+  // This detects the condition and skips registration to prevent the error.
+  let isSandboxed = false;
+  if (window.self !== window.top) {
+    try {
+      // If this access fails, we are in a cross-origin frame.
+      const topHostname = window.top.location.hostname;
+    } catch (e) {
+      isSandboxed = true;
+    }
   }
 
+  if (isSandboxed) {
+    // Silently skip registration in sandboxed environments. The console warning
+    // was causing confusion, so it has been removed.
+    return;
+  }
+  
+  if ('serviceWorker' in navigator) {
+    // To eliminate any ambiguity in path resolution, especially with the <base> tag,
+    // we now construct an absolute URL for the service worker script. This is more robust
+    // than a relative path and can prevent "Invalid state" errors if the browser is
+    // confused about the script's origin.
+    const swUrl = new URL('sw.js', document.baseURI).href;
+    
+    navigator.serviceWorker.register(swUrl)
+      .then(registration => {
+        console.log('Service Worker registered with scope:', registration.scope);
+      })
+      .catch(error => {
+        console.error('Service Worker registration failed:', error);
+      });
+  }
+};
+
+// --- App Initialization ---
+// All initialization logic is now bundled here to run after the page is fully loaded.
+const initialize = () => {
+  // 1. Register the Service Worker for offline capabilities.
+  registerServiceWorker();
+  
+  // 2. Render the React application.
   const rootElement = document.getElementById('root');
   if (!rootElement) {
+    // Use our global handler for this fatal error.
     throw new Error("Fatal: Could not find the #root element in the HTML to mount the application.");
   }
 
@@ -80,9 +110,26 @@ try {
       <App />
     </React.StrictMode>
   );
+};
 
-} catch(error) {
-  // If React itself fails to initialize synchronously, catch it and display it.
+
+// --- Startup Logic ---
+// We wrap the entire app startup in a try/catch to use our failsafe handler.
+try {
+  // The most reliable way to ensure the document is ready is to wait for the 'load' event.
+  // This event fires after the entire page, including all dependent resources (like stylesheets and images), has finished loading.
+  // This avoids race conditions and the "invalid state" error during service worker registration by ensuring nothing
+  // happens until the document is in a completely stable state.
+  
+  // We also check if the page is ALREADY loaded, in case this script runs late.
+  if (document.readyState === 'complete') {
+    initialize();
+  } else {
+    // Use { once: true } to ensure the handler only runs once.
+    window.addEventListener('load', initialize, { once: true });
+  }
+} catch (error) {
+  // This will catch any synchronous errors during the setup phase.
   handleError({
       preventDefault: () => {},
       error: error
