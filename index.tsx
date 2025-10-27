@@ -123,7 +123,7 @@ const initialize = () => {
 
 // --- Startup Logic ---
 // We wrap the entire app startup in a try/catch to use our failsafe handler.
-// Since this script is deferred and at the end of `<body>`, the DOM is ready,
+// Since this script is deferred and at the end of <body>, the DOM is ready,
 // so we can initialize immediately without waiting for any further events.
 try {
   initialize();
