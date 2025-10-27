@@ -95,7 +95,10 @@ const registerServiceWorker = () => {
 // All initialization logic is now bundled here to run after the page is fully loaded.
 const initialize = () => {
   // 1. Register the Service Worker for offline capabilities.
-  registerServiceWorker();
+  // FIX: Temporarily disabled the Service Worker. A "stuck" or corrupt
+  // service worker cache is the most likely cause of a persistent blank
+  // screen. Disabling it forces the browser to load fresh files from the network.
+  // registerServiceWorker();
   
   // 2. Render the React application.
   const rootElement = document.getElementById('root');
