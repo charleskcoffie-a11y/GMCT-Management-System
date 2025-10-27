@@ -67,7 +67,18 @@
   <link rel="stylesheet" href="/index.css">
 </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Failsafe Loading Message -->
+      <!-- This is displayed if the main JavaScript fails to load or execute. -->
+      <!-- It will be automatically removed by index.tsx once React is ready. -->
+      <div style="font-family: ui-sans-serif, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f8fafc;">
+        <div style="text-align: center; padding: 2rem; background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0;">
+          <h1 style="font-size: 1.5rem; font-weight: 600; color: #1e293b;">Loading Application...</h1>
+          <p style="margin-top: 1rem; color: #475569;">If this message remains on screen for more than a few seconds, a critical error likely occurred.</p>
+          <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #64748b;">Please try a hard refresh (<strong style="font-weight: 600;">Ctrl+Shift+R</strong> or <strong style="font-weight: 600;">Cmd+Shift+R</strong>) or check the browser's developer console for errors.</p>
+        </div>
+      </div>
+    </div>
     <script type="module" src="./index.tsx"></script>
   <script type="module" src="/index.tsx"></script>
 </body>

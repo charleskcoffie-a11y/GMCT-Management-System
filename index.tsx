@@ -95,10 +95,9 @@ const registerServiceWorker = () => {
 // All initialization logic is now bundled here to run after the page is fully loaded.
 const initialize = () => {
   // 1. Register the Service Worker for offline capabilities.
-  // FIX: Temporarily disabled the Service Worker. A "stuck" or corrupt
-  // service worker cache is the most likely cause of a persistent blank
-  // screen. Disabling it forces the browser to load fresh files from the network.
-  // registerServiceWorker();
+  // Re-enabled with a new, more robust network-first caching strategy in sw.js
+  // to prevent stale cache issues that cause blank screens.
+  registerServiceWorker();
   
   // 2. Render the React application.
   const rootElement = document.getElementById('root');
@@ -106,6 +105,10 @@ const initialize = () => {
     // Use our global handler for this fatal error.
     throw new Error("Fatal: Could not find the #root element in the HTML to mount the application.");
   }
+
+  // This is the critical step that removes the failsafe loading message
+  // from index.html right before React takes over.
+  rootElement.innerHTML = '';
 
   const root = ReactDOM.createRoot(rootElement);
   root.render(
