@@ -8,29 +8,26 @@
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function(registrations) {
       if (registrations.length === 0) {
-        console.log('No service workers found to unregister.');
+        console.log('No old service workers found to unregister.');
         return;
       }
       for (let registration of registrations) {
         registration.unregister().then(function(boolean) {
           if (boolean) {
-            console.log('Successfully unregistered service worker for scope:', registration.scope);
+            console.log('Successfully unregistered an old service worker for scope:', registration.scope);
           } else {
-            console.log('Failed to unregister service worker for scope:', registration.scope);
+            // This is not a critical error, might just mean it was already unregistered.
+            console.warn('Failed to unregister an old service worker for scope:', registration.scope);
           }
         });
       }
-      // After unregistering, a hard reload is often necessary for the changes
-      // to take full effect immediately. We can prompt the user or do it automatically.
-      // For a seamless fix, we'll reload once.
-      console.log('All service workers unregistered. Reloading the page to ensure a clean start.');
-      // Using a flag in sessionStorage to prevent an infinite reload loop.
-      if (!sessionStorage.getItem('sw_unregistered')) {
-        sessionStorage.setItem('sw_unregistered', 'true');
-        window.location.reload();
-      }
+      // The forced reload has been removed. By simply unregistering the old worker,
+      // the browser will bypass its cache for this page load and fetch fresh assets
+      // from the network, which solves the "stuck" cache problem without causing
+      // a race condition. The new, correct service worker will be installed by
+      // index.tsx and will take over on the next page load.
     }).catch(function(err) {
-      console.error('Service Worker unregistration failed: ', err);
+      console.error('Service Worker unregistration check failed: ', err);
     });
   }
 })();
