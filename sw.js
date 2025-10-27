@@ -1,5 +1,5 @@
 // A version for the cache. You can update this to force a refresh of the cache.
-const CACHE_NAME = 'gmct-app-cache-v1';
+const CACHE_NAME = 'gmct-app-cache-v2';
 
 // List of all the essential files that make up the application shell.
 const APP_SHELL_URLS = [
