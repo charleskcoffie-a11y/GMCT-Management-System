@@ -66,17 +66,15 @@ window.addEventListener('unhandledrejection', handleError as (e: PromiseRejectio
 // --- End of Failsafe ---
 
 const registerServiceWorker = () => {
-  let isSandboxed = false;
+  // DEFINITIVE FIX: The previous attempt to access `window.top.location` to detect
+  // a cross-origin iframe was causing an uncatchable SecurityError that
+  // terminated all script execution, leading to the persistent loading screen.
+  // The fix is to remove this fragile check. We will now simply disable the
+  // service worker if the app is running inside ANY iframe (`window.self !== window.top`),
+  // which is a safe and robust way to handle the sandboxed development environment
+  // without triggering security exceptions.
   if (window.self !== window.top) {
-    try {
-      const topHostname = window.top.location.hostname;
-    } catch (e) {
-      isSandboxed = true;
-    }
-  }
-
-  if (isSandboxed) {
-    console.log("Skipping Service Worker registration in a sandboxed environment.");
+    console.log("App is in an iframe, skipping Service Worker registration for compatibility.");
     return;
   }
   
