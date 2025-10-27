@@ -1,5 +1,5 @@
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import App from './App';
 
 // --- Global Failsafe Error Handler ---
@@ -109,7 +109,7 @@ const initialize = () => {
   // from index.html right before React takes over.
   rootElement.innerHTML = '';
 
-  const root = ReactDOM.createRoot(rootElement);
+  const root = createRoot(rootElement);
   
   console.log("Rendering React app...");
   root.render(
