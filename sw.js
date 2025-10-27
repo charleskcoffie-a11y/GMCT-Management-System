@@ -2,7 +2,6 @@
 const CACHE_NAME = 'gmct-app-cache-v3';
 
 // List of all the essential files that make up the application shell.
-// index.html is included here to be available offline. The fetch strategy below ensures it stays up-to-date.
 const APP_SHELL_URLS = [
   './',
   './index.html',
@@ -35,7 +34,6 @@ self.addEventListener('install', event => {
 });
 
 // The activate event is fired when the service worker is activated.
-// This is a good time to clean up old, unused caches.
 self.addEventListener('activate', event => {
   console.log('Service Worker: Activating...');
   event.waitUntil(
@@ -73,10 +71,13 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 3. Network-first for HTML pages (navigation requests).
-  // This is the most important part of the fix. It ensures the user always gets
-  // the latest version of the app, preventing "stuck" states from a stale cache.
-  if (request.headers.get('accept').includes('text/html')) {
+  // 3. Network-first for HTML pages and the main app script.
+  // This is the most important fix. It ensures the user always gets the latest
+  // version of the app, preventing "stuck" states from a stale cache.
+  const isHtml = request.mode === 'navigate' || request.headers.get('accept').includes('text/html');
+  const isMainScript = request.url.endsWith('index.tsx');
+
+  if (isHtml || isMainScript) {
     event.respondWith(
       fetch(request)
         .then(response => {
@@ -97,7 +98,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 4. Cache-first for all other assets (JS, CSS, images, etc.).
+  // 4. Cache-first for all other assets (CSS, images, libraries, etc.).
   // This makes the app load instantly on subsequent visits and work offline.
   event.respondWith(
     caches.match(request).then(cachedResponse => {
