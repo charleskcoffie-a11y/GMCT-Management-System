@@ -10,21 +10,25 @@
     -->
     <script>
       (function() {
-        const loc = window.location;
-        const path = loc.pathname;
-        // The goal is to find the base directory path, which must end with a '/'.
-        // For 'https://user.github.io/repo/page', the base path is '/repo/'.
-        const segments = path.split('/').filter(Boolean);
-        let basePath = '/'; // Default for root deployment
-        if (loc.hostname.includes('github.io') && segments.length > 0) {
-          // On GitHub Pages, the base path is always '/<repo-name>/'
-          basePath = '/' + segments[0] + '/';
+        try {
+          const loc = window.location;
+          const path = loc.pathname;
+          // The goal is to find the base directory path, which must end with a '/'.
+          // For 'https://user.github.io/repo/page', the base path is '/repo/'.
+          const segments = path.split('/').filter(Boolean);
+          let basePath = '/'; // Default for root deployment
+          if (loc.hostname.includes('github.io') && segments.length > 0) {
+            // On GitHub Pages, the base path is always '/<repo-name>/'
+            basePath = '/' + segments[0] + '/';
+          }
+          
+          const absoluteUrl = loc.origin + basePath;
+          const baseTag = document.createElement('base');
+          baseTag.href = absoluteUrl;
+          document.head.prepend(baseTag);
+        } catch (e) {
+            console.error("Failed to set <base> tag:", e);
         }
-        
-        const absoluteUrl = loc.origin + basePath;
-        const baseTag = document.createElement('base');
-        baseTag.href = absoluteUrl;
-        document.head.prepend(baseTag);
       }());
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -79,7 +83,10 @@
         </div>
       </div>
     </div>
-    <script type="module" src="./index.tsx"></script>
+    <!-- This script runs first to remove any stuck service workers -->
+    <script src="./sw-uninstaller.js"></script>
+    <!-- The main application script, deferred to run after the document is parsed -->
+    <script type="module" src="./index.tsx" defer></script>
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>

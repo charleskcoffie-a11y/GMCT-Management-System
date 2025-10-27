@@ -69,8 +69,7 @@ const registerServiceWorker = () => {
   }
 
   if (isSandboxed) {
-    // Silently skip registration in sandboxed environments. The console warning
-    // was causing confusion, so it has been removed.
+    console.log("Skipping Service Worker registration in a sandboxed environment.");
     return;
   }
   
@@ -92,48 +91,42 @@ const registerServiceWorker = () => {
 };
 
 // --- App Initialization ---
-// All initialization logic is now bundled here to run after the page is fully loaded.
 const initialize = () => {
+  console.log("Initializing application...");
+  
   // 1. Register the Service Worker for offline capabilities.
-  // Re-enabled with a new, more robust network-first caching strategy in sw.js
-  // to prevent stale cache issues that cause blank screens.
+  // This is now safe to run because sw-uninstaller.js has cleared any old registrations.
   registerServiceWorker();
   
   // 2. Render the React application.
   const rootElement = document.getElementById('root');
   if (!rootElement) {
-    // Use our global handler for this fatal error.
     throw new Error("Fatal: Could not find the #root element in the HTML to mount the application.");
   }
 
+  console.log("Root element found, clearing failsafe message...");
   // This is the critical step that removes the failsafe loading message
   // from index.html right before React takes over.
   rootElement.innerHTML = '';
 
   const root = ReactDOM.createRoot(rootElement);
+  
+  console.log("Rendering React app...");
   root.render(
     <React.StrictMode>
       <App />
     </React.StrictMode>
   );
+  console.log("React app rendered.");
 };
 
 
 // --- Startup Logic ---
 // We wrap the entire app startup in a try/catch to use our failsafe handler.
+// Since this script is deferred and at the end of `<body>`, the DOM is ready,
+// so we can initialize immediately without waiting for any further events.
 try {
-  // The most reliable way to ensure the document is ready is to wait for the 'load' event.
-  // This event fires after the entire page, including all dependent resources (like stylesheets and images), has finished loading.
-  // This avoids race conditions and the "invalid state" error during service worker registration by ensuring nothing
-  // happens until the document is in a completely stable state.
-  
-  // We also check if the page is ALREADY loaded, in case this script runs late.
-  if (document.readyState === 'complete') {
-    initialize();
-  } else {
-    // Use { once: true } to ensure the handler only runs once.
-    window.addEventListener('load', initialize, { once: true });
-  }
+  initialize();
 } catch (error) {
   // This will catch any synchronous errors during the setup phase.
   handleError({
