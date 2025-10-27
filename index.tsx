@@ -66,29 +66,9 @@ window.addEventListener('unhandledrejection', handleError as (e: PromiseRejectio
 // --- End of Failsafe ---
 
 const registerServiceWorker = () => {
-  // DEFINITIVE FIX: The previous attempt to access `window.top.location` to detect
-  // a cross-origin iframe was causing an uncatchable SecurityError that
-  // terminated all script execution, leading to the persistent loading screen.
-  // The fix is to remove this fragile check. We will now simply disable the
-  // service worker if the app is running inside ANY iframe (`window.self !== window.top`),
-  // which is a safe and robust way to handle the sandboxed development environment
-  // without triggering security exceptions.
-  if (window.self !== window.top) {
-    console.log("App is in an iframe, skipping Service Worker registration for compatibility.");
-    return;
-  }
-  
-  if ('serviceWorker' in navigator) {
-    const swUrl = new URL('sw.js', document.baseURI).href;
-    
-    navigator.serviceWorker.register(swUrl)
-      .then(registration => {
-        console.log('Service Worker registered with scope:', registration.scope);
-      })
-      .catch(error => {
-        console.error('Service Worker registration failed:', error);
-      });
-  }
+  // Per user feedback and common GitHub Pages deployment issues, the service worker
+  // is being explicitly disabled to prevent silent, script-terminating errors.
+  console.log("Service Worker registration has been disabled for maximum compatibility.");
 };
 
 // --- App Initialization ---
