@@ -14,11 +14,13 @@ import AdminAttendanceView from './components/AdminAttendanceView';
 import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
+import ConfirmationModal from './components/ConfirmationModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { toCsv, sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeAttendanceStatus, formatCurrency, sanitizeWeeklyHistoryRecord } from './utils';
 import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, EntryType, WeeklyHistoryRecord } from './types';
 import { msalSilentSignIn } from './services/oneDrive';
+import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES } from './constants';
 
 // Initial Data
 const INITIAL_USERS: User[] = [
@@ -27,7 +29,7 @@ const INITIAL_USERS: User[] = [
     { username: 'ClassLeader1', password: 'password', role: 'class-leader', classLed: '1' },
     { username: 'Statistician', password: 'Stats', role: 'statistician' },
 ];
-const INITIAL_SETTINGS: Settings = { currency: 'CAD', maxClasses: 12, enforceDirectory: true };
+const INITIAL_SETTINGS: Settings = { currency: DEFAULT_CURRENCY, maxClasses: DEFAULT_MAX_CLASSES, enforceDirectory: true };
 
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
@@ -46,6 +48,8 @@ const App: React.FC = () => {
     const [activeTab, setActiveTab] = useState<Tab>('home');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
+    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -159,10 +163,17 @@ const App: React.FC = () => {
     };
     
     const handleDeleteEntry = (id: string) => {
-        if(window.confirm("Are you sure you want to delete this entry?")) {
-            setEntries(entries.filter(e => e.id !== id));
-            setIsModalOpen(false);
+        setEntryToDeleteId(id);
+        setIsConfirmModalOpen(true);
+    };
+
+    const confirmDeleteEntry = () => {
+        if (entryToDeleteId) {
+            setEntries(entries.filter(e => e.id !== entryToDeleteId));
+            setIsModalOpen(false); // Close the entry modal as well
         }
+        setIsConfirmModalOpen(false);
+        setEntryToDeleteId(null);
     };
 
     const handleImport = (newEntries: Entry[]) => {
@@ -280,9 +291,9 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200/80 overflow-x-auto">
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200/80 overflow-x-auto max-h-[65vh] overflow-y-auto">
                            <table className="w-full text-left text-slate-500">
-                                <thead className="text-base text-slate-700 uppercase bg-slate-100">
+                                <thead className="text-base text-slate-700 uppercase bg-slate-100 sticky top-0 z-10">
                                     <tr>
                                         <th className="px-6 py-3"><button onClick={() => handleSort('date')} className="flex items-center gap-1 font-bold">Date {sortConfig.key === 'date' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</button></th>
                                         <th className="px-6 py-3"><button onClick={() => handleSort('memberName')} className="flex items-center gap-1 font-bold">Member {sortConfig.key === 'memberName' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</button></th>
@@ -300,7 +311,7 @@ const App: React.FC = () => {
                                             <tr key={entry.id} className="bg-white border-b hover:bg-slate-50">
                                                 <td className="px-6 py-4">{entry.date}</td>
                                                 <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName}</td>
-                                                <td className="px-6 py-4 font-mono text-xs text-slate-600">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
+                                                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
                                                 <td className="px-6 py-4 text-center">{member?.classNumber || 'N/A'}</td>
                                                 <td className="px-6 py-4 capitalize">{entry.type}</td>
                                                 <td className="px-6 py-4">{formatCurrency(entry.amount, settings.currency)}</td>
@@ -316,7 +327,7 @@ const App: React.FC = () => {
                     </div>
                 );
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} />;
-            case 'insights': return <Insights />;
+            case 'insights': return <Insights entries={filteredAndSortedEntries} settings={settings} />;
             case 'history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
             case 'users': return <UsersTab users={users} setUsers={setUsers} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} />;
@@ -368,6 +379,16 @@ const App: React.FC = () => {
                     </section>
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} members={members} settings={settings} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
+                <ConfirmationModal
+                    isOpen={isConfirmModalOpen}
+                    onClose={() => {
+                        setIsConfirmModalOpen(false);
+                        setEntryToDeleteId(null);
+                    }}
+                    onConfirm={confirmDeleteEntry}
+                    title="Confirm Deletion"
+                    message="Are you sure you want to delete this financial entry? This action cannot be undone."
+                />
             </div>
         </div>
     );

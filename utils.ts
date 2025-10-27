@@ -31,7 +31,7 @@ export function sanitizeEntry(raw: any): Entry {
         date: date,
         memberID: sanitizeString(raw.memberID),
         memberName: sanitizeString(raw.memberName),
-        type: sanitizeEntryType(raw.type),
+        type: raw.type ? sanitizeEntryType(raw.type) : 'tithe',
         fund: sanitizeString(raw.fund) || "General",
         method: sanitizeMethod(raw.method),
         amount: isNaN(parseFloat(raw.amount)) ? 0 : parseFloat(raw.amount),
