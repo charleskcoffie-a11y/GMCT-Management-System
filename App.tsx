@@ -70,93 +70,6 @@ const App: React.FC = () => {
 
 
     const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '' });
-    const [syncing, setSyncing] = useState(false);
-    const [syncMessage, setSyncMessage] = useState<string | null>(null);
-    const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
-    const entrySyncRef = useRef<Map<string, { signature: string; entry: Entry }>>(new Map());
-    const memberSyncRef = useRef<Map<string, { signature: string; member: Member }>>(new Map());
-    const activeSyncOperations = useRef(0);
-    const [isNavOpen, setIsNavOpen] = useState(false);
-
-    const beginSync = () => {
-        activeSyncOperations.current += 1;
-        setSyncing(true);
-    };
-
-    const endSync = () => {
-        activeSyncOperations.current = Math.max(0, activeSyncOperations.current - 1);
-        if (activeSyncOperations.current === 0) {
-            setSyncing(false);
-        }
-    };
-
-    const computeEntrySignature = useCallback((entry: Entry) => JSON.stringify({
-        id: entry.id,
-        spId: entry.spId ?? '',
-        date: entry.date,
-        memberID: entry.memberID,
-        memberName: entry.memberName,
-        type: entry.type,
-        fund: entry.fund,
-        method: entry.method,
-        amount: Number(entry.amount.toFixed(2)),
-        note: entry.note ?? '',
-    }), []);
-
-    const computeMemberSignature = useCallback((member: Member) => JSON.stringify({
-        id: member.id,
-        spId: member.spId ?? '',
-        name: member.name,
-        classNumber: member.classNumber ?? '',
-    }), []);
-
-    const mergeEntriesFromCloud = useCallback((existing: Entry[], remote: Entry[]): Entry[] => {
-        const sanitizedRemote = remote.map(remoteEntry => sanitizeEntry(remoteEntry));
-        sanitizedRemote.forEach(remoteEntry => {
-            entrySyncRef.current.set(remoteEntry.id, {
-                signature: computeEntrySignature(remoteEntry),
-                entry: remoteEntry,
-            });
-        });
-
-        const remoteMap = new Map(sanitizedRemote.map(entry => [entry.id, entry]));
-        const combined: Entry[] = [...sanitizedRemote];
-
-        existing.forEach(entry => {
-            if (!entry.spId && !remoteMap.has(entry.id)) {
-                combined.push(entry);
-            } else if (entry.spId && remoteMap.has(entry.id)) {
-                const remoteEntry = remoteMap.get(entry.id)!;
-                combined.splice(combined.indexOf(remoteEntry), 1, {
-                    ...remoteEntry,
-                    note: remoteEntry.note ?? entry.note,
-                });
-            }
-        });
-
-        return combined.sort((a, b) => b.date.localeCompare(a.date));
-    }, [computeEntrySignature]);
-
-    const mergeMembersFromCloud = useCallback((existing: Member[], remote: Member[]): Member[] => {
-        const sanitizedRemote = remote.map(remoteMember => sanitizeMember(remoteMember));
-        sanitizedRemote.forEach(remoteMember => {
-            memberSyncRef.current.set(remoteMember.id, {
-                signature: computeMemberSignature(remoteMember),
-                member: remoteMember,
-            });
-        });
-
-        const remoteMap = new Map(sanitizedRemote.map(member => [member.id, member]));
-        const combined: Member[] = [...sanitizedRemote];
-
-        existing.forEach(member => {
-            if (!member.spId && !remoteMap.has(member.id)) {
-                combined.push(member);
-            }
-        });
-
-        return combined.sort((a, b) => a.name.localeCompare(b.name));
-    }, [computeMemberSignature]);
 
     useEffect(() => {
         const attemptSilentSignin = async () => {
@@ -489,10 +402,6 @@ const App: React.FC = () => {
         setWeeklyHistory([]);
         setCurrentUser(null);
         setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.' });
-        entrySyncRef.current.clear();
-        memberSyncRef.current.clear();
-        setSyncMessage(null);
-        setLastSyncedAt(null);
     };
     
     const handleExport = (format: 'csv' | 'json') => {
@@ -706,32 +615,10 @@ const App: React.FC = () => {
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
             <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} />
-                {cloud.signedIn && (
-                    <div className="mt-3 mb-5 rounded-2xl border border-indigo-100 bg-white/80 px-4 py-3 shadow-sm flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 ${syncing ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                <span className={`h-2 w-2 rounded-full ${syncing ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                                {syncing ? 'Syncing with SharePoint…' : 'SharePoint sync up to date'}
-                            </span>
-                            {lastSyncedAt && !syncing && (
-                                <span className="text-slate-500 font-normal">Last synced at {new Date(lastSyncedAt).toLocaleTimeString()}</span>
-                            )}
-                        </div>
-                        {syncMessage && <p className="text-sm text-red-600 font-medium">{syncMessage}</p>}
-                    </div>
-                )}
-                <div className="lg:hidden mb-5">
-                    <button
-                        type="button"
-                        onClick={() => setIsNavOpen(prev => !prev)}
-                        className="w-full inline-flex items-center justify-between rounded-2xl border border-indigo-200 bg-white/90 px-4 py-3 text-indigo-700 font-semibold shadow-sm"
-                    >
-                        <span>Navigation</span>
-                        <span className="text-sm text-slate-500">{isNavOpen ? 'Close' : 'Open'}</span>
-                    </button>
-                    {isNavOpen && (
-                        <nav className="mt-3 rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-4 space-y-2 max-h-[70vh] overflow-y-auto">
-                            {navItems.map(item => (
+                <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
+                    <aside className="lg:w-72 flex-shrink-0">
+                        <nav className="h-full rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-5 space-y-2 overflow-y-auto">
+                             {navItems.map(item => (
                                 <button
                                     key={item.id}
                                     onClick={() => setActiveTab(item.id as Tab)}
