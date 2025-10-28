@@ -92,7 +92,7 @@ This part uploads the configured application to a private website that you can s
 
 ### Step 3.2: Upload the Application Files
 
-You can either upload through the GitHub web UI or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). A GitHub Actions workflow included with this project will take care of building the optimized production bundle and publishing it, so you **should not** commit the `dist/` folder yourself.
+You can either upload through the GitHub web UI, work through a pull request, or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). A GitHub Actions workflow included with this project will take care of building the optimized production bundle and publishing it, so you **should not** commit the `dist/` folder yourself.
 
 **Option A – Upload in the browser**
 
@@ -105,6 +105,13 @@ You can either upload through the GitHub web UI or push from your local machine.
 1.  Clone the empty repository to your machine: `git clone https://github.com/<your-username>/<repository-name>.git`
 2.  Copy this project into the cloned folder, run `npm install`, and verify it builds locally with `npm run build`.
 3.  Commit all files (except `dist/`) and push them to the `main` branch.
+
+**Option C – Use a pull request workflow**
+
+1.  Create a feature branch from `main` (for example, `git checkout -b feature/update-dashboard`).
+2.  Commit your changes to that branch and push it to GitHub.
+3.  Open a pull request targeting `main` and review the diffs as usual.
+4.  Once the pull request is merged, the merge commit lands on `main` and automatically triggers the GitHub Actions deployment workflow—no extra manual steps required.
 
 ### Step 3.3: Enable GitHub Pages
 
