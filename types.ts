@@ -1,4 +1,4 @@
-export type EntryType = "tithe" | "offering" | "first-fruit" | "pledge" | "harvest-levy" | "other";
+export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "first-fruit" | "pledge" | "harvest-levy" | "other";
 export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "other";
 
 export interface Entry {
@@ -47,28 +47,51 @@ export interface AttendanceRecord {
     records: MemberAttendance[];
 }
 
+export type ServiceType = 'communion' | 'harvest' | 'divine-service' | 'teaching-service' | 'other';
+
+export interface WeeklyHistoryVisitorsInfo {
+    total: number;
+    names: string;
+    specialVisitorName: string;
+    specialVisitorPosition: string;
+    specialVisitorSummary: string;
+}
+
+export interface WeeklyHistoryAttendanceBreakdown {
+    adultsMale: number;
+    adultsFemale: number;
+    children: number;
+    adherents: number;
+    catechumens: number;
+    visitors: WeeklyHistoryVisitorsInfo;
+}
+
+export interface WeeklyHistoryDonations {
+    description: string;
+    quantity: string;
+    donatedBy: string;
+}
+
 export interface WeeklyHistoryRecord {
     id: string;
     dateOfService: string; // ISO format YYYY-MM-DD
     societyName: string;
-    officiant: string;
+    preacher: string;
+    guestPreacher: boolean;
+    preacherSociety: string;
     liturgist: string;
-    serviceTypes: string[]; // e.g., ['Divine Service', 'Communion']
+    serviceType: ServiceType;
     serviceTypeOther: string;
     sermonTopic: string;
+    memoryText: string;
+    sermonSummary: string;
     worshipHighlights: string;
     announcementsBy: string;
-    attendance: {
-        men: number;
-        women: number;
-        junior: number;
-        adherents: number;
-        visitors: number;
-        catechumens: number;
-    };
+    announcementsKeyPoints: string;
+    attendance: WeeklyHistoryAttendanceBreakdown;
     newMembersDetails: string;
     newMembersContact: string;
-    specialDonationsDetails: string;
+    donations: WeeklyHistoryDonations;
     events: string;
     observations: string;
     preparedBy: string;

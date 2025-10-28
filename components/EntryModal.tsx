@@ -13,7 +13,11 @@ type EntryModalProps = {
     onDelete: (id: string) => void;
 };
 
+ codex/restore-missing-imports-for-app.tsx
+const entryTypes: EntryType[] = ['tithe', 'offering', 'thanksgiving-offering', 'first-fruit', 'pledge', 'harvest-levy', 'other'];
+
 const entryTypes: EntryType[] = ['tithe', 'offering', 'first-fruit', 'pledge', 'harvest-levy', 'other'];
+ main
 const methods: Method[] = ['cash', 'check', 'card', 'e-transfer', 'mobile', 'other'];
 
 const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSave, onSaveAndNew, onClose, onDelete }) => {
@@ -28,10 +32,18 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
         amount: 0,
         note: '',
     });
+ codex/restore-missing-imports-for-app.tsx
+    const [memberQuery, setMemberQuery] = useState('');
+
+ main
 
     useEffect(() => {
         if (entry) {
             setForm(entry);
+ codex/restore-missing-imports-for-app.tsx
+            setMemberQuery(entry.memberName || '');
+
+ main
         } else {
             setForm({
                 id: uuidv4(),
@@ -44,10 +56,26 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
                 amount: 0,
                 note: '',
             });
+ codex/restore-missing-imports-for-app.tsx
+            setMemberQuery('');
+        }
+    }, [entry]);
+
+    const memberOptions = useMemo(
+        () =>
+            members.map(member => ({
+                value: member.id,
+                label: member.name,
+                display: `${member.name}${member.classNumber ? ` – Class ${member.classNumber}` : ''}`,
+            })),
+        [members],
+    );
+
         }
     }, [entry]);
 
     const memberOptions = useMemo(() => members.map(member => ({ value: member.id, label: member.name })), [members]);
+ main
 
     const updateField = <K extends keyof Entry>(key: K, value: Entry[K]) => {
         setForm(prev => ({ ...prev, [key]: value }));
@@ -55,11 +83,39 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
+ codex/restore-missing-imports-for-app.tsx
+        if (settings.enforceDirectory && !form.memberID) {
+            alert('Please select a member from the directory before saving.');
+            return;
+        }
+        const payload = {
+            ...form,
+            memberName: form.memberName || memberQuery,
+            type: sanitizeEntryType(form.type),
+            method: sanitizeMethod(form.method),
+        };
+        onSave(payload);
+    };
+
+    const handleSaveAndNew = () => {
+        if (settings.enforceDirectory && !form.memberID) {
+            alert('Please select a member from the directory before saving.');
+            return;
+        }
+        const payload = {
+            ...form,
+            id: form.id || uuidv4(),
+            memberName: form.memberName || memberQuery,
+            type: sanitizeEntryType(form.type),
+            method: sanitizeMethod(form.method),
+        };
+
         onSave({ ...form, type: sanitizeEntryType(form.type), method: sanitizeMethod(form.method) });
     };
 
     const handleSaveAndNew = () => {
         const payload = { ...form, id: form.id || uuidv4(), type: sanitizeEntryType(form.type), method: sanitizeMethod(form.method) };
+ main
         onSaveAndNew(payload);
         setForm({
             id: uuidv4(),
@@ -72,6 +128,40 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
             amount: 0,
             note: '',
         });
+ codex/restore-missing-imports-for-app.tsx
+        setMemberQuery('');
+    };
+
+    const handleMemberMatch = (value: string) => {
+        const directId = members.find(m => m.id.toLowerCase() === value.toLowerCase());
+        if (directId) {
+            updateField('memberID', directId.id);
+            updateField('memberName', directId.name);
+            setMemberQuery(directId.name);
+            return;
+        }
+
+        const byName = members.find(m => m.name.toLowerCase() === value.toLowerCase());
+        if (byName) {
+            updateField('memberID', byName.id);
+            updateField('memberName', byName.name);
+            setMemberQuery(byName.name);
+            return;
+        }
+
+        const trimmed = value.split(' – ')[0]?.trim() ?? value.trim();
+        const byDisplay = members.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
+        if (byDisplay) {
+            updateField('memberID', byDisplay.id);
+            updateField('memberName', byDisplay.name);
+            setMemberQuery(byDisplay.name);
+            return;
+        }
+
+        updateField('memberID', '');
+        updateField('memberName', settings.enforceDirectory ? '' : value);
+        setMemberQuery(value);
+
     };
 
     const handleMemberChange = (memberId: string) => {
@@ -82,12 +172,18 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
         } else {
             updateField('memberName', '');
         }
+ main
     };
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+ codex/restore-missing-imports-for-app.tsx
+            <div className="w-full max-w-3xl rounded-3xl shadow-2xl border border-white/60 bg-gradient-to-br from-white via-sky-50 to-indigo-100/80">
+                <header className="border-b border-white/60 bg-white/60 backdrop-blur p-6 flex items-center justify-between rounded-t-3xl">
+
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl">
                 <header className="border-b border-slate-200 p-6 flex items-center justify-between">
+ main
                     <h2 className="text-2xl font-bold text-slate-800">{entry ? 'Edit Entry' : 'New Entry'}</h2>
                     <button onClick={onClose} className="text-slate-400 hover:text-slate-600">Close</button>
                 </header>
@@ -103,6 +199,29 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
                         </label>
                         <label className="flex flex-col gap-2 md:col-span-2">
                             <span className="text-sm font-semibold text-slate-600">Member</span>
+ codex/restore-missing-imports-for-app.tsx
+                            <input
+                                list="entry-member-options"
+                                value={memberQuery}
+                                onChange={e => handleMemberMatch(e.target.value)}
+                                placeholder={settings.enforceDirectory ? 'Start typing a name or ID…' : 'Type a name'}
+                                className="border border-slate-300 rounded-lg px-3 py-2"
+                                required={settings.enforceDirectory}
+                            />
+                            <datalist id="entry-member-options">
+                                {memberOptions.map(option => (
+                                    <option key={option.value} value={option.label} label={`${option.display} • ${option.value.slice(0, 8)}`} />
+                                ))}
+                                {memberOptions.map(option => (
+                                    <option key={`${option.value}-id`} value={option.value} label={`${option.label} (${option.value.slice(0, 8)})`} />
+                                ))}
+                            </datalist>
+                            {!settings.enforceDirectory && (
+                                <p className="text-xs text-slate-500">Unlisted member? Type their name exactly as you want it saved.</p>
+                            )}
+                            {form.memberID && (
+                                <p className="text-xs text-slate-500">Selected member ID: {form.memberID}</p>
+
                             <select value={form.memberID} onChange={e => handleMemberChange(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2" required={settings.enforceDirectory}>
                                 <option value="">Select member</option>
                                 {memberOptions.map(option => (
@@ -111,6 +230,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
                             </select>
                             {!settings.enforceDirectory && (
                                 <input value={form.memberName} onChange={e => updateField('memberName', e.target.value)} placeholder="Member name" className="border border-slate-300 rounded-lg px-3 py-2" />
+ main
                             )}
                         </label>
                         <label className="flex flex-col gap-2">
@@ -141,7 +261,11 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
                     <div className="flex flex-wrap gap-3 justify-between">
                         <div className="flex gap-3">
                             <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg">Save</button>
+ codex/restore-missing-imports-for-app.tsx
+                            <button type="button" onClick={handleSaveAndNew} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Save &amp; New</button>
+
                             <button type="button" onClick={handleSaveAndNew} className="bg-white border border-slate-300 text-slate-700 font-semibold px-4 py-2 rounded-lg hover:bg-slate-100">Save &amp; New</button>
+ main
                         </div>
                         {entry && (
                             <button type="button" onClick={() => onDelete(entry.id)} className="text-red-500 hover:text-red-600 font-semibold">Delete</button>

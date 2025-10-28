@@ -8,10 +8,14 @@
     <meta name="theme-color" content="#4338ca" />
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+      html, body, #root {
+        height: 100%;
+      }
       /* Increase base font size for better readability as requested */
       body {
         font-size: 18px;
-        background-color: #f8fafc; /* bg-slate-50 */
+        background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #fdf2f8 100%);
+        overflow-y: auto;
       }
       /* Custom scrollbar for a more polished, less "dry" look */
       ::-webkit-scrollbar {
@@ -31,10 +35,14 @@
     </style>
  codex/restore-missing-imports-for-app.tsx
   </head>
-=======
+
+ codex/restore-missing-imports-for-app.tsx
+  </head>
+
   <link rel="stylesheet" href="./index.css">
 </head>
 main
+ main
   <body>
     <div id="root">
       <!-- Failsafe Loading Message -->
@@ -52,8 +60,13 @@ main
  codex/restore-missing-imports-for-app.tsx
     <script type="module" src="./index.tsx"></script>
   </body>
-=======
+
+ codex/restore-missing-imports-for-app.tsx
+    <script type="module" src="./index.tsx"></script>
+  </body>
+
   <script type="module" src="./index.tsx" defer></script>
 </body>
+ main
  main
 </html>
