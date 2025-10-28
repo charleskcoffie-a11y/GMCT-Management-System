@@ -260,7 +260,7 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Filter Controls */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                        <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-sky-50 to-cyan-100/70 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                             <div className="lg:col-span-1">
                                 <label htmlFor="searchFilter" className="block text-sm font-medium text-slate-700">Search Member</label>
                                 <input type="text" id="searchFilter" placeholder="Name..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="mt-1 block w-full border-slate-300 rounded-md shadow-sm"/>
@@ -291,7 +291,7 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200/80 overflow-x-auto max-h-[65vh] overflow-y-auto">
+                        <div className="rounded-3xl shadow-lg border border-white/60 bg-white/80 backdrop-blur overflow-x-auto max-h-[65vh] overflow-y-auto">
                            <table className="w-full text-left text-slate-500">
                                 <thead className="text-base text-slate-700 uppercase bg-slate-100 sticky top-0 z-10">
                                     <tr>
@@ -353,20 +353,20 @@ const App: React.FC = () => {
 
 
     return (
-        <div className="bg-slate-50 min-h-screen">
-            <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
+            <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} />
-                <main className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    <aside className="lg:col-span-1">
-                        <nav className="bg-white rounded-xl shadow-sm border border-slate-200/80 p-4 space-y-1">
+                <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
+                    <aside className="lg:w-72 flex-shrink-0">
+                        <nav className="h-full rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-5 space-y-2 overflow-y-auto">
                              {navItems.map(item => (
                                 <button
                                     key={item.id}
                                     onClick={() => setActiveTab(item.id as Tab)}
-                                    className={`w-full text-left font-bold px-4 py-3 rounded-lg transition-colors text-base uppercase tracking-wide ${
+                                    className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
                                         activeTab === item.id
-                                            ? 'bg-indigo-600 text-white shadow'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                                            ? 'bg-white/25 text-white shadow-lg'
+                                            : 'text-indigo-100 hover:bg-white/15 hover:text-white'
                                     }`}
                                 >
                                     {item.label}
@@ -374,8 +374,10 @@ const App: React.FC = () => {
                              ))}
                         </nav>
                     </aside>
-                    <section className="lg:col-span-3">
-                       {renderTabContent()}
+                    <section className="flex-1 overflow-hidden">
+                        <div className="h-full overflow-y-auto pr-1 sm:pr-2 lg:pr-4 pb-10">
+                           {renderTabContent()}
+                        </div>
                     </section>
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} members={members} settings={settings} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
