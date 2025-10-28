@@ -60,14 +60,15 @@ const App: React.FC = () => {
     const [endDateFilter, setEndDateFilter] = useState('');
 
 
-    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: "" });
-     useEffect(() => {
+    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '' });
+
+    useEffect(() => {
         const attemptSilentSignin = async () => {
             const session = await msalSilentSignIn();
             if (session) {
-                setCloud({ ready: true, signedIn: true, account: session.account, accessToken: session.accessToken, message: "Signed in silently." });
+                setCloud({ ready: true, signedIn: true, account: session.account, accessToken: session.accessToken, message: 'Signed in silently.' });
             } else {
-                setCloud({ ready: true, signedIn: false, message: "Ready for manual sign-in." });
+                setCloud({ ready: true, signedIn: false, message: 'Ready for manual sign-in.' });
             }
         };
         attemptSilentSignin();
@@ -79,11 +80,18 @@ const App: React.FC = () => {
     const filteredAndSortedEntries = useMemo(() => {
         // 1. Filter the entries
         const filtered = entries.filter(entry => {
-            if (searchFilter && !entry.memberName.toLowerCase().includes(searchFilter.toLowerCase())) return false;
+            if (searchFilter) {
+                const query = searchFilter.toLowerCase();
+                const member = membersMap.get(entry.memberID);
+                const matchesName = entry.memberName.toLowerCase().includes(query);
+                const matchesId = entry.memberID.toLowerCase().includes(query);
+                const matchesDirectoryName = member ? member.name.toLowerCase().includes(query) : false;
+                if (!matchesName && !matchesId && !matchesDirectoryName) return false;
+            }
             if (typeFilter !== 'all' && entry.type !== typeFilter) return false;
             if (startDateFilter && entry.date < startDateFilter) return false;
             if (endDateFilter && entry.date > endDateFilter) return false;
-            
+
             const member = membersMap.get(entry.memberID);
             if (classFilter !== 'all' && (!member || member.classNumber !== classFilter)) return false;
             
@@ -179,6 +187,35 @@ const App: React.FC = () => {
     const handleImport = (newEntries: Entry[]) => {
         setEntries(prev => [...prev, ...newEntries]);
     };
+
+    const handleBulkAddMembers = (importedMembers: Member[]) => {
+        setMembers(prev => {
+            const existingIds = new Set(prev.map(member => member.id));
+            const next = [...prev];
+            importedMembers.forEach(member => {
+                if (!existingIds.has(member.id)) {
+                    next.push(member);
+                }
+            });
+            return next;
+        });
+    };
+
+    const handleResetAllData = () => {
+        if (!window.confirm('This will permanently delete all locally stored data for this app. Continue?')) {
+            return;
+        }
+        const storageKeys = ['gmct-entries', 'gmct-members', 'gmct-users', 'gmct-settings', 'gmct-attendance', 'gmct-weekly-history'];
+        storageKeys.forEach(key => localStorage.removeItem(key));
+        setEntries([]);
+        setMembers([]);
+        setUsers(INITIAL_USERS);
+        setSettings(INITIAL_SETTINGS);
+        setAttendance([]);
+        setWeeklyHistory([]);
+        setCurrentUser(null);
+        setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.' });
+    };
     
     const handleExport = (format: 'csv' | 'json') => {
         const filename = `gmct-export-${new Date().toISOString().slice(0, 10)}`;
@@ -207,6 +244,10 @@ const App: React.FC = () => {
         link.href = URL.createObjectURL(blob);
         link.download = `gmct-full-backup-${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
+    };
+
+    const handleSaveTotalClasses = (total: number) => {
+        setSettings(prev => ({ ...prev, maxClasses: total }));
     };
 
     const handleFullImport = (file: File) => {
@@ -260,10 +301,10 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Filter Controls */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                        <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-sky-50 to-cyan-100/70 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                             <div className="lg:col-span-1">
                                 <label htmlFor="searchFilter" className="block text-sm font-medium text-slate-700">Search Member</label>
-                                <input type="text" id="searchFilter" placeholder="Name..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="mt-1 block w-full border-slate-300 rounded-md shadow-sm"/>
+                                <input type="text" id="searchFilter" placeholder="Name or ID..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="mt-1 block w-full border-slate-300 rounded-md shadow-sm"/>
                             </div>
                             <div className="lg:col-span-1">
                                 <label htmlFor="classFilter" className="block text-sm font-medium text-slate-700">Class</label>
@@ -276,7 +317,19 @@ const App: React.FC = () => {
                                 <label htmlFor="typeFilter" className="block text-sm font-medium text-slate-700">Type</label>
                                 <select id="typeFilter" value={typeFilter} onChange={e => setTypeFilter(e.target.value as EntryType | 'all')} className="mt-1 block w-full border-slate-300 rounded-md shadow-sm">
                                     <option value="all">All Types</option>
-                                    {(["tithe", "offering", "first-fruit", "pledge", "harvest-levy", "other"] as EntryType[]).map(t => <option key={t} value={t}>{t.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
+                                    {([
+                                        "tithe",
+                                        "offering",
+                                        "thanksgiving-offering",
+                                        "first-fruit",
+                                        "pledge",
+                                        "harvest-levy",
+                                        "other",
+                                    ] as EntryType[]).map(t => (
+                                        <option key={t} value={t}>
+                                            {t.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             <div className="lg:col-span-2 grid grid-cols-2 gap-4">
@@ -291,7 +344,7 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200/80 overflow-x-auto max-h-[65vh] overflow-y-auto">
+                        <div className="rounded-3xl shadow-lg border border-white/60 bg-white/80 backdrop-blur overflow-x-auto max-h-[65vh] overflow-y-auto">
                            <table className="w-full text-left text-slate-500">
                                 <thead className="text-base text-slate-700 uppercase bg-slate-100 sticky top-0 z-10">
                                     <tr>
@@ -328,12 +381,31 @@ const App: React.FC = () => {
                 );
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries} settings={settings} />;
-            case 'history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
+            case 'history':
+                return (
+                    <WeeklyHistory
+                        history={weeklyHistory}
+                        setHistory={setWeeklyHistory}
+                        canEdit={['admin', 'statistician'].includes(currentUser.role)}
+                    />
+                );
             case 'users': return <UsersTab users={users} setUsers={setUsers} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} />;
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} />;
             case 'admin-attendance': return <AdminAttendanceView members={members} attendance={attendance} settings={settings} currentUser={currentUser} />;
-            case 'utilities': return <Utilities entries={filteredAndSortedEntries} members={members} settings={settings} />;
+            case 'utilities':
+                return (
+                    <Utilities
+                        entries={entries}
+                        members={members}
+                        settings={settings}
+                        cloud={cloud}
+                        onImportEntries={handleImport}
+                        onImportMembers={handleBulkAddMembers}
+                        onResetData={handleResetAllData}
+                        onSaveTotalClasses={handleSaveTotalClasses}
+                    />
+                );
             default: return <div>Select a tab</div>;
         }
     };
@@ -353,20 +425,20 @@ const App: React.FC = () => {
 
 
     return (
-        <div className="bg-slate-50 min-h-screen">
-            <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
+            <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} />
-                <main className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    <aside className="lg:col-span-1">
-                        <nav className="bg-white rounded-xl shadow-sm border border-slate-200/80 p-4 space-y-1">
+                <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
+                    <aside className="lg:w-72 flex-shrink-0">
+                        <nav className="h-full rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-5 space-y-2 overflow-y-auto">
                              {navItems.map(item => (
                                 <button
                                     key={item.id}
                                     onClick={() => setActiveTab(item.id as Tab)}
-                                    className={`w-full text-left font-bold px-4 py-3 rounded-lg transition-colors text-base uppercase tracking-wide ${
+                                    className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
                                         activeTab === item.id
-                                            ? 'bg-indigo-600 text-white shadow'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                                            ? 'bg-white/25 text-white shadow-lg'
+                                            : 'text-indigo-100 hover:bg-white/15 hover:text-white'
                                     }`}
                                 >
                                     {item.label}
@@ -374,8 +446,10 @@ const App: React.FC = () => {
                              ))}
                         </nav>
                     </aside>
-                    <section className="lg:col-span-3">
-                       {renderTabContent()}
+                    <section className="flex-1 overflow-hidden">
+                        <div className="h-full overflow-y-auto pr-1 sm:pr-2 lg:pr-4 pb-10">
+                           {renderTabContent()}
+                        </div>
                     </section>
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} members={members} settings={settings} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
