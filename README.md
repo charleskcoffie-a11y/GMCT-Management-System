@@ -73,6 +73,8 @@ The single-page application exposes dedicated modules through a navigation sideb
 * **Automation** – A GitHub Actions workflow (`.github/workflows/deploy.yml`) builds and publishes the Vite bundle on every push to `main`.
 * **Documentation** – This README walks administrators through Azure AD registration, SharePoint provisioning, credential configuration, and secure deployment.
 
+---
+
 ## Part 1: Azure & SharePoint Setup (One-Time)
 
 This part creates the necessary cloud infrastructure in your organization's Microsoft 365 account. You only need to do this once.
@@ -175,6 +177,7 @@ You can either upload through the GitHub web UI, work through a pull request, or
 2.  Copy this project into the cloned folder, run `npm install`, and verify it builds locally with `npm run build`.
 3.  Commit all files (except `dist/`) and push them to the `main` branch.
 
+ codex/restore-missing-imports-for-app.tsx
 **Option C – Use a pull request workflow**
 
 1.  Create a feature branch from `main` (for example, `git checkout -b feature/update-dashboard`).
@@ -182,12 +185,30 @@ You can either upload through the GitHub web UI, work through a pull request, or
 3.  Open a pull request targeting `main` and review the diffs as usual.
 4.  Once the pull request is merged, the merge commit lands on `main` and automatically triggers the GitHub Actions deployment workflow—no extra manual steps required.
 
+
+ main
 ### Step 3.3: Enable GitHub Pages
 
 1.  In your repository, go to the **"Settings"** tab.
 2.  On the left menu, click **"Pages"**.
+ codex/restore-missing-imports-for-app.tsx
 3.  Under **"Build and deployment"**, choose **Source → GitHub Actions** and click **"Save"**. _Do not_ select the old "Deploy from a branch" option—if you do, GitHub Pages will serve the raw TypeScript files and the site will stay on the "Loading Application…" screen.
 4.  After each push to `main`, open the **Actions** tab and wait for the **Deploy to GitHub Pages** workflow to finish. You should also see a successful deployment listed under **Deployments → github-pages** on the right side of your repository home page. Once it succeeds, reload the **Settings → Pages** screen. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
+
+ codex/restore-missing-imports-for-app.tsx
+3.  Under **"Build and deployment"**, choose **Source → GitHub Actions** and click **"Save"**. _Do not_ select the old "Deploy from a branch" option—if you do, GitHub Pages will serve the raw TypeScript files and the site will stay on the "Loading Application…" screen.
+4.  After each push to `main`, open the **Actions** tab and wait for the **Deploy to GitHub Pages** workflow to finish. You should also see a successful deployment listed under **Deployments → github-pages** on the right side of your repository home page. Once it succeeds, reload the **Settings → Pages** screen. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
+
+codex/restore-missing-imports-for-app.tsx
+3.  Under **"Build and deployment"**, choose **Source → GitHub Actions** and click **"Save"**. _Do not_ select the old "Deploy from a branch" option—if you do, GitHub Pages will serve the raw TypeScript files and the site will stay on the "Loading Application…" screen.
+4.  After each push to `main`, open the **Actions** tab and wait for the **Deploy to GitHub Pages** workflow to finish. You should also see a successful deployment listed under **Deployments → github-pages** on the right side of your repository home page. Once it succeeds, reload the **Settings → Pages** screen. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
+
+3.  Under **"Build and deployment"**, set **Source** to **"Deploy from a branch"**.
+4.  Choose the `main` branch and the **`/(root)`** folder, then click **"Save"**. GitHub Pages will publish straight from the project root. (Because `vite.config.ts` already sets a relative base path, no extra configuration is required.)
+5.  Wait for the deployment banner to finish building, then refresh the page. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
+main
+ main
+ main
 
 ### Step 3.4: Update Azure AD Redirect URI (Final Step)
 
@@ -219,3 +240,4 @@ If the GitHub Pages site displays **"Loading Application…"** for more than a f
 2.  Confirm **Settings → Pages → Build and deployment → Source** is set to **GitHub Actions**. If it is set to "Deploy from a branch", GitHub will host the uncompiled TypeScript files and the app will never start.
 3.  After a successful deploy, force-refresh your browser (`Ctrl+Shift+R` on Windows/Linux or `Cmd+Shift+R` on macOS) to make sure you are loading the newest bundle.
 
+If you ever see Git merge conflict markers (for example, `<<<<<<<` or `>>>>>>>`) inside `README.md`, open the file in your editor, remove the markers, and keep the instructions that match your current deployment method. Save the resolved file, run `git add README.md`, and create a new commit to finalize the fix.
