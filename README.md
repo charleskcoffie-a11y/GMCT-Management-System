@@ -219,20 +219,3 @@ If the GitHub Pages site displays **"Loading Application…"** for more than a f
 2.  Confirm **Settings → Pages → Build and deployment → Source** is set to **GitHub Actions**. If it is set to "Deploy from a branch", GitHub will host the uncompiled TypeScript files and the app will never start.
 3.  After a successful deploy, force-refresh your browser (`Ctrl+Shift+R` on Windows/Linux or `Cmd+Shift+R` on macOS) to make sure you are loading the newest bundle.
 
----
-
-## Appendix: Working with Git Changes
-
-### Preventing repeated merge conflicts
-
-Conflicts usually appear when two different edits touch the same file but GitHub cannot decide how to merge them. You can reduce how often they appear by following this routine whenever you update the project:
-
-1. **Pull the latest `main` branch first.** In the GitHub UI, download the newest files before uploading your edits. In a local clone, run `git pull origin main` before you start changing files.
-2. **Edit and save your updates.** Make your changes only after you are sure you have the current files.
-3. **Commit or upload the refreshed copy.** When you push or upload, you will be sending GitHub an updated version that already includes the latest work, so it will not conflict with the new commit from someone else.
-4. **Resolve conflicts once, then repeat the steps above.** After you fix a conflict, make sure to pull again before the next round of edits. That prevents the same conflict from reappearing the next time you upload.
-
-### What do red lines mean on GitHub?
-
-When you review a change on GitHub (for example in a pull request or the file history), the platform highlights **removed or replaced lines in red** and **new lines in green**. Seeing red does not mean the application is broken—it only shows which lines are being deleted compared with the previous version. If you ever see literal conflict markers like `<<<<<<<` or `>>>>>>>` inside a file, those markers mean Git could not merge changes automatically. Remove the markers and choose the correct version of the code, then commit the cleaned file.
-
