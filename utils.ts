@@ -1,6 +1,19 @@
 // utils.ts
 import { v4 as uuidv4 } from 'uuid';
-import type { Entry, EntryType, Member, Method, User, UserRole, AttendanceStatus, Settings, WeeklyHistoryRecord } from './types';
+import type {
+    Entry,
+    EntryType,
+    Member,
+    Method,
+    User,
+    UserRole,
+    AttendanceStatus,
+    Settings,
+    WeeklyHistoryRecord,
+    ServiceType,
+    WeeklyHistoryAttendanceBreakdown,
+    WeeklyHistoryDonations,
+} from './types';
 
 // --- String & Sanitization ---
 
@@ -66,45 +79,83 @@ export function sanitizeSettings(raw: any): Settings {
 }
 
 export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
-    const attendance = raw.attendance && typeof raw.attendance === 'object' ? raw.attendance : {};
+    const attendanceRaw = raw.attendance && typeof raw.attendance === 'object' ? raw.attendance : {};
+    const adultsRaw = attendanceRaw.adults && typeof attendanceRaw.adults === 'object' ? attendanceRaw.adults : attendanceRaw;
+    const visitorsRaw = attendanceRaw.visitors && typeof attendanceRaw.visitors === 'object' ? attendanceRaw.visitors : {};
 
     const parsedDate = new Date(raw.dateOfService);
     const dateOfService = (raw.dateOfService && !isNaN(parsedDate.getTime()))
         ? parsedDate.toISOString().slice(0, 10)
         : new Date().toISOString().slice(0, 10);
-    
+
+    const legacyServiceTypes: string[] = Array.isArray(raw.serviceTypes) ? raw.serviceTypes : [];
+    const serviceTypeInput: string = raw.serviceType ?? legacyServiceTypes[0] ?? '';
+
+    const attendance: WeeklyHistoryAttendanceBreakdown = {
+        adultsMale: normalizeNumber(adultsRaw.adultsMale ?? adultsRaw.male ?? adultsRaw.men ?? attendanceRaw.men),
+        adultsFemale: normalizeNumber(adultsRaw.adultsFemale ?? adultsRaw.female ?? attendanceRaw.women),
+        children: normalizeNumber(adultsRaw.children ?? attendanceRaw.children ?? attendanceRaw.junior),
+        adherents: normalizeNumber(attendanceRaw.adherents),
+        catechumens: normalizeNumber(attendanceRaw.catechumens),
+        visitors: {
+            total: normalizeNumber(visitorsRaw.total ?? attendanceRaw.visitors),
+            names: sanitizeString(visitorsRaw.names ?? attendanceRaw.visitorNames),
+            specialVisitorName: sanitizeString(visitorsRaw.specialVisitorName ?? attendanceRaw.specialVisitorName),
+            specialVisitorPosition: sanitizeString(visitorsRaw.specialVisitorPosition ?? attendanceRaw.specialVisitorPosition),
+            specialVisitorSummary: sanitizeString(visitorsRaw.specialVisitorSummary ?? attendanceRaw.specialVisitorSummary),
+        },
+    };
+
+    const donationsRaw = raw.donations && typeof raw.donations === 'object' ? raw.donations : {};
+    const donations: WeeklyHistoryDonations = {
+        description: sanitizeString(donationsRaw.description || raw.specialDonationsDetails),
+        quantity: sanitizeString(donationsRaw.quantity),
+        donatedBy: sanitizeString(donationsRaw.donatedBy),
+    };
+
     return {
         id: sanitizeString(raw.id) || uuidv4(),
         dateOfService: dateOfService,
         societyName: sanitizeString(raw.societyName),
-        officiant: sanitizeString(raw.officiant),
+        preacher: sanitizeString(raw.preacher) || sanitizeString(raw.officiant),
+        guestPreacher: raw.guestPreacher === true || raw.guestPreacher === 'true',
+        preacherSociety: sanitizeString(raw.preacherSociety),
         liturgist: sanitizeString(raw.liturgist),
-        serviceTypes: Array.isArray(raw.serviceTypes) ? raw.serviceTypes.map(sanitizeString) : [],
+        serviceType: sanitizeServiceType(serviceTypeInput),
         serviceTypeOther: sanitizeString(raw.serviceTypeOther),
         sermonTopic: sanitizeString(raw.sermonTopic),
+        memoryText: sanitizeString(raw.memoryText),
+        sermonSummary: sanitizeString(raw.sermonSummary) || sanitizeString(raw.worshipHighlights),
         worshipHighlights: sanitizeString(raw.worshipHighlights),
         announcementsBy: sanitizeString(raw.announcementsBy),
-        attendance: {
-            men: isNaN(parseInt(attendance.men, 10)) ? 0 : parseInt(attendance.men, 10),
-            women: isNaN(parseInt(attendance.women, 10)) ? 0 : parseInt(attendance.women, 10),
-            junior: isNaN(parseInt(attendance.junior, 10)) ? 0 : parseInt(attendance.junior, 10),
-            adherents: isNaN(parseInt(attendance.adherents, 10)) ? 0 : parseInt(attendance.adherents, 10),
-            visitors: isNaN(parseInt(attendance.visitors, 10)) ? 0 : parseInt(attendance.visitors, 10),
-            catechumens: isNaN(parseInt(attendance.catechumens, 10)) ? 0 : parseInt(attendance.catechumens, 10),
-        },
+        announcementsKeyPoints: sanitizeString(raw.announcementsKeyPoints),
+        attendance,
         newMembersDetails: sanitizeString(raw.newMembersDetails),
         newMembersContact: sanitizeString(raw.newMembersContact),
-        specialDonationsDetails: sanitizeString(raw.specialDonationsDetails),
+        donations,
         events: sanitizeString(raw.events),
         observations: sanitizeString(raw.observations),
         preparedBy: sanitizeString(raw.preparedBy),
     };
 }
 
+function normalizeNumber(value: any): number {
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) || parsed < 0 ? 0 : parsed;
+}
+
 // --- Enum Sanitizers ---
 
 export function sanitizeEntryType(type: any): EntryType {
-    const validTypes: EntryType[] = ["tithe", "offering", "first-fruit", "pledge", "harvest-levy", "other"];
+    const validTypes: EntryType[] = [
+        "tithe",
+        "offering",
+        "thanksgiving-offering",
+        "first-fruit",
+        "pledge",
+        "harvest-levy",
+        "other",
+    ];
     return validTypes.includes(type) ? type : "other";
 }
 
@@ -121,6 +172,37 @@ export function sanitizeUserRole(role: any): UserRole {
 export function sanitizeAttendanceStatus(status: any): AttendanceStatus {
     const validStatuses: AttendanceStatus[] = ['present', 'absent', 'sick', 'travel', 'catechumen'];
     return validStatuses.includes(status) ? status : 'absent';
+}
+
+export function sanitizeServiceType(type: any): ServiceType {
+    const valid: ServiceType[] = ['communion', 'harvest', 'divine-service', 'teaching-service', 'other'];
+    if (typeof type === 'string') {
+        const normalized = type.trim().toLowerCase();
+        const matched = valid.find(option => option === normalized || option === normalized.replace(' ', '-'));
+        if (matched) return matched;
+        const byLabel = valid.find(option => {
+            const label = serviceTypeLabel(option).toLowerCase();
+            return label === normalized;
+        });
+        if (byLabel) return byLabel;
+    }
+    return 'divine-service';
+}
+
+export function serviceTypeLabel(type: ServiceType): string {
+    switch (type) {
+        case 'communion':
+            return 'Communion';
+        case 'harvest':
+            return 'Harvest';
+        case 'divine-service':
+            return 'Divine Service';
+        case 'teaching-service':
+            return 'Teaching Service';
+        case 'other':
+        default:
+            return 'Other';
+    }
 }
 
 
