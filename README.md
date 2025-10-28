@@ -73,8 +73,6 @@ The single-page application exposes dedicated modules through a navigation sideb
 * **Automation** – A GitHub Actions workflow (`.github/workflows/deploy.yml`) builds and publishes the Vite bundle on every push to `main`.
 * **Documentation** – This README walks administrators through Azure AD registration, SharePoint provisioning, credential configuration, and secure deployment.
 
----
-
 ## Part 1: Azure & SharePoint Setup (One-Time)
 
 This part creates the necessary cloud infrastructure in your organization's Microsoft 365 account. You only need to do this once.
@@ -221,4 +219,3 @@ If the GitHub Pages site displays **"Loading Application…"** for more than a f
 2.  Confirm **Settings → Pages → Build and deployment → Source** is set to **GitHub Actions**. If it is set to "Deploy from a branch", GitHub will host the uncompiled TypeScript files and the app will never start.
 3.  After a successful deploy, force-refresh your browser (`Ctrl+Shift+R` on Windows/Linux or `Cmd+Shift+R` on macOS) to make sure you are loading the newest bundle.
 
-If you ever see Git merge conflict markers (for example, `<<<<<<<` or `>>>>>>>`) inside `README.md`, open the file in your editor, remove the markers, and keep the instructions that match your current deployment method. Save the resolved file, run `git add README.md`, and create a new commit to finalize the fix.

@@ -7,6 +7,48 @@
     <link rel="manifest" href="./manifest.json" />
     <meta name="theme-color" content="#4338ca" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Immediately unregister any previously installed service workers before the
+      // main bundle runs. This ensures visitors who are stuck on the loading screen
+      // because of an outdated offline cache get a clean reload path.
+      (function uncacheLegacyServiceWorkers() {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker
+              .getRegistrations()
+              .then(registrations => {
+                registrations.forEach(registration => {
+                  registration.unregister().catch(() => {
+                    /* swallow errors - the React boot process will log details */
+                  });
+                });
+              })
+              .catch(() => {
+                /* ignore lookup errors */
+              });
+          }
+
+          if ('caches' in window) {
+            caches
+              .keys()
+              .then(keys => {
+                keys
+                  .filter(key => key.startsWith('gmct'))
+                  .forEach(key => {
+                    caches.delete(key).catch(() => {
+                      /* ignore cache cleanup errors */
+                    });
+                  });
+              })
+              .catch(() => {
+                /* ignore cache enumeration errors */
+              });
+          }
+        } catch (error) {
+          console.warn('Failed to pre-emptively clear legacy service workers.', error);
+        }
+      })();
+    </script>
     <style>
       html, body, #root {
         height: 100%;
