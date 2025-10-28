@@ -92,7 +92,11 @@ This part uploads the configured application to a private website that you can s
 
 ### Step 3.2: Upload the Application Files
 
+codex/restore-missing-imports-for-app.tsx
 You can either upload through the GitHub web UI or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). A GitHub Actions workflow included with this project will take care of building the optimized production bundle and publishing it, so you **should not** commit the `dist/` folder yourself.
+=======
+You can either upload through the GitHub web UI or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). GitHub Pages will build directly from this branch, so you **do not** need to commit the `dist/` folder.
+main
 
 **Option A – Upload in the browser**
 
@@ -110,8 +114,14 @@ You can either upload through the GitHub web UI or push from your local machine.
 
 1.  In your repository, go to the **"Settings"** tab.
 2.  On the left menu, click **"Pages"**.
+codex/restore-missing-imports-for-app.tsx
 3.  Under **"Build and deployment"**, choose **Source → GitHub Actions** and click **"Save"**. _Do not_ select the old "Deploy from a branch" option—if you do, GitHub Pages will serve the raw TypeScript files and the site will stay on the "Loading Application…" screen.
 4.  After each push to `main`, open the **Actions** tab and wait for the **Deploy to GitHub Pages** workflow to finish. You should also see a successful deployment listed under **Deployments → github-pages** on the right side of your repository home page. Once it succeeds, reload the **Settings → Pages** screen. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
+=======
+3.  Under **"Build and deployment"**, set **Source** to **"Deploy from a branch"**.
+4.  Choose the `main` branch and the **`/(root)`** folder, then click **"Save"**. GitHub Pages will publish straight from the project root. (Because `vite.config.ts` already sets a relative base path, no extra configuration is required.)
+5.  Wait for the deployment banner to finish building, then refresh the page. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
+main
 
 ### Step 3.4: Update Azure AD Redirect URI (Final Step)
 
