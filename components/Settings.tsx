@@ -26,6 +26,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
 
     return (
         <div className="space-y-6">
+            <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-sky-50 to-indigo-100/70 p-6 space-y-4">
  codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-sky-50 to-indigo-100/70 p-6 space-y-4">
 
@@ -66,6 +67,9 @@ main
                 <p className="text-sm text-slate-500">Backups contain financial records, members, users, settings and attendance data. Importing a backup overwrites current data.</p>
             </section>
 
+            <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-6 space-y-4">
+                <h2 className="text-2xl font-bold text-slate-800">Cloud Sync Status</h2>
+                <div className="border border-dashed border-emerald-200 rounded-xl p-4 bg-white/70 backdrop-blur">
  codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-6 space-y-4">
                 <h2 className="text-2xl font-bold text-slate-800">Cloud Sync Status</h2>
@@ -79,6 +83,7 @@ main
                     <p className="text-sm text-slate-500 mt-1">Signed in: {cloud.signedIn ? 'Yes' : 'No'}</p>
                     {cloud.account && <p className="text-sm text-slate-500">Account: {cloud.account.username ?? 'Unknown account'}</p>}
                 </div>
+                <button onClick={() => setCloud(prev => ({ ...prev, message: 'Ready for manual sign-in.', ready: true }))} className="bg-white/80 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white w-full md:w-auto">
  codex/restore-missing-imports-for-app.tsx
                 <button onClick={() => setCloud(prev => ({ ...prev, message: 'Ready for manual sign-in.', ready: true }))} className="bg-white/80 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white w-full md:w-auto">
 

@@ -67,6 +67,7 @@ const Attendance: React.FC<AttendanceProps> = ({ members, attendance, setAttenda
 
     return (
         <div className="space-y-6">
+            <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-lime-50 to-emerald-100/70 p-6">
  codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-lime-50 to-emerald-100/70 p-6">
 

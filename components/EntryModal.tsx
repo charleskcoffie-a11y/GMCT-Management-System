@@ -13,6 +13,7 @@ type EntryModalProps = {
     onDelete: (id: string) => void;
 };
 
+const entryTypes: EntryType[] = ['tithe', 'offering', 'thanksgiving-offering', 'first-fruit', 'pledge', 'harvest-levy', 'other'];
  codex/restore-missing-imports-for-app.tsx
 const entryTypes: EntryType[] = ['tithe', 'offering', 'thanksgiving-offering', 'first-fruit', 'pledge', 'harvest-levy', 'other'];
 
@@ -32,6 +33,12 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
         amount: 0,
         note: '',
     });
+    const [memberQuery, setMemberQuery] = useState('');
+
+    useEffect(() => {
+        if (entry) {
+            setForm(entry);
+            setMemberQuery(entry.memberName || '');
  codex/restore-missing-imports-for-app.tsx
     const [memberQuery, setMemberQuery] = useState('');
 
@@ -177,6 +184,8 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="w-full max-w-3xl rounded-3xl shadow-2xl border border-white/60 bg-gradient-to-br from-white via-sky-50 to-indigo-100/80">
+                <header className="border-b border-white/60 bg-white/60 backdrop-blur p-6 flex items-center justify-between rounded-t-3xl">
  codex/restore-missing-imports-for-app.tsx
             <div className="w-full max-w-3xl rounded-3xl shadow-2xl border border-white/60 bg-gradient-to-br from-white via-sky-50 to-indigo-100/80">
                 <header className="border-b border-white/60 bg-white/60 backdrop-blur p-6 flex items-center justify-between rounded-t-3xl">
@@ -261,6 +270,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
                     <div className="flex flex-wrap gap-3 justify-between">
                         <div className="flex gap-3">
                             <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg">Save</button>
+                            <button type="button" onClick={handleSaveAndNew} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Save &amp; New</button>
  codex/restore-missing-imports-for-app.tsx
                             <button type="button" onClick={handleSaveAndNew} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Save &amp; New</button>
 

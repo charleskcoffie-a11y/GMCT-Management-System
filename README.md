@@ -163,19 +163,7 @@ This part uploads the configured application to a private website that you can s
 
 ### Step 3.2: Upload the Application Files
 
- codex/restore-missing-imports-for-app.tsx
 You can either upload through the GitHub web UI, work through a pull request, or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). A GitHub Actions workflow included with this project will take care of building the optimized production bundle and publishing it, so you **should not** commit the `dist/` folder yourself.
-
- codex/restore-missing-imports-for-app.tsx
-You can either upload through the GitHub web UI or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). A GitHub Actions workflow included with this project will take care of building the optimized production bundle and publishing it, so you **should not** commit the `dist/` folder yourself.
-
-codex/restore-missing-imports-for-app.tsx
-You can either upload through the GitHub web UI or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). A GitHub Actions workflow included with this project will take care of building the optimized production bundle and publishing it, so you **should not** commit the `dist/` folder yourself.
-
-You can either upload through the GitHub web UI or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). GitHub Pages will build directly from this branch, so you **do not** need to commit the `dist/` folder.
-main
- main
- main
 
 **Option A – Upload in the browser**
 

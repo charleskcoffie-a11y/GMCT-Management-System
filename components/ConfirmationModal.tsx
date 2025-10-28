@@ -13,6 +13,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="w-full max-w-lg rounded-3xl shadow-2xl border border-white/60 bg-gradient-to-br from-white via-rose-50 to-pink-100/80">
+                <header className="border-b border-white/60 bg-white/60 backdrop-blur p-6 rounded-t-3xl">
  codex/restore-missing-imports-for-app.tsx
             <div className="w-full max-w-lg rounded-3xl shadow-2xl border border-white/60 bg-gradient-to-br from-white via-rose-50 to-pink-100/80">
                 <header className="border-b border-white/60 bg-white/60 backdrop-blur p-6 rounded-t-3xl">
@@ -25,6 +27,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
                 <div className="p-6 space-y-4">
                     <p className="text-slate-600">{message}</p>
                     <div className="flex justify-end gap-3">
+                        <button onClick={onClose} className="bg-white/80 border border-pink-200 text-pink-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Cancel</button>
  codex/restore-missing-imports-for-app.tsx
                         <button onClick={onClose} className="bg-white/80 border border-pink-200 text-pink-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Cancel</button>
 

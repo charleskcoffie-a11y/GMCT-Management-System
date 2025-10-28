@@ -45,6 +45,7 @@ const Header: React.FC<HeaderProps> = ({ entries, onImport, onExport, currentUse
     };
 
     return (
+        <header className="bg-gradient-to-br from-white via-indigo-50 to-sky-50 rounded-3xl shadow-lg border border-white/60 backdrop-blur p-6 sm:p-8 mb-6">
  codex/restore-missing-imports-for-app.tsx
         <header className="bg-gradient-to-br from-white via-indigo-50 to-sky-50 rounded-3xl shadow-lg border border-white/60 backdrop-blur p-6 sm:p-8 mb-6">
 

@@ -49,6 +49,11 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
     const [rangeStart, setRangeStart] = useState('');
     const [rangeEnd, setRangeEnd] = useState('');
 
+    const availableDates = useMemo<string[]>(() => {
+        return Array.from(new Set(entries.map(entry => entry.date))).sort();
+    }, [entries]);
+
+    const availableMonths = useMemo<string[]>(() => {
     const availableDates = useMemo(() => {
         return Array.from(new Set(entries.map(entry => entry.date))).sort();
     }, [entries]);
@@ -76,6 +81,7 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
         }
     }, [filterMode, availableMonths]);
 
+    const filteredEntries = useMemo<Entry[]>(() => {
     const filteredEntries = useMemo(() => {
         if (entries.length === 0) return [];
 
@@ -125,6 +131,7 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
         };
     }, [filteredEntries]);
 
+    const barData = useMemo<Array<{ period: string; label: string; total: number }>>(() => {
     const barData = useMemo(() => {
         if (filteredEntries.length === 0) return [];
 
@@ -143,6 +150,7 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
             }));
     }, [filteredEntries, filterMode]);
 
+    const pieData = useMemo<Array<{ type: EntryType; label: string; value: number; color: string }>>(() => {
     const pieData = useMemo(() => {
         if (filteredEntries.length === 0) return [];
 
@@ -168,6 +176,21 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
         }));
     }, [filteredEntries]);
 
+    const classTotals = useMemo<Array<{ classNumber: string; total: number }>>(() => {
+        if (filteredEntries.length === 0) return [];
+
+        const totals = new Map<string, number>();
+        filteredEntries.forEach(entry => {
+            const classNumber = entry.memberID.split('-')[0] ?? 'Unknown';
+            totals.set(classNumber, (totals.get(classNumber) ?? 0) + entry.amount);
+        });
+
+        const aggregated: Array<{ classNumber: string; total: number }> = [];
+        totals.forEach((total, classNumber) => {
+            aggregated.push({ classNumber, total });
+        });
+
+        return aggregated.sort((a, b) => b.total - a.total);
     const classTotals = useMemo(() => {
         if (filteredEntries.length === 0) return [];
         const totals = filteredEntries.reduce<Record<string, number>>((acc, entry) => {
@@ -286,6 +309,9 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
                             <p className="text-2xl font-bold text-slate-800">{stats.largest ? formatCurrency(stats.largest.amount, settings.currency) : '—'}</p>
                             {stats.largest && <p className="text-sm text-slate-500">{stats.largest.memberName}</p>}
                         </div>
+                        <div className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/60">
+                            <h3 className="text-sm font-semibold text-slate-500 uppercase">Latest Entry</h3>
+                            <p className="text-2xl font-bold text-slate-800">{stats.latest ? formatDayLabel(stats.latest.date) : '—'}</p>
  codex/restore-missing-imports-for-app.tsx
                         <div className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/60">
                             <h3 className="text-sm font-semibold text-slate-500 uppercase">Latest Entry</h3>

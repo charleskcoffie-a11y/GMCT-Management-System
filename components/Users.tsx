@@ -33,6 +33,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers }) => {
 
     return (
         <div className="space-y-6">
+            <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-indigo-50 to-sky-100/70 p-6">
  codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-indigo-50 to-sky-100/70 p-6">
 
@@ -53,6 +54,7 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers }) => {
                 </form>
             </section>
 
+            <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-rose-50 to-pink-100/70 p-6">
  codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-rose-50 to-pink-100/70 p-6">
 

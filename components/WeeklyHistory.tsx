@@ -4,6 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import type { ServiceType, WeeklyHistoryRecord } from '../types';
 import { serviceTypeLabel } from '../utils';
 
+interface WeeklyHistoryProps {
+    history: WeeklyHistoryRecord[];
+    setHistory: React.Dispatch<React.SetStateAction<WeeklyHistoryRecord[]>>;
 import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { WeeklyHistoryRecord } from '../types';

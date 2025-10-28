@@ -133,6 +133,7 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
                 <p className="text-sm text-slate-500">Attendance categories are aggregated across {attendance.length} service dates.</p>
             </section>
 
+            <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-lime-100/70 p-6">
  codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-lime-100/70 p-6">
 
@@ -144,6 +145,7 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {Object.entries(summary.totals).map(([status, count]) => (
+                            <div key={status} className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-slate-50 to-slate-100/70">
  codex/restore-missing-imports-for-app.tsx
                             <div key={status} className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-slate-50 to-slate-100/70">
 
