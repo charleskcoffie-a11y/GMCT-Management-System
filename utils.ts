@@ -71,11 +71,31 @@ export function sanitizeUser(raw: any): User {
 }
 
 export function sanitizeSettings(raw: any): Settings {
-    return {
-        currency: sanitizeString(raw.currency) || 'USD',
-        maxClasses: typeof raw.maxClasses === 'number' && raw.maxClasses > 0 ? raw.maxClasses : 10,
-        enforceDirectory: typeof raw.enforceDirectory === 'boolean' ? raw.enforceDirectory : true,
+    const source: Record<string, unknown> = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
+    const maxRaw = source.maxClasses;
+    const parsedMaxClasses = typeof maxRaw === 'string'
+        ? parseInt(maxRaw, 10)
+        : typeof maxRaw === 'number'
+            ? maxRaw
+            : NaN;
+
+    const enforceRaw = source.enforceDirectory;
+    let enforceDirectory: boolean;
+    if (typeof enforceRaw === 'boolean') {
+        enforceDirectory = enforceRaw;
+    } else if (typeof enforceRaw === 'string') {
+        enforceDirectory = enforceRaw.trim().toLowerCase() !== 'false';
+    } else {
+        enforceDirectory = true;
     }
+
+    const currencyRaw = source.currency;
+
+    return {
+        currency: typeof currencyRaw === 'string' ? sanitizeString(currencyRaw) || 'USD' : 'USD',
+        maxClasses: Number.isFinite(parsedMaxClasses) && parsedMaxClasses > 0 ? parsedMaxClasses : 10,
+        enforceDirectory,
+    };
 }
 
 export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
