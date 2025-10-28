@@ -182,17 +182,6 @@ You can either upload through the GitHub web UI, work through a pull request, or
 3.  Open a pull request targeting `main` and review the diffs as usual.
 4.  Once the pull request is merged, the merge commit lands on `main` and automatically triggers the GitHub Actions deployment workflow—no extra manual steps required.
 
-#### If `git push` fails because `origin` is missing
-
-When you work from a fresh folder or copy files into a new directory, Git might not know which remote repository to use. If you run `git push` or `git pull` and see an error like `fatal: 'origin' does not appear to be a git repository`, add the remote with the following commands (replace the placeholders with your GitHub path):
-
-```bash
-git remote add origin https://github.com/<your-username>/<repository-name>.git
-git push -u origin main
-```
-
-The first command tells Git where the repository lives online. The second command uploads your `main` branch and remembers that `origin/main` is the default upstream, so future pushes only need `git push`.
-
 ### Step 3.3: Enable GitHub Pages
 
 1.  In your repository, go to the **"Settings"** tab.
@@ -229,21 +218,4 @@ If the GitHub Pages site displays **"Loading Application…"** for more than a f
 1.  Open your repository on GitHub and review the **Actions → Deploy to GitHub Pages** workflow run for the most recent commit. Resolve any build errors reported there.
 2.  Confirm **Settings → Pages → Build and deployment → Source** is set to **GitHub Actions**. If it is set to "Deploy from a branch", GitHub will host the uncompiled TypeScript files and the app will never start.
 3.  After a successful deploy, force-refresh your browser (`Ctrl+Shift+R` on Windows/Linux or `Cmd+Shift+R` on macOS) to make sure you are loading the newest bundle.
-
----
-
-## Appendix: Working with Git Changes
-
-### Preventing repeated merge conflicts
-
-Conflicts usually appear when two different edits touch the same file but GitHub cannot decide how to merge them. You can reduce how often they appear by following this routine whenever you update the project:
-
-1. **Pull the latest `main` branch first.** In the GitHub UI, download the newest files before uploading your edits. In a local clone, run `git pull origin main` before you start changing files.
-2. **Edit and save your updates.** Make your changes only after you are sure you have the current files.
-3. **Commit or upload the refreshed copy.** When you push or upload, you will be sending GitHub an updated version that already includes the latest work, so it will not conflict with the new commit from someone else.
-4. **Resolve conflicts once, then repeat the steps above.** After you fix a conflict, make sure to pull again before the next round of edits. That prevents the same conflict from reappearing the next time you upload.
-
-### What do red lines mean on GitHub?
-
-When you review a change on GitHub (for example in a pull request or the file history), the platform highlights **removed or replaced lines in red** and **new lines in green**. Seeing red does not mean the application is broken—it only shows which lines are being deleted compared with the previous version. If you ever see literal conflict markers like `<<<<<<<` or `>>>>>>>` inside a file, those markers mean Git could not merge changes automatically. Remove the markers and choose the correct version of the code, then commit the cleaned file.
 

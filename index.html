@@ -14,34 +14,18 @@
       (function uncacheLegacyServiceWorkers() {
         try {
           if ('serviceWorker' in navigator) {
-            const { serviceWorker } = navigator;
-            if (typeof serviceWorker.getRegistrations === 'function') {
-              serviceWorker
-                .getRegistrations()
-                .then(registrations => {
-                  registrations.forEach(registration => {
-                    registration.unregister().catch(() => {
-                      /* swallow errors - the React boot process will log details */
-                    });
+            navigator.serviceWorker
+              .getRegistrations()
+              .then(registrations => {
+                registrations.forEach(registration => {
+                  registration.unregister().catch(() => {
+                    /* swallow errors - the React boot process will log details */
                   });
-                })
-                .catch(() => {
-                  /* ignore lookup errors */
                 });
-            } else if (typeof serviceWorker.getRegistration === 'function') {
-              serviceWorker
-                .getRegistration()
-                .then(registration => {
-                  if (registration) {
-                    registration.unregister().catch(() => {
-                      /* swallow errors - the React boot process will log details */
-                    });
-                  }
-                })
-                .catch(() => {
-                  /* ignore lookup errors */
-                });
-            }
+              })
+              .catch(() => {
+                /* ignore lookup errors */
+              });
           }
 
           if ('caches' in window) {
