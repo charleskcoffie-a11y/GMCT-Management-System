@@ -92,16 +92,27 @@ This part uploads the configured application to a private website that you can s
 
 ### Step 3.2: Upload the Application Files
 
+You can either upload through the GitHub web UI or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). GitHub Pages will build directly from this branch, so you **do not** need to commit the `dist/` folder.
+
+**Option A – Upload in the browser**
+
 1.  In your new repository, click **"Add file"** > **"Upload files"**.
 2.  Drag and drop **all application files and folders** into the upload area. This includes the `constants.ts` file you just edited.
 3.  Click **"Commit changes"**.
+
+**Option B – Push from your computer**
+
+1.  Clone the empty repository to your machine: `git clone https://github.com/<your-username>/<repository-name>.git`
+2.  Copy this project into the cloned folder, run `npm install`, and verify it builds locally with `npm run build`.
+3.  Commit all files (except `dist/`) and push them to the `main` branch.
 
 ### Step 3.3: Enable GitHub Pages
 
 1.  In your repository, go to the **"Settings"** tab.
 2.  On the left menu, click **"Pages"**.
-3.  Under "Branch", select `main` from the dropdown and click **"Save"**.
-4.  After a minute, refresh the page. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
+3.  Under **"Build and deployment"**, set **Source** to **"Deploy from a branch"**.
+4.  Choose the `main` branch and the **`/(root)`** folder, then click **"Save"**. GitHub Pages will publish straight from the project root. (Because `vite.config.ts` already sets a relative base path, no extra configuration is required.)
+5.  Wait for the deployment banner to finish building, then refresh the page. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
 
 ### Step 3.4: Update Azure AD Redirect URI (Final Step)
 
