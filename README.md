@@ -92,7 +92,11 @@ This part uploads the configured application to a private website that you can s
 
 ### Step 3.2: Upload the Application Files
 
+codex/restore-missing-imports-for-app.tsx
+You can either upload through the GitHub web UI or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). A GitHub Actions workflow included with this project will take care of building the optimized production bundle and publishing it, so you **should not** commit the `dist/` folder yourself.
+=======
 You can either upload through the GitHub web UI or push from your local machine. The key requirement is that the `main` branch contains all of the source files (including `App.tsx`, `components/`, and the edited `constants.ts`). GitHub Pages will build directly from this branch, so you **do not** need to commit the `dist/` folder.
+main
 
 **Option A – Upload in the browser**
 
@@ -110,9 +114,14 @@ You can either upload through the GitHub web UI or push from your local machine.
 
 1.  In your repository, go to the **"Settings"** tab.
 2.  On the left menu, click **"Pages"**.
+codex/restore-missing-imports-for-app.tsx
+3.  Under **"Build and deployment"**, choose **Source → GitHub Actions** and click **"Save"**. _Do not_ select the old "Deploy from a branch" option—if you do, GitHub Pages will serve the raw TypeScript files and the site will stay on the "Loading Application…" screen.
+4.  After each push to `main`, open the **Actions** tab and wait for the **Deploy to GitHub Pages** workflow to finish. You should also see a successful deployment listed under **Deployments → github-pages** on the right side of your repository home page. Once it succeeds, reload the **Settings → Pages** screen. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
+=======
 3.  Under **"Build and deployment"**, set **Source** to **"Deploy from a branch"**.
 4.  Choose the `main` branch and the **`/(root)`** folder, then click **"Save"**. GitHub Pages will publish straight from the project root. (Because `vite.config.ts` already sets a relative base path, no extra configuration is required.)
 5.  Wait for the deployment banner to finish building, then refresh the page. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
+main
 
 ### Step 3.4: Update Azure AD Redirect URI (Final Step)
 
@@ -133,3 +142,15 @@ Your application is now live and fully configured.
 *   You can now share the GitHub Pages URL with your team members.
 *   They can open the link, sign in with their assigned user accounts, and start using the application immediately with no setup required.
 *   When a user signs in with their Microsoft account, the app will connect to your SharePoint lists to sync member data.
+
+---
+
+## Troubleshooting
+
+If the GitHub Pages site displays **"Loading Application…"** for more than a few seconds:
+
+1.  Open your repository on GitHub and review the **Actions → Deploy to GitHub Pages** workflow run for the most recent commit. Resolve any build errors reported there.
+2.  Confirm **Settings → Pages → Build and deployment → Source** is set to **GitHub Actions**. If it is set to "Deploy from a branch", GitHub will host the uncompiled TypeScript files and the app will never start.
+3.  After a successful deploy, force-refresh your browser (`Ctrl+Shift+R` on Windows/Linux or `Cmd+Shift+R` on macOS) to make sure you are loading the newest bundle.
+
+If you ever see Git merge conflict markers (for example, `<<<<<<<` or `>>>>>>>`) inside `README.md`, open the file in your editor, remove the markers, and keep the instructions that match your current deployment method. Save the resolved file, run `git add README.md`, and create a new commit to finalize the fix.
