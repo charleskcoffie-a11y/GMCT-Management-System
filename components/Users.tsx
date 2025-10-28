@@ -33,7 +33,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers }) => {
 
     return (
         <div className="space-y-6">
+ codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-indigo-50 to-sky-100/70 p-6">
+
+            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
+ main
                 <h2 className="text-xl font-bold text-slate-800 mb-4">Add User</h2>
                 <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username" className="border border-slate-300 rounded-lg px-3 py-2" />
@@ -49,7 +53,11 @@ const UsersTab: React.FC<UsersTabProps> = ({ users, setUsers }) => {
                 </form>
             </section>
 
+ codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-rose-50 to-pink-100/70 p-6">
+
+            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
+ main
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
                     <h2 className="text-xl font-bold text-slate-800">Existing Users</h2>
                     <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search users" className="border border-slate-300 rounded-lg px-3 py-2 w-full md:w-64" />
