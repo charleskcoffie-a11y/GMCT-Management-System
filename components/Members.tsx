@@ -1,13 +1,7 @@
- codex/restore-missing-imports-for-app.tsx
 import React, { useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Member, Settings } from '../types';
 import { fromCsv, sanitizeMember } from '../utils';
-
-import React, { useMemo, useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import type { Member, Settings } from '../types';
- main
 
 interface MembersProps {
     members: Member[];
@@ -19,7 +13,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
     const [name, setName] = useState('');
     const [classNumber, setClassNumber] = useState('');
     const [search, setSearch] = useState('');
- codex/restore-missing-imports-for-app.tsx
     const [classFilter, setClassFilter] = useState<'all' | string>('all');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
@@ -38,12 +31,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
             .filter(member => (classFilter === 'all' ? true : (member.classNumber ?? '') === classFilter));
     }, [members, search, classFilter]);
 
-
-    const filteredMembers = useMemo(() => {
-        return members.filter(member => member.name.toLowerCase().includes(search.toLowerCase()));
-    }, [members, search]);
- main
-
     const handleAdd = (event: React.FormEvent) => {
         event.preventDefault();
         if (!name.trim()) return;
@@ -57,7 +44,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
         setMembers(prev => prev.filter(member => member.id !== id));
     };
 
- codex/restore-missing-imports-for-app.tsx
     const handleEdit = (member: Member) => {
         setEditingId(member.id);
         setEditName(member.name);
@@ -121,11 +107,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
     return (
         <div className="space-y-6">
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-6">
-
-    return (
-        <div className="space-y-6">
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
- main
                 <h2 className="text-xl font-bold text-slate-800 mb-4">Add Member</h2>
                 <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" className="border border-slate-300 rounded-lg px-3 py-2" />
@@ -137,7 +118,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                     </select>
                     <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-3 py-2">Add Member</button>
                 </form>
- codex/restore-missing-imports-for-app.tsx
                 <div className="flex flex-wrap gap-3 mt-4">
                     <button type="button" onClick={handleImportClick} className="bg-white/80 border border-emerald-200 text-emerald-700 font-semibold rounded-lg px-3 py-2 hover:bg-white">
                         Import Members (CSV)
@@ -159,14 +139,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                             ))}
                         </select>
                     </div>
-
-            </section>
-
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-                    <h2 className="text-xl font-bold text-slate-800">Member Directory</h2>
-                    <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search members" className="border border-slate-300 rounded-lg px-3 py-2 w-full md:w-64" />
- main
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-slate-600">
@@ -180,7 +152,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                         <tbody>
                             {filteredMembers.map(member => (
                                 <tr key={member.id} className="border-b last:border-0">
- codex/restore-missing-imports-for-app.tsx
                                     <td className="px-4 py-2 font-medium text-slate-800">
                                         {editingId === member.id ? (
                                             <input value={editName} onChange={e => setEditName(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1 w-full" />
@@ -212,12 +183,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                                                 <button onClick={() => handleRemove(member.id)} className="text-red-500 hover:text-red-600 font-semibold">Remove</button>
                                             </div>
                                         )}
-
-                                    <td className="px-4 py-2 font-medium text-slate-800">{member.name}</td>
-                                    <td className="px-4 py-2">{member.classNumber ? `Class ${member.classNumber}` : '—'}</td>
-                                    <td className="px-4 py-2">
-                                        <button onClick={() => handleRemove(member.id)} className="text-red-500 hover:text-red-600 font-semibold">Remove</button>
- main
                                     </td>
                                 </tr>
                             ))}

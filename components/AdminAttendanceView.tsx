@@ -1,11 +1,6 @@
- codex/restore-missing-imports-for-app.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import type { AttendanceRecord, Member, Settings, User } from '../types';
 import { sanitizeAttendanceStatus } from '../utils';
-
-import React, { useMemo } from 'react';
-import type { AttendanceRecord, Member, Settings, User } from '../types';
- main
 
 interface AdminAttendanceViewProps {
     members: Member[];
@@ -14,7 +9,6 @@ interface AdminAttendanceViewProps {
     currentUser: User;
 }
 
- codex/restore-missing-imports-for-app.tsx
 const STATUSES: Array<'present' | 'absent' | 'sick' | 'travel' | 'catechumen'> = ['present', 'absent', 'sick', 'travel', 'catechumen'];
 
 const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, attendance, settings, currentUser }) => {
@@ -42,14 +36,6 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
                 (acc, item) => {
                     const status = sanitizeAttendanceStatus(item.status);
                     acc[status] = (acc[status] ?? 0) + 1;
-
-const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, attendance, settings, currentUser }) => {
-    const summary = useMemo(() => {
-        const perDate = attendance.map(record => {
-            const stats = record.records.reduce(
-                (acc, item) => {
-                    acc[item.status] = (acc[item.status] ?? 0) + 1;
- main
                     return acc;
                 },
                 {} as Record<string, number>,
@@ -57,22 +43,15 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
             return { date: record.date, stats };
         });
 
- codex/restore-missing-imports-for-app.tsx
         const totals = orderedRecords.reduce<Record<string, number>>((acc, record) => {
             record.records.forEach(item => {
                 const status = sanitizeAttendanceStatus(item.status);
                 acc[status] = (acc[status] ?? 0) + 1;
-
-        const totals = attendance.reduce<Record<string, number>>((acc, record) => {
-            record.records.forEach(item => {
-                acc[item.status] = (acc[item.status] ?? 0) + 1;
- main
             });
             return acc;
         }, {});
 
         return { perDate, totals };
- codex/restore-missing-imports-for-app.tsx
     }, [orderedRecords]);
 
     const selectedRecord = useMemo(
@@ -121,24 +100,12 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
     return (
         <div className="space-y-6">
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-indigo-50 to-violet-100/70 p-6">
-
-    }, [attendance]);
-
-    return (
-        <div className="space-y-6">
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
- main
                 <h2 className="text-2xl font-bold text-slate-800">Attendance Overview</h2>
                 <p className="text-slate-500">{members.length} members tracked. Viewing as {currentUser.role}.</p>
                 <p className="text-sm text-slate-500">Attendance categories are aggregated across {attendance.length} service dates.</p>
             </section>
 
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-lime-100/70 p-6">
- codex/restore-missing-imports-for-app.tsx
-            <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-lime-100/70 p-6">
-
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
- main
                 <h3 className="text-xl font-semibold text-slate-800 mb-4">Totals</h3>
                 {Object.keys(summary.totals).length === 0 ? (
                     <p className="text-slate-500">No attendance has been recorded yet.</p>
@@ -146,11 +113,6 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {Object.entries(summary.totals).map(([status, count]) => (
                             <div key={status} className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-slate-50 to-slate-100/70">
- codex/restore-missing-imports-for-app.tsx
-                            <div key={status} className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-slate-50 to-slate-100/70">
-
-                            <div key={status} className="border border-slate-200 rounded-xl p-4">
- main
                                 <h4 className="text-sm font-semibold text-slate-500 uppercase">{status}</h4>
                                 <p className="text-2xl font-bold text-slate-800">{count}</p>
                             </div>
@@ -159,7 +121,6 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
                 )}
             </section>
 
- codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-sky-50 to-cyan-100/70 p-6 space-y-4">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div>
@@ -247,40 +208,10 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
                             </div>
                         </div>
                     </div>
-
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
-                <h3 className="text-xl font-semibold text-slate-800 mb-4">By Service Date</h3>
-                {summary.perDate.length === 0 ? (
-                    <p className="text-slate-500">No attendance records to display.</p>
-                ) : (
-                    <table className="w-full text-left text-slate-600">
-                        <thead className="uppercase text-sm text-slate-500 border-b">
-                            <tr>
-                                <th className="px-4 py-2">Date</th>
-                                <th className="px-4 py-2">Breakdown</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {summary.perDate.map(record => (
-                                <tr key={record.date} className="border-b last:border-0">
-                                    <td className="px-4 py-2 font-medium text-slate-800">{record.date}</td>
-                                    <td className="px-4 py-2">
-                                        <div className="flex flex-wrap gap-2 text-sm text-slate-500">
-                                            {Object.entries(record.stats).map(([status, count]) => (
-                                                <span key={status} className="bg-slate-100 text-slate-700 px-2 py-1 rounded-md">{status}: {count}</span>
-                                            ))}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
- main
                 )}
             </section>
 
             <p className="text-xs text-slate-400">Class limit configured to {settings.maxClasses}. Ensure member class assignments are up to date for accurate reporting.</p>
- codex/restore-missing-imports-for-app.tsx
 
             {selectedMember && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -307,8 +238,6 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
                     </div>
                 </div>
             )}
-
- main
         </div>
     );
 };

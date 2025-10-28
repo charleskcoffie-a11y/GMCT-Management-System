@@ -13,7 +13,6 @@ const STATUSES: AttendanceStatus[] = ['present', 'absent', 'sick', 'travel', 'ca
 
 const Attendance: React.FC<AttendanceProps> = ({ members, attendance, setAttendance, currentUser, settings }) => {
     const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
- codex/restore-missing-imports-for-app.tsx
     const [memberSearch, setMemberSearch] = useState('');
 
     const filteredMembers = useMemo(() => {
@@ -29,15 +28,6 @@ const Attendance: React.FC<AttendanceProps> = ({ members, attendance, setAttenda
             return nameMatch || idMatch;
         });
     }, [members, currentUser, memberSearch]);
-
-
-    const filteredMembers = useMemo(() => {
-        if (currentUser.role === 'class-leader' && currentUser.classLed) {
-            return members.filter(member => member.classNumber === currentUser.classLed);
-        }
-        return members;
-    }, [members, currentUser]);
- main
 
     const record = useMemo(() => attendance.find(item => item.date === date), [attendance, date]);
 
@@ -68,11 +58,6 @@ const Attendance: React.FC<AttendanceProps> = ({ members, attendance, setAttenda
     return (
         <div className="space-y-6">
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-lime-50 to-emerald-100/70 p-6">
- codex/restore-missing-imports-for-app.tsx
-            <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-lime-50 to-emerald-100/70 p-6">
-
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
- main
                 <h2 className="text-2xl font-bold text-slate-800">Mark Attendance</h2>
                 <p className="text-slate-500">Select the service date and update each member's status.</p>
                 <div className="mt-4">
@@ -81,7 +66,6 @@ const Attendance: React.FC<AttendanceProps> = ({ members, attendance, setAttenda
                 </div>
             </section>
 
- codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-cyan-50 to-sky-100/70 p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-semibold text-slate-800">Members ({filteredMembers.length})</h3>
@@ -97,15 +81,6 @@ const Attendance: React.FC<AttendanceProps> = ({ members, attendance, setAttenda
                 </div>
                 {filteredMembers.length === 0 ? (
                     <p className="text-slate-500">{memberSearch ? 'No members match your search.' : 'No members assigned to your view.'}</p>
-
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-semibold text-slate-800">Members ({filteredMembers.length})</h3>
-                    <span className="text-sm text-slate-500">Class limit: {settings.maxClasses}</span>
-                </div>
-                {filteredMembers.length === 0 ? (
-                    <p className="text-slate-500">No members assigned to your view.</p>
- main
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-slate-600">

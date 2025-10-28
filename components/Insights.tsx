@@ -1,4 +1,3 @@
- codex/restore-missing-imports-for-app.tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Entry, EntryType, Settings } from '../types';
 import { formatCurrency } from '../utils';
@@ -31,18 +30,12 @@ function formatMonthLabel(monthKey: string): string {
     return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
 }
 
-import React, { useMemo } from 'react';
-import type { Entry, Settings } from '../types';
-import { formatCurrency } from '../utils';
- main
-
 interface InsightsProps {
     entries: Entry[];
     settings: Settings;
 }
 
 const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
- codex/restore-missing-imports-for-app.tsx
     const [filterMode, setFilterMode] = useState<FilterMode>('month');
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedMonth, setSelectedMonth] = useState('');
@@ -54,11 +47,6 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
     }, [entries]);
 
     const availableMonths = useMemo<string[]>(() => {
-    const availableDates = useMemo(() => {
-        return Array.from(new Set(entries.map(entry => entry.date))).sort();
-    }, [entries]);
-
-    const availableMonths = useMemo(() => {
         return Array.from(new Set(entries.map(entry => entry.date.slice(0, 7)))).sort();
     }, [entries]);
 
@@ -82,7 +70,6 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
     }, [filterMode, availableMonths]);
 
     const filteredEntries = useMemo<Entry[]>(() => {
-    const filteredEntries = useMemo(() => {
         if (entries.length === 0) return [];
 
         switch (filterMode) {
@@ -108,18 +95,12 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
         if (filteredEntries.length === 0) {
             return {
                 total: 0,
-
-    const stats = useMemo(() => {
-        if (entries.length === 0) {
-            return {
- main
                 average: 0,
                 largest: null as Entry | null,
                 latest: null as Entry | null,
             };
         }
 
- codex/restore-missing-imports-for-app.tsx
         const sortedByAmount = [...filteredEntries].sort((a, b) => b.amount - a.amount);
         const sortedByDate = [...filteredEntries].sort((a, b) => b.date.localeCompare(a.date));
         const total = filteredEntries.reduce((acc, entry) => acc + entry.amount, 0);
@@ -132,7 +113,6 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
     }, [filteredEntries]);
 
     const barData = useMemo<Array<{ period: string; label: string; total: number }>>(() => {
-    const barData = useMemo(() => {
         if (filteredEntries.length === 0) return [];
 
         const totals = new Map<string, number>();
@@ -151,7 +131,6 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
     }, [filteredEntries, filterMode]);
 
     const pieData = useMemo<Array<{ type: EntryType; label: string; value: number; color: string }>>(() => {
-    const pieData = useMemo(() => {
         if (filteredEntries.length === 0) return [];
 
         const totals: Record<EntryType, number> = {
@@ -191,31 +170,6 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
         });
 
         return aggregated.sort((a, b) => b.total - a.total);
-    const classTotals = useMemo(() => {
-        if (filteredEntries.length === 0) return [];
-        const totals = filteredEntries.reduce<Record<string, number>>((acc, entry) => {
-
-        const sortedByAmount = [...entries].sort((a, b) => b.amount - a.amount);
-        const sortedByDate = [...entries].sort((a, b) => b.date.localeCompare(a.date));
-        const sum = entries.reduce((acc, entry) => acc + entry.amount, 0);
-        return {
-            average: sum / entries.length,
-            largest: sortedByAmount[0] ?? null,
-            latest: sortedByDate[0] ?? null,
-        };
-    }, [entries]);
-
-    const classTotals = useMemo(() => {
-        const totals = entries.reduce<Record<string, number>>((acc, entry) => {
- main
-            const classNumber = entry.memberID.split('-')[0] ?? 'Unknown';
-            acc[classNumber] = (acc[classNumber] ?? 0) + entry.amount;
-            return acc;
-        }, {});
- codex/restore-missing-imports-for-app.tsx
-        return Object.entries(totals)
-            .map(([classNumber, total]) => ({ classNumber, total }))
-            .sort((a, b) => b.total - a.total);
     }, [filteredEntries]);
 
     return (
@@ -287,24 +241,6 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
                             <p className="text-2xl font-bold text-slate-800">{formatCurrency(stats.average, settings.currency)}</p>
                         </div>
                         <div className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-sky-50 to-cyan-100/60">
-
-        return Object.entries(totals).sort((a, b) => b[1] - a[1]);
-    }, [entries]);
-
-    return (
-        <div className="space-y-6">
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
-                <h2 className="text-2xl font-bold text-slate-800 mb-4">Key Metrics</h2>
-                {entries.length === 0 ? (
-                    <p className="text-slate-500">Add financial records to unlock insights.</p>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="border border-slate-200 rounded-xl p-4">
-                            <h3 className="text-sm font-semibold text-slate-500 uppercase">Average Gift</h3>
-                            <p className="text-2xl font-bold text-slate-800">{formatCurrency(stats.average, settings.currency)}</p>
-                        </div>
-                        <div className="border border-slate-200 rounded-xl p-4">
- main
                             <h3 className="text-sm font-semibold text-slate-500 uppercase">Largest Gift</h3>
                             <p className="text-2xl font-bold text-slate-800">{stats.largest ? formatCurrency(stats.largest.amount, settings.currency) : '—'}</p>
                             {stats.largest && <p className="text-sm text-slate-500">{stats.largest.memberName}</p>}
@@ -312,22 +248,12 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
                         <div className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/60">
                             <h3 className="text-sm font-semibold text-slate-500 uppercase">Latest Entry</h3>
                             <p className="text-2xl font-bold text-slate-800">{stats.latest ? formatDayLabel(stats.latest.date) : '—'}</p>
- codex/restore-missing-imports-for-app.tsx
-                        <div className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/60">
-                            <h3 className="text-sm font-semibold text-slate-500 uppercase">Latest Entry</h3>
-                            <p className="text-2xl font-bold text-slate-800">{stats.latest ? formatDayLabel(stats.latest.date) : '—'}</p>
-
-                        <div className="border border-slate-200 rounded-xl p-4">
-                            <h3 className="text-sm font-semibold text-slate-500 uppercase">Latest Entry</h3>
-                            <p className="text-2xl font-bold text-slate-800">{stats.latest ? stats.latest.date : '—'}</p>
- main
                             {stats.latest && <p className="text-sm text-slate-500">{stats.latest.memberName}</p>}
                         </div>
                     </div>
                 )}
             </section>
 
- codex/restore-missing-imports-for-app.tsx
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-sky-50 to-cyan-100/70 p-6">
                 <h2 className="text-2xl font-bold text-slate-800 mb-4">Giving Trend</h2>
                 {!hasResults ? (
@@ -376,11 +302,6 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
                 {!hasResults ? (
                     <p className="text-slate-500">No records found for the selected filter.</p>
                 ) : classTotals.length === 0 ? (
-
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
-                <h2 className="text-2xl font-bold text-slate-800 mb-4">Class Contribution Leaderboard</h2>
-                {classTotals.length === 0 ? (
- main
                     <p className="text-slate-500">No class level data available yet.</p>
                 ) : (
                     <table className="w-full text-left text-slate-600">
@@ -391,17 +312,10 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
                             </tr>
                         </thead>
                         <tbody>
- codex/restore-missing-imports-for-app.tsx
                             {classTotals.map(row => (
                                 <tr key={row.classNumber} className="border-b last:border-0">
                                     <td className="px-4 py-2 font-medium text-slate-800">{row.classNumber}</td>
                                     <td className="px-4 py-2">{formatCurrency(row.total, settings.currency)}</td>
-
-                            {classTotals.map(([classNumber, amount]) => (
-                                <tr key={classNumber} className="border-b last:border-0">
-                                    <td className="px-4 py-2 font-medium text-slate-800">{classNumber}</td>
-                                    <td className="px-4 py-2">{formatCurrency(amount, settings.currency)}</td>
- main
                                 </tr>
                             ))}
                         </tbody>
