@@ -60,14 +60,15 @@ const App: React.FC = () => {
     const [endDateFilter, setEndDateFilter] = useState('');
 
 
-    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: "" });
-     useEffect(() => {
+    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '' });
+
+    useEffect(() => {
         const attemptSilentSignin = async () => {
             const session = await msalSilentSignIn();
             if (session) {
-                setCloud({ ready: true, signedIn: true, account: session.account, accessToken: session.accessToken, message: "Signed in silently." });
+                setCloud({ ready: true, signedIn: true, account: session.account, accessToken: session.accessToken, message: 'Signed in silently.' });
             } else {
-                setCloud({ ready: true, signedIn: false, message: "Ready for manual sign-in." });
+                setCloud({ ready: true, signedIn: false, message: 'Ready for manual sign-in.' });
             }
         };
         attemptSilentSignin();
