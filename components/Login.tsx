@@ -15,6 +15,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
     };
 
     return (
+ codex/restore-missing-imports-for-app.tsx
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 flex items-center justify-center px-4 py-10">
             <div className="w-full max-w-md rounded-3xl shadow-2xl border border-white/20 bg-white/90 backdrop-blur p-8">
                 <div className="flex items-start gap-4 mb-6">
@@ -38,6 +39,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, error }) => {
                         <p className="mt-1 text-sm text-slate-600">Enter your credentials and press <span className="font-semibold text-slate-800">Enter</span> to log in.</p>
                     </div>
                 </div>
+
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
+            <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+                <h1 className="text-3xl font-black text-slate-800 mb-6">GMCT Management System</h1>
+ main
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
                         <label className="block text-sm font-semibold text-slate-600 mb-1">Username</label>
