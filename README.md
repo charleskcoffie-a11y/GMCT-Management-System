@@ -132,3 +132,14 @@ Your application is now live and fully configured.
 *   You can now share the GitHub Pages URL with your team members.
 *   They can open the link, sign in with their assigned user accounts, and start using the application immediately with no setup required.
 *   When a user signs in with their Microsoft account, the app will connect to your SharePoint lists to sync member data.
+
+---
+
+## Troubleshooting
+
+If the GitHub Pages site displays **"Loading Application…"** for more than a few seconds:
+
+1.  Open your repository on GitHub and review the **Actions → Deploy to GitHub Pages** workflow run for the most recent commit. Resolve any build errors reported there.
+2.  After a successful deploy, force-refresh your browser (`Ctrl+Shift+R` on Windows/Linux or `Cmd+Shift+R` on macOS) to make sure you are loading the newest bundle.
+
+If you ever see Git merge conflict markers (for example, `<<<<<<<` or `>>>>>>>`) inside `README.md`, open the file in your editor, remove the markers, and keep the instructions that match your current deployment method. Save the resolved file, run `git add README.md`, and create a new commit to finalize the fix.
