@@ -69,6 +69,65 @@ const registerServiceWorker = () => {
   // Per user feedback and common GitHub Pages deployment issues, the service worker
   // is being explicitly disabled to prevent silent, script-terminating errors.
   console.log("Service Worker registration has been disabled for maximum compatibility.");
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const { serviceWorker } = navigator;
+
+      if (typeof serviceWorker.getRegistrations === 'function') {
+        serviceWorker
+          .getRegistrations()
+          .then(registrations => {
+            registrations.forEach(registration => {
+              if (registration.active || registration.waiting || registration.installing) {
+                console.log('Unregistering stale service worker:', registration.scope);
+              }
+              registration.unregister().catch(error => {
+                console.warn('Failed to unregister service worker', error);
+              });
+            });
+          })
+          .catch(error => {
+            console.warn('Unable to enumerate existing service workers', error);
+          });
+      } else if (typeof serviceWorker.getRegistration === 'function') {
+        serviceWorker
+          .getRegistration()
+          .then(registration => {
+            if (registration) {
+              if (registration.active || registration.waiting || registration.installing) {
+                console.log('Unregistering stale service worker:', registration.scope);
+              }
+              registration.unregister().catch(error => {
+                console.warn('Failed to unregister legacy service worker', error);
+              });
+            }
+          })
+          .catch(error => {
+            console.warn('Unable to look up legacy service worker', error);
+          });
+      }
+    }
+  } catch (error) {
+    console.warn('Service worker cleanup failed before React booted.', error);
+  }
+
+  if ('caches' in window) {
+    caches
+      .keys()
+      .then(keys => {
+        keys
+          .filter(key => key.startsWith('gmct-app-cache') || key.startsWith('gmct-'))
+          .forEach(key => {
+            caches.delete(key).catch(error => {
+              console.warn(`Failed to delete cache ${key}`, error);
+            });
+          });
+      })
+      .catch(error => {
+        console.warn('Unable to enumerate caches for cleanup', error);
+      });
+  }
 };
 
 // --- App Initialization ---
