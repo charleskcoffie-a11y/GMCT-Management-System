@@ -23,10 +23,14 @@ const handleError = (errorEvent: ErrorEvent | PromiseRejectionEvent | { error: a
     // Log the raw error to the console for developers.
     console.error("GMCT App Global Error Handler caught:", error);
 
+    const message = error?.message || String(error) || 'An unknown error occurred.';
+    window.__gmctBootstrapFailed = true;
+    window.__gmctAppBooted = false;
+    window.__gmctBootstrapError = message;
+
     const rootElement = document.getElementById('root');
     if (rootElement) {
       // Safely convert the error to a string for display.
-      const message = error?.message || String(error) || 'An unknown error occurred.';
       const stack = error?.stack || 'No stack trace available.';
       
       // Clear the root element and use textContent for maximum safety.
