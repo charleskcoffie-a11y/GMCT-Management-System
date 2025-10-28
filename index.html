@@ -2,57 +2,111 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!--
-      This inline script is the definitive fix for GitHub Pages deployment.
-      It's simpler and more robust, specifically targeting the GH Pages URL structure.
-      It correctly identifies the base path (e.g., /repo-name/) and injects a <base> tag,
-      which fixes the "Invalid URL" crash and allows all assets to load correctly.
-    -->
-    <script>
-      (function() {
-        try {
-          const loc = window.location;
-          const path = loc.pathname;
-          // The goal is to find the base directory path, which must end with a '/'.
-          // For 'https://user.github.io/repo/page', the base path is '/repo/'.
-          const segments = path.split('/').filter(Boolean);
-          let basePath = '/'; // Default for root deployment
-          if (loc.hostname.includes('github.io') && segments.length > 0) {
-            // On GitHub Pages, the base path is always '/<repo-name>/'
-            basePath = '/' + segments[0] + '/';
-          }
-          
-          const absoluteUrl = loc.origin + basePath;
-          const baseTag = document.createElement('base');
-          baseTag.href = absoluteUrl;
-          document.head.prepend(baseTag);
-        } catch (e) {
-            console.error("Failed to set <base> tag:", e);
-        }
-      }());
-    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>GMCT Management System</title>
     <link rel="manifest" href="./manifest.json" />
     <meta name="theme-color" content="#4338ca" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "recharts": "https://aistudiocdn.com/recharts@^2.12.7"
-  }
-}
-</script>
+    <script>
+      // Immediately unregister any previously installed service workers before the
+      // main bundle runs. This ensures visitors who are stuck on the loading screen
+      // because of an outdated offline cache get a clean reload path.
+      (function uncacheLegacyServiceWorkers() {
+        try {
+          if ('serviceWorker' in navigator) {
+            const { serviceWorker } = navigator;
+            if (typeof serviceWorker.getRegistrations === 'function') {
+              serviceWorker
+                .getRegistrations()
+                .then(registrations => {
+                  registrations.forEach(registration => {
+                    registration.unregister().catch(() => {
+                      /* swallow errors - the React boot process will log details */
+                    });
+                  });
+                })
+                .catch(() => {
+                  /* ignore lookup errors */
+                });
+            } else if (typeof serviceWorker.getRegistration === 'function') {
+              serviceWorker
+                .getRegistration()
+                .then(registration => {
+                  if (registration) {
+                    registration.unregister().catch(() => {
+                      /* swallow errors - the React boot process will log details */
+                    });
+                  }
+                })
+                .catch(() => {
+                  /* ignore lookup errors */
+                });
+            }
+          }
+
+          if ('caches' in window) {
+            caches
+              .keys()
+              .then(keys => {
+                keys
+                  .filter(key => key.startsWith('gmct'))
+                  .forEach(key => {
+                    caches.delete(key).catch(() => {
+                      /* ignore cache cleanup errors */
+                    });
+                  });
+              })
+              .catch(() => {
+                /* ignore cache enumeration errors */
+              });
+          }
+        } catch (error) {
+          console.warn('Failed to pre-emptively clear legacy service workers.', error);
+        }
+      })();
+    </script>
+    <script>
+      // If the React bundle fails to mark the boot flag within a few seconds, force
+      // a cache-busting reload so visitors are not trapped on the loading screen.
+      window.addEventListener('load', () => {
+        window.setTimeout(() => {
+          if (window.__gmctAppBooted) {
+            return;
+          }
+
+          const root = document.getElementById('root');
+          if (root) {
+            const notice = document.createElement('p');
+            notice.style.marginTop = '1.5rem';
+            notice.style.color = '#b91c1c';
+            notice.style.fontWeight = '600';
+            notice.textContent = 'We could not start the application automatically. Reloading to clear the cache...';
+            root.appendChild(notice);
+          }
+
+          try {
+            const retryUrl = new URL(window.location.href);
+            retryUrl.searchParams.set('cache-bust', Date.now().toString());
+            window.location.replace(retryUrl.toString());
+          } catch (error) {
+            console.warn('Failed to issue automatic cache-busting reload.', error);
+            window.location.reload();
+          }
+        }, 6000);
+      });
+    </script>
     <style>
+      html, body, #root {
+        height: 100%;
+      }
       /* Increase base font size for better readability as requested */
       body {
         font-size: 18px;
-        background-color: #f8fafc; /* bg-slate-50 */
+        background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #fdf2f8 100%);
+        overflow-y: auto;
       }
       /* Custom scrollbar for a more polished, less "dry" look */
       ::-webkit-scrollbar {
@@ -70,8 +124,7 @@
         background: #818cf8; /* indigo-400 */
       }
     </style>
-  <link rel="stylesheet" href="/index.css">
-</head>
+  </head>
   <body>
     <div id="root">
       <!-- Failsafe Loading Message -->
@@ -86,7 +139,6 @@
       </div>
     </div>
     <!-- The main application script, deferred to run after the document is parsed -->
-    <script type="module" src="./index.tsx" defer></script>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="./index.tsx"></script>
+  </body>
 </html>
