@@ -3,6 +3,7 @@ export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "othe
 
 export interface Entry {
     id: string;
+    spId?: string; // SharePoint list item identifier for cloud sync
     date: string; // ISO format YYYY-MM-DD
     memberID: string;
     memberName: string;

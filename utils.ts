@@ -41,6 +41,7 @@ export function sanitizeEntry(raw: any): Entry {
     
     return {
         id: sanitizeString(raw.id) || uuidv4(),
+        spId: sanitizeString(raw.spId),
         date: date,
         memberID: sanitizeString(raw.memberID),
         memberName: sanitizeString(raw.memberName),

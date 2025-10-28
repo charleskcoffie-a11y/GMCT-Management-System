@@ -120,6 +120,8 @@ The application will store its data in lists on a SharePoint site.
 7.  Click **"+ Add column"** > **"Single line of text"**. Name it `ClassNumber` and click **Save**.
 8.  Create a second list named `Finance_Records` using the same process. Its columns will be configured automatically by the app in future updates.
 
+> **Why SharePoint and not OneDrive?** The live multi-user sync relies on SharePoint list items so every contributor writes to the same structured dataset. You do not need OneDrive for cloud storage—the bundled OneDrive service remains a stub for future file features, but all real-time collaboration happens through SharePoint.
+
 ---
 
 ## Part 2: Application Code Configuration

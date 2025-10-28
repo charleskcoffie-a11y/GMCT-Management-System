@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -20,6 +20,15 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { toCsv, sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeAttendanceStatus, formatCurrency, sanitizeWeeklyHistoryRecord } from './utils';
 import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, EntryType, WeeklyHistoryRecord } from './types';
 import { msalSilentSignIn } from './services/oneDrive';
+import {
+    loadEntriesFromSharePoint,
+    loadMembersFromSharePoint,
+    upsertEntryToSharePoint,
+    deleteEntryFromSharePoint,
+    upsertMemberToSharePoint,
+    deleteMemberFromSharePoint,
+    resetContextCache,
+} from './services/sharepoint';
 import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES } from './constants';
 
 // Initial Data
@@ -73,6 +82,180 @@ const App: React.FC = () => {
         };
         attemptSilentSignin();
     }, []);
+
+    useEffect(() => {
+        setIsNavOpen(false);
+    }, [activeTab]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken) {
+            entrySyncRef.current.clear();
+            memberSyncRef.current.clear();
+            resetContextCache();
+            setSyncMessage(null);
+            setLastSyncedAt(null);
+            return;
+        }
+
+        let active = true;
+
+        const hydrateFromSharePoint = async () => {
+            beginSync();
+            try {
+                const [remoteEntries, remoteMembers] = await Promise.all([
+                    loadEntriesFromSharePoint(cloud.accessToken!),
+                    loadMembersFromSharePoint(cloud.accessToken!),
+                ]);
+                if (!active) return;
+                setEntries(prev => mergeEntriesFromCloud(prev, remoteEntries));
+                setMembers(prev => mergeMembersFromCloud(prev, remoteMembers));
+                setSyncMessage(null);
+                setLastSyncedAt(Date.now());
+            } catch (error) {
+                if (!active) return;
+                console.error('Initial SharePoint sync failed', error);
+                setSyncMessage(error instanceof Error ? error.message : 'Unable to sync with SharePoint right now.');
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        hydrateFromSharePoint();
+
+        return () => {
+            active = false;
+        };
+    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken) {
+            return;
+        }
+
+        let active = true;
+
+        const pushEntryChanges = async () => {
+            beginSync();
+            const known = entrySyncRef.current;
+            const currentMap = new Map(entries.map(entry => [entry.id, entry]));
+            const entriesSnapshot: Array<[string, { signature: string; entry: Entry }]> = Array.from(known.entries());
+
+            for (const [id, stored] of entriesSnapshot) {
+                if (!currentMap.has(id)) {
+                    if (stored.entry.spId) {
+                        try {
+                            await deleteEntryFromSharePoint(stored.entry, cloud.accessToken!);
+                        } catch (error) {
+                            console.error('Failed to remove SharePoint entry', error);
+                        }
+                    }
+                    known.delete(id);
+                }
+            }
+
+            try {
+                for (const entry of entries) {
+                    const sanitized = sanitizeEntry(entry);
+                    sanitized.spId = entry.spId;
+                    const signature = computeEntrySignature(sanitized);
+                    const cached = known.get(sanitized.id);
+                    if (!cached || cached.signature !== signature) {
+                        try {
+                            const spId = await upsertEntryToSharePoint(sanitized, cloud.accessToken!);
+                            if (!active) return;
+                            const updatedEntry = { ...sanitized, spId: spId ?? sanitized.spId };
+                            known.set(updatedEntry.id, { signature: computeEntrySignature(updatedEntry), entry: updatedEntry });
+                            if (spId && sanitized.spId !== spId) {
+                                setEntries(prev => prev.map(existing => existing.id === updatedEntry.id ? { ...existing, spId } : existing));
+                            }
+                            setSyncMessage(null);
+                            setLastSyncedAt(Date.now());
+                        } catch (error) {
+                            if (!active) return;
+                            console.error('Failed to sync entry to SharePoint', error);
+                            setSyncMessage('Unable to upload some financial entries to SharePoint. They remain saved locally.');
+                        }
+                    }
+                }
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        pushEntryChanges();
+
+        return () => {
+            active = false;
+        };
+    }, [entries, cloud.signedIn, cloud.accessToken, computeEntrySignature, setEntries]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken) {
+            return;
+        }
+
+        let active = true;
+
+        const pushMemberChanges = async () => {
+            beginSync();
+            const known = memberSyncRef.current;
+            const currentMap = new Map(members.map(member => [member.id, member]));
+            const membersSnapshot: Array<[string, { signature: string; member: Member }]> = Array.from(known.entries());
+
+            for (const [id, stored] of membersSnapshot) {
+                if (!currentMap.has(id)) {
+                    if (stored.member.spId) {
+                        try {
+                            await deleteMemberFromSharePoint(stored.member, cloud.accessToken!);
+                        } catch (error) {
+                            console.error('Failed to remove SharePoint member', error);
+                        }
+                    }
+                    known.delete(id);
+                }
+            }
+
+            try {
+                for (const member of members) {
+                    const sanitized = sanitizeMember(member);
+                    sanitized.spId = member.spId;
+                    const signature = computeMemberSignature(sanitized);
+                    const cached = known.get(sanitized.id);
+                    if (!cached || cached.signature !== signature) {
+                        try {
+                            const spId = await upsertMemberToSharePoint(sanitized, cloud.accessToken!);
+                            if (!active) return;
+                            const updatedMember = { ...sanitized, spId: spId ?? sanitized.spId };
+                            known.set(updatedMember.id, { signature: computeMemberSignature(updatedMember), member: updatedMember });
+                            if (spId && sanitized.spId !== spId) {
+                                setMembers(prev => prev.map(existing => existing.id === updatedMember.id ? { ...existing, spId } : existing));
+                            }
+                            setSyncMessage(null);
+                            setLastSyncedAt(Date.now());
+                        } catch (error) {
+                            if (!active) return;
+                            console.error('Failed to sync member to SharePoint', error);
+                            setSyncMessage('Unable to sync some members to SharePoint. Data remains saved locally.');
+                        }
+                    }
+                }
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        pushMemberChanges();
+
+        return () => {
+            active = false;
+        };
+    }, [members, cloud.signedIn, cloud.accessToken, computeMemberSignature, setMembers]);
 
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -148,7 +331,11 @@ const App: React.FC = () => {
         }
     };
 
-    const handleLogout = () => setCurrentUser(null);
+    const handleLogout = () => {
+        setCurrentUser(null);
+        setIsNavOpen(false);
+        setCloud(prev => ({ ...prev, signedIn: false, accessToken: undefined, account: undefined, message: 'Ready for manual sign-in.' }));
+    };
 
     const handleSaveEntry = (entry: Entry) => {
         const newEntries = [...entries];
@@ -443,7 +630,26 @@ const App: React.FC = () => {
                                 >
                                     {item.label}
                                 </button>
-                             ))}
+                            ))}
+                        </nav>
+                    )}
+                </div>
+                <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
+                    <aside className="hidden lg:block lg:w-72 flex-shrink-0">
+                        <nav className="h-full rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-5 space-y-2 overflow-y-auto">
+                            {navItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setActiveTab(item.id as Tab)}
+                                    className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
+                                        activeTab === item.id
+                                            ? 'bg-white/25 text-white shadow-lg'
+                                            : 'text-indigo-100 hover:bg-white/15 hover:text-white'
+                                    }`}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
                         </nav>
                     </aside>
                     <section className="flex-1 overflow-hidden">
