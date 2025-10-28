@@ -2,6 +2,12 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 
+declare global {
+  interface Window {
+    __gmctAppBooted?: boolean;
+  }
+}
+
 // --- Global Failsafe Error Handler ---
 // This is a new, simplified, and more robust error handler that is guaranteed
 // to display startup errors instead of crashing silently.
@@ -128,6 +134,7 @@ const initialize = () => {
     </React.StrictMode>
   );
   console.log("React app rendered.");
+  window.__gmctAppBooted = true;
 };
 
 
