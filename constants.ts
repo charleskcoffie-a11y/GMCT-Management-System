@@ -9,14 +9,15 @@ export const MSAL_CLIENT_ID = "c8358699-db35-45ca-997d-dc15c2be9553";
 export const MSAL_TENANT_ID = "10eb45a8-7562-4898-a5a5-8cc3598fd239";
 export const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite.AppFolder", "Sites.ReadWrite.All"];
 
-// --- SharePoint Configuration ---
+// --- SharePoint Configuration Defaults ---
 // IMPORTANT: Replace with your SharePoint site URL
 // e.g., "https://yourtenant.sharepoint.com/sites/YourSiteName"
-export const SHAREPOINT_SITE_URL = "https://gmct98.sharepoint.com/sites/Finance";
+export const DEFAULT_SHAREPOINT_SITE_URL = "https://gmct98.sharepoint.com/sites/Finance";
 
 // IMPORTANT: Replace with the exact names of your SharePoint lists
-export const SHAREPOINT_MEMBERS_LIST_NAME = "Members_DataBase";
-export const SHAREPOINT_ENTRIES_LIST_NAME = "Finance_Records";
+export const DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME = "Members_DataBase";
+export const DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME = "Finance_Records";
+export const DEFAULT_SHAREPOINT_HISTORY_LIST_NAME = "Weekly_Service_History";
 
 // The base URL for Microsoft Graph API requests
 export const SHAREPOINT_GRAPH_URL = "https://graph.microsoft.com/v1.0";
