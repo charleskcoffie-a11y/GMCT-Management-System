@@ -326,6 +326,32 @@ const App: React.FC = () => {
         return sortableEntries;
     }, [entries, sortConfig, membersMap, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter]);
 
+    const recordRows = useMemo(() => filteredAndSortedEntries.map(entry => {
+        const member = membersMap.get(entry.memberID);
+
+        return (
+            <tr key={entry.id} className="bg-white border-b hover:bg-slate-50">
+                <td className="px-6 py-4">{entry.date}</td>
+                <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName}</td>
+                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
+                <td className="px-6 py-4 text-center">{member?.classNumber || 'N/A'}</td>
+                <td className="px-6 py-4 capitalize">{entry.type}</td>
+                <td className="px-6 py-4">{formatCurrency(entry.amount, settings.currency)}</td>
+                <td className="px-6 py-4 text-right">
+                    <button
+                        onClick={() => {
+                            setSelectedEntry(entry);
+                            setIsModalOpen(true);
+                        }}
+                        className="font-medium text-indigo-600 hover:underline"
+                    >
+                        Edit
+                    </button>
+                </td>
+            </tr>
+        );
+    }), [filteredAndSortedEntries, membersMap, settings.currency, setIsModalOpen, setSelectedEntry]);
+
     // --- Handlers ---
     const handleLogin = (username: string, password: string) => {
         const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
@@ -552,24 +578,7 @@ const App: React.FC = () => {
                                         <th className="px-6 py-3"></th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    {filteredAndSortedEntries.map(entry => {
-                                        const member = membersMap.get(entry.memberID);
-                                        return (
-                                            <tr key={entry.id} className="bg-white border-b hover:bg-slate-50">
-                                                <td className="px-6 py-4">{entry.date}</td>
-                                                <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName}</td>
-                                                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
-                                                <td className="px-6 py-4 text-center">{member?.classNumber || 'N/A'}</td>
-                                                <td className="px-6 py-4 capitalize">{entry.type}</td>
-                                                <td className="px-6 py-4">{formatCurrency(entry.amount, settings.currency)}</td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <button onClick={() => { setSelectedEntry(entry); setIsModalOpen(true); }} className="font-medium text-indigo-600 hover:underline">Edit</button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
+                                <tbody>{recordRows}</tbody>
                            </table>
                         </div>
                     </div>
