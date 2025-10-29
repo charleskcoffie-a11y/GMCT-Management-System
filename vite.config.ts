@@ -16,11 +16,6 @@ export default defineConfig(({ mode }) => {
       },
       build: {
         target: 'es2019',
-        rollupOptions: {
-          output: {
-            inlineDynamicImports: true,
-          },
-        },
       },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
