@@ -1,7 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CloudState, Entry, EntryType, Member, Settings } from '../types';
 import { formatCurrency, fromCsv, sanitizeEntry, sanitizeMember, toCsv } from '../utils';
 import { testSharePointConnection } from '../services/sharepoint';
+import {
+    SHAREPOINT_ENTRIES_LIST_NAME,
+    SHAREPOINT_MEMBERS_LIST_NAME,
+    SHAREPOINT_SITE_URL,
+} from '../constants';
 
 type UtilitiesProps = {
     entries: Entry[];
@@ -12,12 +17,6 @@ type UtilitiesProps = {
     onImportMembers: (members: Member[]) => void;
     onResetData: () => void;
     onSaveTotalClasses: (total: number) => void;
-    onSaveSharePointLocation: (config: {
-        siteUrl: string;
-        entriesListName: string;
-        membersListName: string;
-        historyListName: string;
-    }) => void;
 };
 
 const ENTRY_TYPES: EntryType[] = ['tithe', 'offering', 'thanksgiving-offering', 'first-fruit', 'pledge', 'harvest-levy', 'other'];
@@ -31,7 +30,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
     onImportMembers,
     onResetData,
     onSaveTotalClasses,
-    onSaveSharePointLocation,
 }) => {
     const entryFileRef = useRef<HTMLInputElement | null>(null);
     const memberFileRef = useRef<HTMLInputElement | null>(null);
@@ -45,56 +43,34 @@ const Utilities: React.FC<UtilitiesProps> = ({
     const [connectionMessage, setConnectionMessage] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [totalClassesInput, setTotalClassesInput] = useState<string>(String(settings.maxClasses));
     const [totalClassesStatus, setTotalClassesStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
-    const [siteUrlInput, setSiteUrlInput] = useState<string>(settings.sharePointSiteUrl);
-    const [entriesListInput, setEntriesListInput] = useState<string>(settings.sharePointEntriesListName);
-    const [membersListInput, setMembersListInput] = useState<string>(settings.sharePointMembersListName);
-    const [historyListInput, setHistoryListInput] = useState<string>(settings.sharePointHistoryListName);
-    const [locationStatus, setLocationStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
-    const sharePointConfig = useMemo(
-        () => ({
-            siteUrl: settings.sharePointSiteUrl.trim(),
-            entriesListName: settings.sharePointEntriesListName.trim(),
-            membersListName: settings.sharePointMembersListName.trim(),
-            historyListName: settings.sharePointHistoryListName.trim(),
-        }),
-        [
-            settings.sharePointSiteUrl,
-            settings.sharePointEntriesListName,
-            settings.sharePointMembersListName,
-            settings.sharePointHistoryListName,
-        ],
-    );
+    const sharePointEntriesUrl = useMemo(() => {
+        if (!SHAREPOINT_SITE_URL) return null;
+        try {
+            const url = new URL(SHAREPOINT_SITE_URL);
+            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(
+                SHAREPOINT_ENTRIES_LIST_NAME,
+            )}/AllItems.aspx`;
+            return url.toString();
+        } catch (error) {
+            console.error('Invalid SharePoint site URL configuration', error);
+            return null;
+        }
+    }, []);
 
-    const buildListUrl = useCallback(
-        (listName: string) => {
-            if (!sharePointConfig.siteUrl || !listName) return null;
-            try {
-                const url = new URL(sharePointConfig.siteUrl);
-                url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(listName)}/AllItems.aspx`;
-                return url.toString();
-            } catch (error) {
-                console.error('Invalid SharePoint site URL configuration', error);
-                return null;
-            }
-        },
-        [sharePointConfig.siteUrl],
-    );
-
-    const sharePointEntriesUrl = useMemo(
-        () => buildListUrl(sharePointConfig.entriesListName),
-        [buildListUrl, sharePointConfig.entriesListName],
-    );
-
-    const sharePointMembersUrl = useMemo(
-        () => buildListUrl(sharePointConfig.membersListName),
-        [buildListUrl, sharePointConfig.membersListName],
-    );
-
-    const sharePointHistoryUrl = useMemo(
-        () => buildListUrl(sharePointConfig.historyListName),
-        [buildListUrl, sharePointConfig.historyListName],
-    );
+    const sharePointMembersUrl = useMemo(() => {
+        if (!SHAREPOINT_SITE_URL) return null;
+        try {
+            const url = new URL(SHAREPOINT_SITE_URL);
+            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(
+                SHAREPOINT_MEMBERS_LIST_NAME,
+            )}/AllItems.aspx`;
+            return url.toString();
+        } catch (error) {
+            console.error('Invalid SharePoint site URL configuration', error);
+            return null;
+        }
+    }, []);
 
     const membersMap = useMemo(() => new Map(members.map(member => [member.id, member])), [members]);
 
@@ -106,18 +82,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
     useEffect(() => {
         setTotalClassesInput(String(settings.maxClasses));
     }, [settings.maxClasses]);
-
-    useEffect(() => {
-        setSiteUrlInput(settings.sharePointSiteUrl);
-        setEntriesListInput(settings.sharePointEntriesListName);
-        setMembersListInput(settings.sharePointMembersListName);
-        setHistoryListInput(settings.sharePointHistoryListName);
-    }, [
-        settings.sharePointSiteUrl,
-        settings.sharePointEntriesListName,
-        settings.sharePointMembersListName,
-        settings.sharePointHistoryListName,
-    ]);
 
     const filteredEntries = useMemo(() => {
         return entries.filter(entry => {
@@ -273,7 +237,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                                 setConnectionMessage({ tone: 'info', text: 'Checking connection…' });
                                 setIsTestingConnection(true);
                                 try {
-                                    const result = await testSharePointConnection(sharePointConfig, cloud.accessToken);
+                                    const result = await testSharePointConnection(cloud.accessToken);
                                     setConnectionMessage({ tone: result.success ? 'success' : 'error', text: result.message });
                                 } catch (error) {
                                     console.error('Unexpected error while testing SharePoint connection', error);
@@ -338,98 +302,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
                             </p>
                         )}
                     </div>
-                    <div className="flex-1 bg-white/80 border border-sky-200 rounded-2xl p-4 space-y-3">
-                        <h3 className="text-lg font-semibold text-slate-700">SharePoint storage location</h3>
-                        <p className="text-sm text-slate-500">Set the site and list names once so every import, export, and sync uses the same location.</p>
-                        <label className="flex flex-col gap-2">
-                            <span className="text-sm font-semibold text-slate-600">Site URL</span>
-                            <input
-                                value={siteUrlInput}
-                                onChange={event => {
-                                    setSiteUrlInput(event.target.value);
-                                    setLocationStatus(null);
-                                }}
-                                placeholder="https://yourtenant.sharepoint.com/sites/GMCT"
-                                className="border border-slate-300 rounded-lg px-3 py-2"
-                            />
-                        </label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <label className="flex flex-col gap-2">
-                                <span className="text-sm font-semibold text-slate-600">Finance list name</span>
-                                <input
-                                    value={entriesListInput}
-                                    onChange={event => {
-                                        setEntriesListInput(event.target.value);
-                                        setLocationStatus(null);
-                                    }}
-                                    placeholder="Finance_Records"
-                                    className="border border-slate-300 rounded-lg px-3 py-2"
-                                />
-                            </label>
-                            <label className="flex flex-col gap-2">
-                                <span className="text-sm font-semibold text-slate-600">Members list name</span>
-                                <input
-                                    value={membersListInput}
-                                    onChange={event => {
-                                        setMembersListInput(event.target.value);
-                                        setLocationStatus(null);
-                                    }}
-                                    placeholder="Members_DataBase"
-                                    className="border border-slate-300 rounded-lg px-3 py-2"
-                                />
-                            </label>
-                            <label className="flex flex-col gap-2 sm:col-span-2">
-                                <span className="text-sm font-semibold text-slate-600">Weekly history list name</span>
-                                <input
-                                    value={historyListInput}
-                                    onChange={event => {
-                                        setHistoryListInput(event.target.value);
-                                        setLocationStatus(null);
-                                    }}
-                                    placeholder="Weekly_Service_History"
-                                    className="border border-slate-300 rounded-lg px-3 py-2"
-                                />
-                            </label>
-                        </div>
-                        <div className="flex flex-wrap gap-3">
-                            <button
-                                onClick={() => {
-                                    const site = siteUrlInput.trim();
-                                    const entriesList = entriesListInput.trim();
-                                    const membersList = membersListInput.trim();
-                                    const historyList = historyListInput.trim();
-                                    if (!site || !entriesList || !membersList) {
-                                        setLocationStatus({ tone: 'error', text: 'Site URL, Finance list, and Members list are required.' });
-                                        return;
-                                    }
-                                    onSaveSharePointLocation({
-                                        siteUrl: site,
-                                        entriesListName: entriesList,
-                                        membersListName: membersList,
-                                        historyListName: historyList || settings.sharePointHistoryListName,
-                                    });
-                                    setLocationStatus({ tone: 'success', text: 'Saved. New imports and syncs will use this location.' });
-                                }}
-                                className="bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-lg"
-                            >
-                                Save as default
-                            </button>
-                            {sharePointConfig.siteUrl && (
-                                <button
-                                    type="button"
-                                    onClick={() => window.open(sharePointConfig.siteUrl, '_blank', 'noopener')}
-                                    className="bg-white/80 border border-sky-200 text-sky-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
-                                >
-                                    Open SharePoint site
-                                </button>
-                            )}
-                        </div>
-                        {locationStatus && (
-                            <p className={`text-sm font-medium ${locationStatus.tone === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {locationStatus.text}
-                            </p>
-                        )}
-                    </div>
                 </div>
             </section>
 
@@ -455,15 +327,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Members List
-                        </button>
-                    )}
-                    {sharePointHistoryUrl && (
-                        <button
-                            type="button"
-                            onClick={() => window.open(sharePointHistoryUrl, '_blank', 'noopener')}
-                            className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
-                        >
-                            Open SharePoint Weekly History List
                         </button>
                     )}
                     <button
