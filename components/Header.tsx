@@ -1,7 +1,6 @@
 import React, { useRef } from 'react';
 import type { Entry, User } from '../types';
 import { fromCsv, sanitizeEntry } from '../utils';
-import gmctLogo from '../assets/gmct-logo.svg';
 
 type HeaderProps = {
     entries: Entry[];
@@ -48,12 +47,9 @@ const Header: React.FC<HeaderProps> = ({ entries, onImport, onExport, currentUse
     return (
         <header className="bg-gradient-to-br from-white via-indigo-50 to-sky-50 rounded-3xl shadow-lg border border-white/60 backdrop-blur p-6 sm:p-8 mb-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <img src={gmctLogo} alt="GMCT crest" className="h-14 w-14 flex-none rounded-full shadow-sm border border-indigo-100 bg-white object-contain" />
-                    <div>
-                        <h1 className="text-3xl font-black text-slate-800 tracking-tight">GMCT Management System</h1>
-                        <p className="text-slate-500">Welcome back, {currentUser.username}.</p>
-                    </div>
+                <div>
+                    <h1 className="text-3xl font-black text-slate-800 tracking-tight">GMCT Management System</h1>
+                    <p className="text-slate-500">Welcome back, {currentUser.username}. You have {entries.length} financial entries stored locally.</p>
                 </div>
                 <div className="flex flex-wrap gap-3">
                     <button onClick={() => onExport('csv')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow-sm">Export CSV</button>
