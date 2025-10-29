@@ -19,7 +19,6 @@ const methods: Method[] = ['cash', 'check', 'card', 'e-transfer', 'mobile', 'oth
 const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSave, onSaveAndNew, onClose, onDelete }) => {
     const [form, setForm] = useState<Entry>(() => entry ?? {
         id: uuidv4(),
-        spId: undefined,
         date: new Date().toISOString().slice(0, 10),
         memberID: '',
         memberName: '',
@@ -38,7 +37,6 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
         } else {
             setForm({
                 id: uuidv4(),
-                spId: undefined,
                 date: new Date().toISOString().slice(0, 10),
                 memberID: '',
                 memberName: '',
@@ -89,7 +87,6 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
         const payload = {
             ...form,
             id: form.id || uuidv4(),
-            spId: form.spId,
             memberName: form.memberName || memberQuery,
             type: sanitizeEntryType(form.type),
             method: sanitizeMethod(form.method),
@@ -97,7 +94,6 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
         onSaveAndNew(payload);
         setForm({
             id: uuidv4(),
-            spId: undefined,
             date: new Date().toISOString().slice(0, 10),
             memberID: '',
             memberName: '',
