@@ -14,14 +14,6 @@ import type {
     WeeklyHistoryAttendanceBreakdown,
     WeeklyHistoryDonations,
 } from './types';
-import {
-    DEFAULT_CURRENCY,
-    DEFAULT_MAX_CLASSES,
-    DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
-    DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
-    DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
-    DEFAULT_SHAREPOINT_SITE_URL,
-} from './constants';
 
 // --- String & Sanitization ---
 
@@ -100,19 +92,10 @@ export function sanitizeSettings(raw: any): Settings {
 
     const currencyRaw = source.currency;
 
-    const siteRaw = source.sharePointSiteUrl;
-    const entriesListRaw = source.sharePointEntriesListName;
-    const membersListRaw = source.sharePointMembersListName;
-    const historyListRaw = source.sharePointHistoryListName;
-
     return {
-        currency: typeof currencyRaw === 'string' ? sanitizeString(currencyRaw) || DEFAULT_CURRENCY : DEFAULT_CURRENCY,
-        maxClasses: Number.isFinite(parsedMaxClasses) && parsedMaxClasses > 0 ? parsedMaxClasses : DEFAULT_MAX_CLASSES,
+        currency: typeof currencyRaw === 'string' ? sanitizeString(currencyRaw) || 'USD' : 'USD',
+        maxClasses: Number.isFinite(parsedMaxClasses) && parsedMaxClasses > 0 ? parsedMaxClasses : 10,
         enforceDirectory,
-        sharePointSiteUrl: typeof siteRaw === 'string' ? sanitizeString(siteRaw) || DEFAULT_SHAREPOINT_SITE_URL : DEFAULT_SHAREPOINT_SITE_URL,
-        sharePointEntriesListName: typeof entriesListRaw === 'string' ? sanitizeString(entriesListRaw) || DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME : DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
-        sharePointMembersListName: typeof membersListRaw === 'string' ? sanitizeString(membersListRaw) || DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME : DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
-        sharePointHistoryListName: typeof historyListRaw === 'string' ? sanitizeString(historyListRaw) || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME : DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
     };
 }
 
