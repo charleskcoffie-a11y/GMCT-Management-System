@@ -38,7 +38,15 @@ const INITIAL_USERS: User[] = [
     { username: 'ClassLeader1', password: 'password', role: 'class-leader', classLed: '1' },
     { username: 'Statistician', password: 'Stats', role: 'statistician' },
 ];
-const INITIAL_SETTINGS: Settings = { currency: DEFAULT_CURRENCY, maxClasses: DEFAULT_MAX_CLASSES, enforceDirectory: true };
+const INITIAL_SETTINGS: Settings = {
+    currency: DEFAULT_CURRENCY,
+    maxClasses: DEFAULT_MAX_CLASSES,
+    enforceDirectory: true,
+    sharePointSiteUrl: DEFAULT_SHAREPOINT_SITE_URL,
+    sharePointEntriesListName: DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
+    sharePointMembersListName: DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
+    sharePointHistoryListName: DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
+};
 
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';

@@ -138,14 +138,17 @@ Now, you'll update the app's code with the values you just gathered.
     // Paste the 'Directory (tenant) ID' from Step 1.1
     export const MSAL_TENANT_ID = "YOUR_TENANT_ID_HERE";
     
-    // Paste the SharePoint Site homepage URL from Step 1.3
-    export const SHAREPOINT_SITE_URL = "https://yourtenant.sharepoint.com/sites/YourSite";
+    // Paste the SharePoint Site homepage URL from Step 1.3 (used as the initial default)
+    export const DEFAULT_SHAREPOINT_SITE_URL = "https://yourtenant.sharepoint.com/sites/YourSite";
 
     // These should match the names from Step 1.3 exactly
-    export const SHAREPOINT_MEMBERS_LIST_NAME = "Members_DataBase";
-    export const SHAREPOINT_ENTRIES_LIST_NAME = "Finance_Records";
+    export const DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME = "Members_DataBase";
+    export const DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME = "Finance_Records";
+    export const DEFAULT_SHAREPOINT_HISTORY_LIST_NAME = "Weekly_Service_History";
     ```
 3.  Save the `constants.ts` file.
+
+> **Tip:** After the app boots, you can fine-tune these SharePoint values without editing code by opening **Settings → SharePoint Storage** (or **Utilities → SharePoint Tools**) and saving the site URL plus list names you want to use long term.
 
 ---
 

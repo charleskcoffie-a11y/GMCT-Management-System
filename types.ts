@@ -21,10 +21,21 @@ export interface Member {
     classNumber?: string;
 }
 
+export interface SharePointConfig {
+    siteUrl: string;
+    entriesListName: string;
+    membersListName: string;
+    historyListName: string;
+}
+
 export interface Settings {
     currency: string;
     maxClasses: number;
     enforceDirectory: boolean; // if true, member names must be selected from the directory
+    sharePointSiteUrl: string;
+    sharePointEntriesListName: string;
+    sharePointMembersListName: string;
+    sharePointHistoryListName: string;
 }
 
 export type UserRole = 'admin' | 'finance' | 'class-leader' | 'statistician';
