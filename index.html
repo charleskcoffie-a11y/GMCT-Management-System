@@ -18,34 +18,18 @@
       (function uncacheLegacyServiceWorkers() {
         try {
           if ('serviceWorker' in navigator) {
-            const { serviceWorker } = navigator;
-            if (typeof serviceWorker.getRegistrations === 'function') {
-              serviceWorker
-                .getRegistrations()
-                .then(registrations => {
-                  registrations.forEach(registration => {
-                    registration.unregister().catch(() => {
-                      /* swallow errors - the React boot process will log details */
-                    });
+            navigator.serviceWorker
+              .getRegistrations()
+              .then(registrations => {
+                registrations.forEach(registration => {
+                  registration.unregister().catch(() => {
+                    /* swallow errors - the React boot process will log details */
                   });
-                })
-                .catch(() => {
-                  /* ignore lookup errors */
                 });
-            } else if (typeof serviceWorker.getRegistration === 'function') {
-              serviceWorker
-                .getRegistration()
-                .then(registration => {
-                  if (registration) {
-                    registration.unregister().catch(() => {
-                      /* swallow errors - the React boot process will log details */
-                    });
-                  }
-                })
-                .catch(() => {
-                  /* ignore lookup errors */
-                });
-            }
+              })
+              .catch(() => {
+                /* ignore lookup errors */
+              });
           }
 
           if ('caches' in window) {
@@ -68,36 +52,6 @@
           console.warn('Failed to pre-emptively clear legacy service workers.', error);
         }
       })();
-    </script>
-    <script>
-      // If the React bundle fails to mark the boot flag within a few seconds, force
-      // a cache-busting reload so visitors are not trapped on the loading screen.
-      window.addEventListener('load', () => {
-        window.setTimeout(() => {
-          if (window.__gmctAppBooted || window.__gmctBootstrapFailed) {
-            return;
-          }
-
-          const root = document.getElementById('root');
-          if (root) {
-            const notice = document.createElement('p');
-            notice.style.marginTop = '1.5rem';
-            notice.style.color = '#b91c1c';
-            notice.style.fontWeight = '600';
-            notice.textContent = 'We could not start the application automatically. Reloading to clear the cache...';
-            root.appendChild(notice);
-          }
-
-          try {
-            const retryUrl = new URL(window.location.href);
-            retryUrl.searchParams.set('cache-bust', Date.now().toString());
-            window.location.replace(retryUrl.toString());
-          } catch (error) {
-            console.warn('Failed to issue automatic cache-busting reload.', error);
-            window.location.reload();
-          }
-        }, 6000);
-      });
     </script>
     <style>
       html, body, #root {
@@ -140,92 +94,6 @@
       </div>
     </div>
     <!-- The main application script, deferred to run after the document is parsed -->
-    <script type="module">
-      const root = document.getElementById('root');
-
-      const renderBootstrapError = (title, bodyLines) => {
-        if (!root) {
-          return;
-        }
-
-        root.innerHTML = '';
-
-        const container = document.createElement('div');
-        container.style.fontFamily = 'ui-sans-serif, system-ui, sans-serif';
-        container.style.backgroundColor = '#fff1f2';
-        container.style.border = '1px solid #fda4af';
-        container.style.borderRadius = '0.75rem';
-        container.style.padding = '1.75rem';
-        container.style.maxWidth = '42rem';
-        container.style.margin = '2.5rem auto';
-        container.style.boxShadow = '0 20px 45px -15px rgba(190, 18, 60, 0.35)';
-
-        const heading = document.createElement('h2');
-        heading.textContent = title;
-        heading.style.fontSize = '1.35rem';
-        heading.style.fontWeight = '700';
-        heading.style.color = '#9f1239';
-        container.appendChild(heading);
-
-        bodyLines.forEach(line => {
-          const paragraph = document.createElement('p');
-          paragraph.textContent = line;
-          paragraph.style.marginTop = '0.75rem';
-          paragraph.style.color = '#7f1d1d';
-          paragraph.style.lineHeight = '1.5';
-          container.appendChild(paragraph);
-        });
-
-        root.appendChild(container);
-      };
-
-      const describeFailure = error => {
-        try {
-          if (!error) {
-            return [];
-          }
-          const reason = error?.message || String(error);
-          const guidance = [];
-
-          if (/Unexpected token|Unexpected identifier|Cannot use import statement/.test(reason)) {
-            guidance.push('The browser received raw TypeScript files. Confirm GitHub Pages is configured to deploy from “GitHub Actions” and that the latest “Deploy to GitHub Pages” workflow run succeeded.');
-          }
-
-          if (navigator.onLine === false) {
-            guidance.push('You appear to be offline. Reconnect to the internet and reload the page.');
-          }
-
-          guidance.push(`Technical details: ${reason}`);
-          return guidance;
-        } catch (fallbackError) {
-          console.warn('Failed to render detailed bootstrap guidance.', fallbackError);
-          return [];
-        }
-      };
-
-      const markBootstrapFailure = error => {
-        window.__gmctBootstrapFailed = true;
-        window.__gmctBootstrapError = error?.message || String(error) || 'Unknown error';
-      };
-
-      const markBootstrapPending = () => {
-        window.__gmctBootstrapFailed = false;
-        window.__gmctBootstrapError = undefined;
-      };
-
-      markBootstrapPending();
-
-      import('./index.tsx').catch(error => {
-        console.error('Failed to load the GMCT Management System bundle.', error);
-        markBootstrapFailure(error);
-
-        const guidance = describeFailure(error);
-        renderBootstrapError('Application bundle could not start', [
-          'The compiled application failed to load, so the interface is unavailable right now.',
-          ...guidance,
-          'If the issue persists after reloading, open the browser console and share the full error log with the support team.',
-        ]);
-      });
-    </script>
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>
