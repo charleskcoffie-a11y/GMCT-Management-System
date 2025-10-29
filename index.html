@@ -2,57 +2,125 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!--
-      This inline script is the definitive fix for GitHub Pages deployment.
-      It's simpler and more robust, specifically targeting the GH Pages URL structure.
-      It correctly identifies the base path (e.g., /repo-name/) and injects a <base> tag,
-      which fixes the "Invalid URL" crash and allows all assets to load correctly.
-    -->
-    <script>
-      (function() {
-        try {
-          const loc = window.location;
-          const path = loc.pathname;
-          // The goal is to find the base directory path, which must end with a '/'.
-          // For 'https://user.github.io/repo/page', the base path is '/repo/'.
-          const segments = path.split('/').filter(Boolean);
-          let basePath = '/'; // Default for root deployment
-          if (loc.hostname.includes('github.io') && segments.length > 0) {
-            // On GitHub Pages, the base path is always '/<repo-name>/'
-            basePath = '/' + segments[0] + '/';
-          }
-          
-          const absoluteUrl = loc.origin + basePath;
-          const baseTag = document.createElement('base');
-          baseTag.href = absoluteUrl;
-          document.head.prepend(baseTag);
-        } catch (e) {
-            console.error("Failed to set <base> tag:", e);
-        }
-      }());
-    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>GMCT Management System</title>
     <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" type="image/svg+xml" href="./gmct-logo.svg" />
     <meta name="theme-color" content="#4338ca" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "recharts": "https://aistudiocdn.com/recharts@^2.12.7"
-  }
-}
-</script>
+    <script>
+      // Immediately unregister any previously installed service workers before the
+      // main bundle runs. This ensures visitors who are stuck on the loading screen
+      // because of an outdated offline cache get a clean reload path.
+      (function uncacheLegacyServiceWorkers() {
+        try {
+          if ('serviceWorker' in navigator) {
+            const { serviceWorker } = navigator;
+            if (typeof serviceWorker.getRegistrations === 'function') {
+              serviceWorker
+                .getRegistrations()
+                .then(registrations => {
+                  registrations.forEach(registration => {
+                    registration.unregister().catch(() => {
+                      /* swallow errors - the React boot process will log details */
+                    });
+                  });
+                })
+                .catch(() => {
+                  /* ignore lookup errors */
+                });
+            } else if (typeof serviceWorker.getRegistration === 'function') {
+              serviceWorker
+                .getRegistration()
+                .then(registration => {
+                  if (registration) {
+                    registration.unregister().catch(() => {
+                      /* swallow errors - the React boot process will log details */
+                    });
+                  }
+                })
+                .catch(() => {
+                  /* ignore lookup errors */
+                });
+            }
+          }
+
+          if ('caches' in window) {
+            caches
+              .keys()
+              .then(keys => {
+                keys
+                  .filter(key => key.startsWith('gmct'))
+                  .forEach(key => {
+                    caches.delete(key).catch(() => {
+                      /* ignore cache cleanup errors */
+                    });
+                  });
+              })
+              .catch(() => {
+                /* ignore cache enumeration errors */
+              });
+          }
+        } catch (error) {
+          console.warn('Failed to pre-emptively clear legacy service workers.', error);
+        }
+      })();
+    </script>
+    <script>
+      (function registerBootTimeout() {
+        window.addEventListener('load', () => {
+          window.setTimeout(() => {
+            if (window.__gmctAppBooted || window.__gmctBootstrapFailed) {
+              return;
+            }
+
+            const root = document.getElementById('root');
+            if (!root) {
+              return;
+            }
+
+            root.innerHTML = '';
+            const container = document.createElement('div');
+            container.style.fontFamily = 'ui-sans-serif, system-ui, sans-serif';
+            container.style.backgroundColor = '#fff1f2';
+            container.style.border = '1px solid #fda4af';
+            container.style.borderRadius = '0.75rem';
+            container.style.padding = '1.75rem';
+            container.style.maxWidth = '42rem';
+            container.style.margin = '2.5rem auto';
+            container.style.boxShadow = '0 20px 45px -15px rgba(190, 18, 60, 0.35)';
+
+            const heading = document.createElement('h2');
+            heading.textContent = 'Still loading...';
+            heading.style.fontSize = '1.35rem';
+            heading.style.fontWeight = '700';
+            heading.style.color = '#9f1239';
+
+            const message = document.createElement('p');
+            message.textContent = 'The application bundle has not started yet. Try refreshing the page or clearing your browser cache.';
+            message.style.marginTop = '0.75rem';
+            message.style.color = '#7f1d1d';
+            message.style.lineHeight = '1.5';
+
+            container.appendChild(heading);
+            container.appendChild(message);
+            root.appendChild(container);
+          }, 7000);
+        });
+      })();
+    </script>
     <style>
+      html, body, #root {
+        height: 100%;
+      }
       /* Increase base font size for better readability as requested */
       body {
         font-size: 18px;
-        background-color: #f8fafc; /* bg-slate-50 */
+        background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #fdf2f8 100%);
+        overflow-y: auto;
       }
       /* Custom scrollbar for a more polished, less "dry" look */
       ::-webkit-scrollbar {
@@ -70,8 +138,131 @@
         background: #818cf8; /* indigo-400 */
       }
     </style>
-  <link rel="stylesheet" href="/index.css">
-</head>
+    <!-- The main application bootstrap -->
+    <script id="gmct-bundle-monitor">
+      (function monitorBundleLoad() {
+        window.__gmctBootstrapFailed = false;
+
+        function withRoot(callback) {
+          if (typeof callback !== 'function') {
+            return;
+          }
+
+          const invoke = () => {
+            const root = document.getElementById('root');
+            if (root) {
+              callback(root);
+            }
+          };
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', invoke, { once: true });
+          } else {
+            invoke();
+          }
+        }
+
+        function renderBootstrapError(lines) {
+          withRoot(root => {
+            root.innerHTML = '';
+
+            const container = document.createElement('div');
+            container.style.fontFamily = 'ui-sans-serif, system-ui, sans-serif';
+            container.style.backgroundColor = '#fff1f2';
+            container.style.border = '1px solid #fda4af';
+            container.style.borderRadius = '0.75rem';
+            container.style.padding = '1.75rem';
+            container.style.maxWidth = '42rem';
+            container.style.margin = '2.5rem auto';
+            container.style.boxShadow = '0 20px 45px -15px rgba(190, 18, 60, 0.35)';
+
+            const heading = document.createElement('h2');
+            heading.textContent = 'Application bundle could not start';
+            heading.style.fontSize = '1.35rem';
+            heading.style.fontWeight = '700';
+            heading.style.color = '#9f1239';
+            container.appendChild(heading);
+
+            lines.forEach(text => {
+              const paragraph = document.createElement('p');
+              paragraph.textContent = text;
+              paragraph.style.marginTop = '0.75rem';
+              paragraph.style.color = '#7f1d1d';
+              paragraph.style.lineHeight = '1.5';
+              container.appendChild(paragraph);
+            });
+
+            root.appendChild(container);
+          });
+        }
+
+        function describeFailure(message) {
+          const messages = [
+            'The compiled interface failed to download or initialise.',
+            'Please hard refresh the page (Ctrl+Shift+R or Cmd+Shift+R).',
+          ];
+
+          if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            messages.push('You appear to be offline. Reconnect to the internet and reload the page.');
+          }
+
+          if (message) {
+            messages.push(`Technical details: ${message}`);
+          }
+
+          messages.push('If the issue persists, share the browser console output with the support team.');
+          return messages;
+        }
+
+        function handleFailure(detail) {
+          window.__gmctBootstrapFailed = true;
+          renderBootstrapError(describeFailure(detail));
+        }
+
+        function attachHandlers() {
+          const current = document.currentScript;
+          let entryScript = null;
+
+          if (current && current.nextElementSibling instanceof HTMLScriptElement && current.nextElementSibling.type === 'module') {
+            entryScript = current.nextElementSibling;
+          }
+
+          if (!entryScript) {
+            entryScript =
+              document.querySelector('script[type="module"][data-entry-bundle]') ||
+              document.querySelector('script[type="module"][src]');
+          }
+
+          if (!entryScript) {
+            return;
+          }
+
+          entryScript.addEventListener(
+            'error',
+            () => handleFailure('The main script file could not be downloaded. This is usually a cache or connectivity issue.'),
+            { once: true },
+          );
+
+          entryScript.addEventListener('load', () => {
+            window.__gmctBootstrapFailed = false;
+          }, { once: true });
+        }
+
+        attachHandlers();
+
+        window.addEventListener(
+          'vite:preloadError',
+          event => {
+            const payload = event && 'payload' in event ? event.payload : undefined;
+            const detail = payload && payload.message ? payload.message : String(payload ?? 'Unknown error');
+            handleFailure(detail);
+          },
+          { once: true },
+        );
+      })();
+    </script>
+    <script type="module" data-entry-bundle src="./index.tsx"></script>
+  </head>
   <body>
     <div id="root">
       <!-- Failsafe Loading Message -->
@@ -85,8 +276,40 @@
         </div>
       </div>
     </div>
-    <!-- The main application script, deferred to run after the document is parsed -->
-    <script type="module" src="./index.tsx" defer></script>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <!-- The module loader is defined in the <head> so it can watch for early failures. -->
+    <script nomodule>
+      (function legacyBrowserWarning() {
+        var root = document.getElementById('root');
+        if (!root) {
+          return;
+        }
+        root.innerHTML = '';
+        var container = document.createElement('div');
+        container.style.fontFamily = 'ui-sans-serif, system-ui, sans-serif';
+        container.style.backgroundColor = '#fff1f2';
+        container.style.border = '1px solid #fda4af';
+        container.style.borderRadius = '0.75rem';
+        container.style.padding = '1.75rem';
+        container.style.maxWidth = '42rem';
+        container.style.margin = '2.5rem auto';
+        container.style.boxShadow = '0 20px 45px -15px rgba(190, 18, 60, 0.35)';
+
+        var heading = document.createElement('h2');
+        heading.textContent = 'Browser upgrade required';
+        heading.style.fontSize = '1.35rem';
+        heading.style.fontWeight = '700';
+        heading.style.color = '#9f1239';
+
+        var message = document.createElement('p');
+        message.textContent = 'The GMCT Management System requires a modern browser with JavaScript modules enabled. Please update your browser and try again.';
+        message.style.marginTop = '0.75rem';
+        message.style.color = '#7f1d1d';
+        message.style.lineHeight = '1.5';
+
+        container.appendChild(heading);
+        container.appendChild(message);
+        root.appendChild(container);
+      })();
+    </script>
+  </body>
 </html>
