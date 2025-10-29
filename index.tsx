@@ -2,6 +2,14 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 
+declare global {
+  interface Window {
+    __gmctAppBooted?: boolean;
+    __gmctBootstrapFailed?: boolean;
+    __gmctBootstrapError?: string;
+  }
+}
+
 // --- Global Failsafe Error Handler ---
 // This is a new, simplified, and more robust error handler that is guaranteed
 // to display startup errors instead of crashing silently.
@@ -17,10 +25,14 @@ const handleError = (errorEvent: ErrorEvent | PromiseRejectionEvent | { error: a
     // Log the raw error to the console for developers.
     console.error("GMCT App Global Error Handler caught:", error);
 
+    const message = error?.message || String(error) || 'An unknown error occurred.';
+    window.__gmctBootstrapFailed = true;
+    window.__gmctAppBooted = false;
+    window.__gmctBootstrapError = message;
+
     const rootElement = document.getElementById('root');
     if (rootElement) {
       // Safely convert the error to a string for display.
-      const message = error?.message || String(error) || 'An unknown error occurred.';
       const stack = error?.stack || 'No stack trace available.';
       
       // Clear the root element and use textContent for maximum safety.
@@ -69,6 +81,65 @@ const registerServiceWorker = () => {
   // Per user feedback and common GitHub Pages deployment issues, the service worker
   // is being explicitly disabled to prevent silent, script-terminating errors.
   console.log("Service Worker registration has been disabled for maximum compatibility.");
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const { serviceWorker } = navigator;
+
+      if (typeof serviceWorker.getRegistrations === 'function') {
+        serviceWorker
+          .getRegistrations()
+          .then(registrations => {
+            registrations.forEach(registration => {
+              if (registration.active || registration.waiting || registration.installing) {
+                console.log('Unregistering stale service worker:', registration.scope);
+              }
+              registration.unregister().catch(error => {
+                console.warn('Failed to unregister service worker', error);
+              });
+            });
+          })
+          .catch(error => {
+            console.warn('Unable to enumerate existing service workers', error);
+          });
+      } else if (typeof serviceWorker.getRegistration === 'function') {
+        serviceWorker
+          .getRegistration()
+          .then(registration => {
+            if (registration) {
+              if (registration.active || registration.waiting || registration.installing) {
+                console.log('Unregistering stale service worker:', registration.scope);
+              }
+              registration.unregister().catch(error => {
+                console.warn('Failed to unregister legacy service worker', error);
+              });
+            }
+          })
+          .catch(error => {
+            console.warn('Unable to look up legacy service worker', error);
+          });
+      }
+    }
+  } catch (error) {
+    console.warn('Service worker cleanup failed before React booted.', error);
+  }
+
+  if ('caches' in window) {
+    caches
+      .keys()
+      .then(keys => {
+        keys
+          .filter(key => key.startsWith('gmct-app-cache') || key.startsWith('gmct-'))
+          .forEach(key => {
+            caches.delete(key).catch(error => {
+              console.warn(`Failed to delete cache ${key}`, error);
+            });
+          });
+      })
+      .catch(error => {
+        console.warn('Unable to enumerate caches for cleanup', error);
+      });
+  }
 };
 
 // --- App Initialization ---
@@ -93,6 +164,9 @@ const initialize = () => {
     </React.StrictMode>
   );
   console.log("React app rendered.");
+  window.__gmctAppBooted = true;
+  window.__gmctBootstrapFailed = false;
+  window.__gmctBootstrapError = undefined;
 };
 
 
