@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Ghana Methodist Church of Toronto emblem</title>
+  <desc id="desc">A stylised circular mark with caring hands supporting a globe and the GMCT lettering.</desc>
+  <defs>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f3f4ff" />
+      <stop offset="100%" stop-color="#dbeafe" />
+    </linearGradient>
+    <linearGradient id="hands" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f97316" />
+      <stop offset="100%" stop-color="#ea580c" />
+    </linearGradient>
+    <linearGradient id="letters" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#ef4444" />
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="122" fill="#ffffff" stroke="#e2e8f0" stroke-width="10" />
+  <circle cx="128" cy="116" r="70" fill="url(#glow)" stroke="#38bdf8" stroke-width="4" />
+  <path d="M75 164c18 30 45 46 53 46s35-16 53-46c9-15-6-28-21-19-9 5-17 8-32 8s-23-3-32-8c-15-9-30 4-21 19z" fill="url(#hands)" />
+  <g fill="#0ea5e9">
+    <circle cx="102" cy="104" r="10" />
+    <circle cx="154" cy="104" r="10" />
+  </g>
+  <path d="M128 82c-18 0-33 14-33 32 0 9 4 17 10 23l-6 18 17-11c4 1 8 2 12 2 18 0 33-14 33-32s-15-32-33-32z" fill="#22d3ee" opacity="0.85" />
+  <text x="128" y="214" text-anchor="middle" font-family="'Poppins', 'Segoe UI', sans-serif" font-weight="800" font-size="54" fill="url(#letters)" letter-spacing="4">GMCT</text>
+  <text x="128" y="40" text-anchor="middle" font-family="'Poppins', 'Segoe UI', sans-serif" font-size="18" fill="#b91c1c" font-weight="700">GHANA METHODIST CHURCH OF TORONTO</text>
+</svg>
