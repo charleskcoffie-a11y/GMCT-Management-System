@@ -2,35 +2,6 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!--
-      This inline script is the definitive fix for GitHub Pages deployment.
-      It's simpler and more robust, specifically targeting the GH Pages URL structure.
-      It correctly identifies the base path (e.g., /repo-name/) and injects a <base> tag,
-      which fixes the "Invalid URL" crash and allows all assets to load correctly.
-    -->
-    <script>
-      (function() {
-        try {
-            const loc = window.location;
-            const path = loc.pathname;
-            // The goal is to find the base directory path, which must end with a '/'.
-            // For 'https://user.github.io/repo/page', the base path is '/repo/'.
-            const segments = path.split('/').filter(Boolean);
-            let basePath = '/'; // Default for root deployment
-            if (loc.hostname.includes('github.io') && segments.length > 0) {
-              // On GitHub Pages, the base path is always '/<repo-name>/'
-              basePath = '/' + segments[0] + '/';
-            }
-            
-            const absoluteUrl = loc.origin + basePath;
-            const baseTag = document.createElement('base');
-            baseTag.href = absoluteUrl;
-            document.head.prepend(baseTag);
-        } catch (e) {
-            console.error("Failed to set <base> tag in 404.html:", e);
-        }
-      }());
-    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GMCT Management System</title>
     <link rel="manifest" href="./manifest.json" />
@@ -49,42 +20,64 @@
       }
     </script>
     <style>
-      /* Increase base font size for better readability as requested */
       body {
-        font-size: 18px;
-        background-color: #f8fafc; /* bg-slate-50 */
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #fdf2f8 100%);
+        color: #1e293b;
       }
-      /* Custom scrollbar for a more polished, less "dry" look */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+      .card {
+        background: white;
+        border-radius: 0.75rem;
+        box-shadow: 0 20px 45px -15px rgba(30, 64, 175, 0.35);
+        padding: 2rem 2.5rem;
+        max-width: 32rem;
+        text-align: center;
+        border: 1px solid #e2e8f0;
       }
-      ::-webkit-scrollbar-track {
-        background: #f1f5f9; /* bg-slate-100 */
+      h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1e3a8a;
       }
-      ::-webkit-scrollbar-thumb {
-        background: #a5b4fc; /* indigo-300 */
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #818cf8; /* indigo-400 */
+      p {
+        margin-top: 1rem;
+        line-height: 1.5;
       }
     </style>
+    <script>
+      (function redirectToApp() {
+        try {
+          var loc = window.location;
+          var segments = loc.pathname.split('/').filter(Boolean);
+          var basePath = '/';
+          if (loc.hostname.includes('github.io') && segments.length > 0) {
+            basePath = '/' + segments[0] + '/';
+          }
+          var redirectUrl = loc.origin + basePath;
+          if (loc.search) {
+            redirectUrl += loc.search;
+          }
+          if (loc.hash) {
+            redirectUrl += loc.hash;
+          }
+          window.location.replace(redirectUrl);
+        } catch (error) {
+          console.error('Failed to redirect from 404.html', error);
+        }
+      })();
+    </script>
   </head>
   <body>
-    <div id="root">
-      <!-- Failsafe Loading Message -->
-      <!-- This is displayed if the main JavaScript fails to load or execute. -->
-      <!-- It will be automatically removed by index.tsx once React is ready. -->
-      <div style="font-family: ui-sans-serif, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #f8fafc;">
-        <div style="text-align: center; padding: 2rem; background-color: white; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0;">
-          <h1 style="font-size: 1.5rem; font-weight: 600; color: #1e293b;">Loading Application...</h1>
-          <p style="margin-top: 1rem; color: #475569;">If this message remains on screen for more than a few seconds, a critical error likely occurred.</p>
-          <p style="margin-top: 0.5rem; font-size: 0.875rem; color: #64748b;">Please try a hard refresh (<strong style="font-weight: 600;">Ctrl+Shift+R</strong> or <strong style="font-weight: 600;">Cmd+Shift+R</strong>) and check the browser's developer console for specific error messages.</p>
-        </div>
-      </div>
+    <div class="card">
+      <h1>Redirecting…</h1>
+      <p>Taking you back to the GMCT Management System.</p>
+      <p>If this page stays open, <a href="./">click here</a> to continue.</p>
     </div>
-    <!-- The main application script, deferred to run after the document is parsed -->
-    <script type="module" src="./index.tsx" defer></script>
   </body>
 </html>
