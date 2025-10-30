@@ -319,55 +319,26 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
         currency: currency,
     }).format(amount);
 }
-const RANDOM_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 let fallbackCounter = 0;
-let warnedAboutMathFallback = false;
-
-function randomChunk(length: number, cryptoObj?: Crypto): string {
-    if (length <= 0) return '';
-
-    if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
-        try {
-            const bytes = new Uint8Array(length);
-            cryptoObj.getRandomValues(bytes);
-            let result = '';
-            for (let i = 0; i < bytes.length; i += 1) {
-                result += RANDOM_ALPHABET.charAt(bytes[i] % RANDOM_ALPHABET.length);
-            }
-            return result;
-        } catch (error) {
-            console.warn('generateId: crypto.getRandomValues failed, falling back to Math.random()', error);
-        }
-    }
-
-    if (!warnedAboutMathFallback) {
-        console.warn('generateId: cryptographically secure random numbers are unavailable; using Math.random() instead.');
-        warnedAboutMathFallback = true;
-    }
-
-    let result = '';
-    for (let i = 0; i < length; i += 1) {
-        const index = Math.floor(Math.random() * RANDOM_ALPHABET.length);
-        result += RANDOM_ALPHABET.charAt(index);
-    }
-    return result;
-}
 
 export function generateId(prefix: string = 'gmct'): string {
-    const cryptoObj = typeof globalThis !== 'undefined'
-        ? (globalThis as typeof globalThis & { crypto?: Crypto }).crypto
-        : undefined;
-
-    if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
-        try {
+    try {
+        const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as typeof globalThis & { crypto?: Crypto }).crypto : undefined;
+        if (cryptoObj?.randomUUID) {
             return cryptoObj.randomUUID();
-        } catch (error) {
-            console.warn('generateId: crypto.randomUUID failed, using fallback generator.', error);
         }
+    } catch (error) {
+        console.warn('generateId: crypto.randomUUID is not available.', error);
+    }
+
+    try {
+        return uuidv4();
+    } catch (error) {
+        console.warn('generateId: uuidv4() failed, falling back to Math.random()', error);
     }
 
     fallbackCounter = (fallbackCounter + 1) % 0x10000;
     const timestamp = Date.now().toString(36);
-    const randomPart = randomChunk(16, cryptoObj);
+    const randomPart = Math.random().toString(36).slice(2, 10);
     return `${prefix}-${timestamp}-${randomPart}-${fallbackCounter.toString(36).padStart(4, '0')}`;
 }
