@@ -85,6 +85,9 @@ const App: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
+    const [syncMessage, setSyncMessage] = useState<string | null>(null);
+    const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+    const [, setIsNavOpen] = useState(false);
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -96,6 +99,98 @@ const App: React.FC = () => {
 
 
     const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '' });
+
+    const syncTaskCountRef = useRef(0);
+    const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
+    const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
+
+    const beginSync = useCallback(() => {
+        syncTaskCountRef.current += 1;
+    }, []);
+
+    const endSync = useCallback(() => {
+        syncTaskCountRef.current = Math.max(0, syncTaskCountRef.current - 1);
+    }, []);
+
+    const computeEntrySignature = useCallback((entry: Entry) => {
+        const sanitized = sanitizeEntry(entry);
+        return JSON.stringify({
+            id: sanitized.id,
+            spId: sanitized.spId ?? null,
+            date: sanitized.date,
+            memberID: sanitized.memberID,
+            memberName: sanitized.memberName,
+            type: sanitized.type,
+            fund: sanitized.fund,
+            method: sanitized.method,
+            amount: sanitized.amount,
+            note: sanitized.note ?? '',
+        });
+    }, []);
+
+    const computeMemberSignature = useCallback((member: Member) => {
+        const sanitized = sanitizeMember(member);
+        return JSON.stringify({
+            id: sanitized.id,
+            spId: sanitized.spId ?? null,
+            name: sanitized.name,
+            classNumber: sanitized.classNumber ?? '',
+        });
+    }, []);
+
+    const mergeEntriesFromCloud = useCallback((localEntries: Entry[], remoteEntries: Entry[]) => {
+        const sanitizedRemote = remoteEntries.map(remote => sanitizeEntry(remote));
+        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+
+        const merged = localEntries.map(local => {
+            const remote = remoteMap.get(local.id);
+            if (remote) {
+                remoteMap.delete(local.id);
+                return { ...local, ...remote };
+            }
+            return local;
+        });
+
+        for (const remote of remoteMap.values()) {
+            merged.push(remote);
+        }
+
+        const cache = entrySyncRef.current;
+        cache.clear();
+        for (const entry of merged) {
+            const sanitized = sanitizeEntry(entry);
+            cache.set(sanitized.id, { signature: computeEntrySignature(sanitized), entry: sanitized });
+        }
+
+        return merged;
+    }, [computeEntrySignature]);
+
+    const mergeMembersFromCloud = useCallback((localMembers: Member[], remoteMembers: Member[]) => {
+        const sanitizedRemote = remoteMembers.map(remote => sanitizeMember(remote));
+        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+
+        const merged = localMembers.map(local => {
+            const remote = remoteMap.get(local.id);
+            if (remote) {
+                remoteMap.delete(local.id);
+                return { ...local, ...remote };
+            }
+            return local;
+        });
+
+        for (const remote of remoteMap.values()) {
+            merged.push(remote);
+        }
+
+        const cache = memberSyncRef.current;
+        cache.clear();
+        for (const member of merged) {
+            const sanitized = sanitizeMember(member);
+            cache.set(sanitized.id, { signature: computeMemberSignature(sanitized), member: sanitized });
+        }
+
+        return merged;
+    }, [computeMemberSignature]);
 
     useEffect(() => {
         const attemptSilentSignin = async () => {
