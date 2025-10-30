@@ -47,7 +47,7 @@ export interface User {
     classLed?: string; // Class number if role is 'class-leader'
 }
 
-export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';
+export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel';
 
 export interface MemberAttendance {
     memberId: string;

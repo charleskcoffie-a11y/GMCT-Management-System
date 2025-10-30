@@ -14,6 +14,7 @@ import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
 import ConfirmationModal from './components/ConfirmationModal';
+import SyncStatus from './components/SyncStatus';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
@@ -101,6 +102,13 @@ const App: React.FC = () => {
     const [syncMessage, setSyncMessage] = useState<string | null>(null);
     const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
     const [, setIsNavOpen] = useState(false);
+    const [lastAttendanceSavedAt, setLastAttendanceSavedAt] = useState<number | null>(null);
+    const [isOffline, setIsOffline] = useState<boolean>(() => {
+        if (typeof navigator === 'undefined') return false;
+        return !navigator.onLine;
+    });
+    const [shouldResync, setShouldResync] = useState(0);
+    const [activeSyncTasks, setActiveSyncTasks] = useState(0);
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -119,10 +127,12 @@ const App: React.FC = () => {
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
+        setActiveSyncTasks(syncTaskCountRef.current);
     }, []);
 
     const endSync = useCallback(() => {
         syncTaskCountRef.current = Math.max(0, syncTaskCountRef.current - 1);
+        setActiveSyncTasks(syncTaskCountRef.current);
     }, []);
 
     const computeEntrySignature = useCallback((entry: Entry) => {
@@ -222,12 +232,43 @@ const App: React.FC = () => {
     }, [activeTab]);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const handleOffline = () => {
+            setIsOffline(true);
+            setSyncMessage('Offline: changes will sync when connection returns.');
+            setActiveSyncTasks(0);
+        };
+        const handleOnline = () => {
+            setIsOffline(false);
+            setSyncMessage('Connection restored. Syncing latest updates…');
+            setShouldResync(prev => prev + 1);
+        };
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('online', handleOnline);
+        return () => {
+            window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('online', handleOnline);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (attendance.length === 0) return;
+        setLastAttendanceSavedAt(prev => (prev === null ? Date.now() : prev));
+    }, [attendance]);
+
+    useEffect(() => {
         if (!cloud.signedIn || !cloud.accessToken) {
             entrySyncRef.current.clear();
             memberSyncRef.current.clear();
             resetContextCache();
             setSyncMessage(null);
             setLastSyncedAt(null);
+            setActiveSyncTasks(0);
+            return;
+        }
+
+        if (isOffline) {
+            setSyncMessage('Offline: changes will sync when connection returns.');
             return;
         }
 
@@ -261,10 +302,10 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud]);
+    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud, isOffline, shouldResync]);
 
     useEffect(() => {
-        if (!cloud.signedIn || !cloud.accessToken) {
+        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
             return;
         }
 
@@ -325,10 +366,10 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [entries, cloud.signedIn, cloud.accessToken, computeEntrySignature, setEntries]);
+    }, [entries, cloud.signedIn, cloud.accessToken, computeEntrySignature, setEntries, isOffline, shouldResync]);
 
     useEffect(() => {
-        if (!cloud.signedIn || !cloud.accessToken) {
+        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
             return;
         }
 
@@ -389,7 +430,7 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [members, cloud.signedIn, cloud.accessToken, computeMemberSignature, setMembers]);
+    }, [members, cloud.signedIn, cloud.accessToken, computeMemberSignature, setMembers, isOffline, shouldResync]);
 
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -670,6 +711,14 @@ const App: React.FC = () => {
                             <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Add New Entry</button>
                         </div>
 
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-4">
+                                <p className="text-sm uppercase tracking-wide text-amber-600 font-semibold">Stored Entries</p>
+                                <p className="text-3xl font-extrabold text-slate-800 mt-1">{entries.length.toLocaleString()}</p>
+                                <p className="text-xs text-slate-500 mt-2">Total financial entries captured in this workspace.</p>
+                            </div>
+                        </div>
+
                         {/* Filter Controls */}
                         <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-sky-50 to-cyan-100/70 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                             <div className="lg:col-span-1">
@@ -744,7 +793,7 @@ const App: React.FC = () => {
                 );
             case 'users': return <UsersTab users={users} setUsers={setUsers} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} />;
-            case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} />;
+            case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} onAttendanceSaved={setLastAttendanceSavedAt} />;
             case 'admin-attendance': return <AdminAttendanceView members={members} attendance={attendance} settings={settings} currentUser={currentUser} />;
             case 'utilities':
                 return (
@@ -802,6 +851,17 @@ const App: React.FC = () => {
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
             <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} />
+                <div className="mt-4">
+                    <SyncStatus
+                        isOffline={isOffline}
+                        syncMessage={syncMessage}
+                        lastSyncedAt={lastSyncedAt}
+                        lastAttendanceSavedAt={lastAttendanceSavedAt}
+                        activeSyncTasks={activeSyncTasks}
+                        cloudReady={cloud.ready}
+                        cloudSignedIn={cloud.signedIn}
+                    />
+                </div>
                 <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
                     <aside className="hidden lg:block lg:w-72 flex-shrink-0">
                         <nav className="h-full rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-5 space-y-2 overflow-y-auto">
