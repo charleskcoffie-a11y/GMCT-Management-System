@@ -4,6 +4,7 @@ import { expect } from '../vitest/index.js';
 // with expect.extend usages. Real DOM-specific matchers are not implemented.
 expect.extend({});
 
+export { expect };
 export const matchers = {};
 export default matchers;
 
