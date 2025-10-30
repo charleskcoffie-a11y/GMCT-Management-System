@@ -6,9 +6,11 @@ interface MembersProps {
     members: Member[];
     setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
     settings: Settings;
+    canViewContributionReport: boolean;
+    onViewContributionReport: (memberId: string) => void;
 }
 
-const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
+const Members: React.FC<MembersProps> = ({ members, setMembers, settings, canViewContributionReport, onViewContributionReport }) => {
     const [name, setName] = useState('');
     const [classNumber, setClassNumber] = useState('');
     const [search, setSearch] = useState('');
@@ -172,14 +174,22 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                                     </td>
                                     <td className="px-4 py-2">
                                         {editingId === member.id ? (
-                                            <div className="flex gap-3">
+                                            <div className="flex flex-wrap gap-3">
                                                 <button onClick={handleUpdate} className="text-emerald-600 hover:text-emerald-700 font-semibold">Save</button>
                                                 <button onClick={handleCancelEdit} className="text-slate-500 hover:text-slate-600 font-semibold">Cancel</button>
                                             </div>
                                         ) : (
-                                            <div className="flex gap-3">
+                                            <div className="flex flex-wrap gap-3">
                                                 <button onClick={() => handleEdit(member)} className="text-indigo-600 hover:text-indigo-700 font-semibold">Edit</button>
                                                 <button onClick={() => handleRemove(member.id)} className="text-red-500 hover:text-red-600 font-semibold">Remove</button>
+                                                {canViewContributionReport && (
+                                                    <button
+                                                        onClick={() => onViewContributionReport(member.id)}
+                                                        className="text-emerald-600 hover:text-emerald-700 font-semibold"
+                                                    >
+                                                        View Contribution Report
+                                                    </button>
+                                                )}
                                             </div>
                                         )}
                                     </td>

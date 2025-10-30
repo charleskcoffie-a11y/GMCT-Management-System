@@ -14,6 +14,7 @@ import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
 import ConfirmationModal from './components/ConfirmationModal';
+import MemberContributionReport from './components/MemberContributionReport';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
@@ -101,6 +102,8 @@ const App: React.FC = () => {
     const [syncMessage, setSyncMessage] = useState<string | null>(null);
     const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
     const [, setIsNavOpen] = useState(false);
+    const [isContributionReportOpen, setContributionReportOpen] = useState(false);
+    const [reportMemberId, setReportMemberId] = useState<string | null>(null);
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -659,6 +662,16 @@ const App: React.FC = () => {
         return <Login onLogin={handleLogin} error={loginError} />;
     }
 
+    const canViewContributionReport = currentUser.role === 'admin' || currentUser.role === 'finance';
+
+    const openContributionReport = (memberId: string) => {
+        if (!canViewContributionReport) {
+            return;
+        }
+        setReportMemberId(memberId);
+        setContributionReportOpen(true);
+    };
+
     const renderTabContent = () => {
         switch (activeTab) {
             case 'home': return currentUser.role === 'admin' || currentUser.role === 'finance' ? <AdminLandingPage onNavigate={setActiveTab} currentUser={currentUser} /> : <Dashboard entries={filteredAndSortedEntries} settings={settings} />;
@@ -732,7 +745,16 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 );
-            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} />;
+            case 'members':
+                return (
+                    <Members
+                        members={members}
+                        setMembers={setMembers}
+                        settings={settings}
+                        canViewContributionReport={canViewContributionReport}
+                        onViewContributionReport={openContributionReport}
+                    />
+                );
             case 'insights': return <Insights entries={filteredAndSortedEntries} settings={settings} />;
             case 'history':
                 return (
@@ -815,6 +837,20 @@ const App: React.FC = () => {
                     </section>
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} members={members} settings={settings} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
+                {canViewContributionReport && isContributionReportOpen && (
+                    <MemberContributionReport
+                        isOpen={isContributionReportOpen}
+                        onClose={() => {
+                            setContributionReportOpen(false);
+                            setReportMemberId(null);
+                        }}
+                        entries={entries}
+                        members={members}
+                        settings={settings}
+                        initialMemberId={reportMemberId ?? undefined}
+                        currentUser={currentUser}
+                    />
+                )}
                 <ConfirmationModal
                     isOpen={isConfirmModalOpen}
                     onClose={() => {
