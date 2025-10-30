@@ -30,6 +30,7 @@ import {
     sanitizeUsersCollection,
     sanitizeAttendanceCollection,
     sanitizeWeeklyHistoryCollection,
+    sanitizeString,
 } from './utils';
 import type {
     Entry,
@@ -537,11 +538,14 @@ const App: React.FC = () => {
 
     const handleBulkAddMembers = (importedMembers: Member[]) => {
         setMembers(prev => {
-            const existingIds = new Set(prev.map(member => member.id));
+            const existingIds = new Set(prev.map(member => sanitizeString(member.id)));
             const next = [...prev];
             importedMembers.forEach(member => {
-                if (!existingIds.has(member.id)) {
-                    next.push(member);
+                const sanitizedMember = sanitizeMember(member);
+                const normalizedId = sanitizeString(sanitizedMember.id);
+                if (!existingIds.has(normalizedId)) {
+                    next.push(sanitizedMember);
+                    existingIds.add(normalizedId);
                 }
             });
             return next;
