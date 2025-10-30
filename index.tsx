@@ -2,6 +2,40 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 
+declare const global: any;
+
+(function ensureGlobalThis() {
+  if (typeof globalThis !== 'undefined') {
+    return;
+  }
+
+  var getGlobal = function (): any {
+    if (typeof self !== 'undefined') {
+      return self;
+    }
+    if (typeof window !== 'undefined') {
+      return window;
+    }
+    if (typeof global !== 'undefined') {
+      return global;
+    }
+
+    return Function('return this')();
+  };
+
+  var globalObj = getGlobal();
+  try {
+    Object.defineProperty(globalObj, 'globalThis', {
+      value: globalObj,
+      configurable: true,
+      enumerable: false,
+      writable: true,
+    });
+  } catch (error) {
+    (globalObj as any).globalThis = globalObj;
+  }
+})();
+
 declare global {
   interface Window {
     __gmctAppBooted?: boolean;
