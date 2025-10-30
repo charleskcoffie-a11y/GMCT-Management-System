@@ -11,6 +11,7 @@
     <link rel="icon" type="image/svg+xml" href="./gmct-logo.svg" />
     <meta name="theme-color" content="#4338ca" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default%2CArray.prototype.includes%2CString.prototype.includes%2CArray.prototype.find%2CArray.prototype.findIndex%2CArray.from%2CObject.assign%2CObject.entries%2CNumber.isFinite%2CPromise%2CMap%2CSet%2CString.prototype.startsWith%2CURL%2CURLSearchParams" crossorigin="anonymous"></script>
     <script>
       (function applyCompatPolyfills() {
         if (!Array.prototype.includes) {
@@ -313,9 +314,9 @@
     </script>
     <script>
       (function bootstrapWatchdog() {
-        var HARD_RELOAD_PARAM = 'gmct-hard-reload';
-        var CHECK_INTERVAL_MS = 500;
-        var BOOT_DEADLINE_MS = 20000;
+        const HARD_RELOAD_PARAM = 'gmct-hard-reload';
+        const CHECK_INTERVAL_MS = 500;
+        const BOOT_DEADLINE_MS = 20000;
 
         function start() {
           if (window.__gmctBootstrapWatchdogActive) return;
@@ -323,13 +324,8 @@
 
           var startedAt = Date.now();
           var loaderCard = document.querySelector('.gmct-loader__card');
-          var alreadyReloaded = false;
-          try {
-            var query = window.location.search || '';
-            alreadyReloaded = query.indexOf(HARD_RELOAD_PARAM + '=') >= 0;
-          } catch (error) {
-            console.warn('GMCT bootstrap watchdog could not inspect the current URL.', error);
-          }
+          var url = new URL(window.location.href);
+          var alreadyReloaded = url.searchParams.has(HARD_RELOAD_PARAM);
           var statusLine = null;
 
           function ensureStatusLine() {
@@ -379,41 +375,22 @@
           }
 
           function flushCaches() {
-            if (typeof Promise !== 'function') {
-              return {
-                catch: function () {
-                  return this;
-                },
-                then: function (callback) {
-                  if (typeof callback === 'function') {
-                    try {
-                      callback();
-                    } catch (error) {
-                      console.warn('GMCT bootstrap watchdog legacy reload failed during cache flush callback.', error);
-                    }
-                  }
-                  return this;
-                },
-              };
-            }
             var tasks = [];
             if ('serviceWorker' in navigator) {
               tasks.push(
                 navigator.serviceWorker
                   .getRegistrations()
                   .then(function (registrations) {
-                    var unregisterTasks = [];
-                    for (var i = 0; i < registrations.length; i += 1) {
-                      var registration = registrations[i];
-                      if (registration && (registration.active || registration.waiting || registration.installing)) {
-                        unregisterTasks.push(
-                          registration.unregister().catch(function (error) {
+                    return Promise.all(
+                      registrations.map(function (registration) {
+                        if (registration.active || registration.waiting || registration.installing) {
+                          return registration.unregister().catch(function (error) {
                             console.warn('GMCT bootstrap watchdog failed to unregister a service worker.', error);
-                          })
-                        );
-                      }
-                    }
-                    return Promise.all(unregisterTasks);
+                          });
+                        }
+                        return Promise.resolve();
+                      })
+                    );
                   })
                   .catch(function (error) {
                     console.warn('GMCT bootstrap watchdog could not enumerate service workers.', error);
@@ -426,18 +403,15 @@
                 caches
                   .keys()
                   .then(function (keys) {
-                    var removals = [];
-                    for (var i = 0; i < keys.length; i += 1) {
-                      var key = keys[i];
-                      if (key && key.indexOf('gmct') === 0) {
-                        removals.push(
-                          caches.delete(key).catch(function (error) {
+                    return Promise.all(
+                      keys
+                        .filter(function (key) { return key.indexOf('gmct') === 0; })
+                        .map(function (key) {
+                          return caches.delete(key).catch(function (error) {
                             console.warn('GMCT bootstrap watchdog failed to delete cache', key, error);
-                          })
-                        );
-                      }
-                    }
-                    return Promise.all(removals);
+                          });
+                        })
+                    );
                   })
                   .catch(function (error) {
                     console.warn('GMCT bootstrap watchdog could not enumerate caches.', error);
@@ -448,24 +422,6 @@
             return Promise.all(tasks);
           }
 
-          function buildHardReloadUrl() {
-            var href = window.location.href || '';
-            var hashIndex = href.indexOf('#');
-            var hash = '';
-            if (hashIndex >= 0) {
-              hash = href.slice(hashIndex);
-              href = href.slice(0, hashIndex);
-            }
-            var separator = href.indexOf('?') >= 0 ? '&' : '?';
-            var timestamp = Date.now().toString();
-            if (href.indexOf(HARD_RELOAD_PARAM + '=') >= 0) {
-              href = href.replace(new RegExp(HARD_RELOAD_PARAM + '=[^&]*'), HARD_RELOAD_PARAM + '=' + timestamp);
-            } else {
-              href += separator + HARD_RELOAD_PARAM + '=' + timestamp;
-            }
-            return href + hash;
-          }
-
           function attemptRecovery() {
             if (alreadyReloaded) {
               var details = window.__gmctBootstrapError ? 'Last error: ' + window.__gmctBootstrapError : '';
@@ -473,13 +429,7 @@
                 'We tried reloading the page automatically, but the application is still stuck. Please clear your browser cache and reload.',
                 details
               );
-              if (typeof Promise === 'function') {
-                return Promise.resolve();
-              }
-              return {
-                then: function () { return this; },
-                catch: function () { return this; },
-              };
+              return Promise.resolve();
             }
 
             updateStatus('Clearing saved caches and refreshing…');
@@ -488,8 +438,8 @@
                 /* ignore cache clearing errors before forcing a refresh */
               })
               .then(function () {
-                var nextUrl = buildHardReloadUrl();
-                window.location.replace(nextUrl);
+                url.searchParams.set(HARD_RELOAD_PARAM, Date.now().toString());
+                window.location.replace(url.toString());
               });
           }
 
@@ -506,14 +456,14 @@
               return;
             }
 
-            var elapsed = Date.now() - startedAt;
+            const elapsed = Date.now() - startedAt;
 
             if (elapsed >= 5000 && elapsed < BOOT_DEADLINE_MS) {
               updateStatus('Still working… large updates can take a little longer to load on slower networks.');
             }
 
             if (elapsed >= BOOT_DEADLINE_MS) {
-              attemptRecovery();
+              await attemptRecovery();
               return;
             }
 
