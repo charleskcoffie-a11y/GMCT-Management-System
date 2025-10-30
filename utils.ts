@@ -321,20 +321,39 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
 }
 let fallbackCounter = 0;
 
+function generateUuidFromCrypto(cryptoObj: Crypto | undefined): string | null {
+    if (!cryptoObj) {
+        return null;
+    }
+
+    if (typeof cryptoObj.randomUUID === 'function') {
+        return cryptoObj.randomUUID();
+    }
+
+    if (typeof cryptoObj.getRandomValues === 'function') {
+        const buffer = new Uint8Array(16);
+        cryptoObj.getRandomValues(buffer);
+
+        // Per RFC 4122, version 4 UUIDs set the version and variant bits explicitly
+        buffer[6] = (buffer[6] & 0x0f) | 0x40;
+        buffer[8] = (buffer[8] & 0x3f) | 0x80;
+
+        const hex = Array.from(buffer, byte => byte.toString(16).padStart(2, '0'));
+        return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+    }
+
+    return null;
+}
+
 export function generateId(prefix: string = 'gmct'): string {
     try {
         const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as typeof globalThis & { crypto?: Crypto }).crypto : undefined;
-        if (cryptoObj?.randomUUID) {
-            return cryptoObj.randomUUID();
+        const uuid = generateUuidFromCrypto(cryptoObj);
+        if (uuid) {
+            return uuid;
         }
     } catch (error) {
-        console.warn('generateId: crypto.randomUUID is not available.', error);
-    }
-
-    try {
-        return uuidv4();
-    } catch (error) {
-        console.warn('generateId: uuidv4() failed, falling back to Math.random()', error);
+        console.warn('generateId: crypto API is unavailable, falling back to pseudo-random id generation.', error);
     }
 
     fallbackCounter = (fallbackCounter + 1) % 0x10000;
