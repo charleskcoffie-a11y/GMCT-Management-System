@@ -18,7 +18,18 @@ import ConfirmationModal from './components/ConfirmationModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { toCsv, sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeAttendanceStatus, formatCurrency, sanitizeWeeklyHistoryRecord } from './utils';
-import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, EntryType, WeeklyHistoryRecord } from './types';
+import type {
+    Entry,
+    Member,
+    Settings,
+    User,
+    Tab,
+    CloudState,
+    AttendanceRecord,
+    EntryType,
+    WeeklyHistoryRecord,
+    UserRole,
+} from './types';
 import { msalSilentSignIn } from './services/oneDrive';
 import {
     loadEntriesFromSharePoint,
@@ -614,7 +625,13 @@ const App: React.FC = () => {
         }
     };
 
-    const navItems = [
+    type NavItem = {
+        id: Tab;
+        label: string;
+        roles: UserRole[];
+    };
+
+    const navItems: NavItem[] = [
         { id: 'home', label: 'Home', roles: ['admin', 'finance'] },
         { id: 'records', label: 'Financial Records', roles: ['admin', 'finance'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
@@ -625,7 +642,23 @@ const App: React.FC = () => {
         { id: 'users', label: 'Manage Users', roles: ['admin', 'finance'] },
         { id: 'utilities', label: 'Utilities', roles: ['admin'] },
         { id: 'settings', label: 'Settings', roles: ['admin'] },
-    ].filter(item => item.roles.includes(currentUser.role));
+    ];
+
+    const visibleNavItems = navItems.filter(item => item.roles.includes(currentUser.role));
+
+    const renderNavButton = (item: NavItem) => (
+        <button
+            key={item.id}
+            onClick={() => setActiveTab(item.id as Tab)}
+            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
+                activeTab === item.id
+                    ? 'bg-white/25 text-white shadow-lg'
+                    : 'text-indigo-100 hover:bg-white/15 hover:text-white'
+            }`}
+        >
+            {item.label}
+        </button>
+    );
 
     const renderNavButton = (item: typeof navItems[number]) => (
         <button
