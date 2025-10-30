@@ -86,14 +86,19 @@ function handleError(errorEvent: ErrorEvent | PromiseRejectionEvent | { error: a
     console.error('GMCT App Global Error Handler caught:', error);
 
     var message = normaliseErrorMessage(error);
+    var stack = getStack(error);
+    var detailText = 'Error: ' + message + '\n\nStack Trace:\n' + stack;
     window.__gmctBootstrapFailed = true;
     window.__gmctAppBooted = false;
-    window.__gmctBootstrapError = message;
+    window.__gmctBootstrapError = detailText;
+    try {
+      window.sessionStorage.setItem('gmct-last-bootstrap-error', detailText);
+    } catch (storageError) {
+      console.warn('GMCT bootstrap error details could not be persisted.', storageError);
+    }
 
     var rootElement = document.getElementById('root');
     if (rootElement) {
-      var stack = getStack(error);
-
       rootElement.innerHTML = '';
       rootElement.style.padding = '1.5rem';
       rootElement.style.fontFamily = 'ui-sans-serif, system-ui, sans-serif';
@@ -109,7 +114,7 @@ function handleError(errorEvent: ErrorEvent | PromiseRejectionEvent | { error: a
       preamble.style.marginTop = '1rem';
 
       var details = document.createElement('pre');
-      details.textContent = 'Error: ' + message + '\n\nStack Trace:\n' + stack;
+      details.textContent = detailText;
       details.style.marginTop = '1rem';
       details.style.padding = '1rem';
       details.style.backgroundColor = '#FEF2F2';
@@ -206,6 +211,11 @@ function initialize(): void {
     delete window.__gmctBootstrapError;
   } catch (error) {
     window.__gmctBootstrapError = undefined;
+  }
+  try {
+    window.sessionStorage.removeItem('gmct-last-bootstrap-error');
+  } catch (storageError) {
+    console.warn('GMCT bootstrap error record could not be cleared.', storageError);
   }
 }
 
