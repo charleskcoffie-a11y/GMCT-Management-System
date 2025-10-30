@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import type { Entry, EntryType, Member, Method, Settings } from '../types';
-import { sanitizeEntryType, sanitizeMethod } from '../utils';
+import { generateId, sanitizeEntryType, sanitizeMethod } from '../utils';
 
 type EntryModalProps = {
     entry: Entry | null;
@@ -18,7 +17,7 @@ const methods: Method[] = ['cash', 'check', 'card', 'e-transfer', 'mobile', 'oth
 
 const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSave, onSaveAndNew, onClose, onDelete }) => {
     const [form, setForm] = useState<Entry>(() => entry ?? {
-        id: uuidv4(),
+        id: generateId('entry'),
         date: new Date().toISOString().slice(0, 10),
         memberID: '',
         memberName: '',
@@ -36,7 +35,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
             setMemberQuery(entry.memberName || '');
         } else {
             setForm({
-                id: uuidv4(),
+                id: generateId('entry'),
                 date: new Date().toISOString().slice(0, 10),
                 memberID: '',
                 memberName: '',
@@ -86,14 +85,14 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
         }
         const payload = {
             ...form,
-            id: form.id || uuidv4(),
+            id: form.id || generateId('entry'),
             memberName: form.memberName || memberQuery,
             type: sanitizeEntryType(form.type),
             method: sanitizeMethod(form.method),
         };
         onSaveAndNew(payload);
         setForm({
-            id: uuidv4(),
+            id: generateId('entry'),
             date: new Date().toISOString().slice(0, 10),
             memberID: '',
             memberName: '',

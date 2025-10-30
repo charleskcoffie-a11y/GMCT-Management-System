@@ -48,7 +48,7 @@ export function sanitizeEntry(raw: any): Entry {
         : new Date().toISOString().slice(0, 10);
     
     return {
-        id: sanitizeString(raw.id) || uuidv4(),
+        id: sanitizeString(raw.id) || generateId('entry'),
         spId: sanitizeString(raw.spId),
         date: date,
         memberID: sanitizeString(raw.memberID),
@@ -63,7 +63,7 @@ export function sanitizeEntry(raw: any): Entry {
 
 export function sanitizeMember(raw: any): Member {
     return {
-        id: sanitizeString(raw.id) || uuidv4(),
+        id: sanitizeString(raw.id) || generateId('member'),
         spId: sanitizeString(raw.spId),
         name: sanitizeString(raw.name) || "Unnamed Member",
         classNumber: sanitizeString(raw.classNumber),
@@ -147,7 +147,7 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
     };
 
     return {
-        id: sanitizeString(raw.id) || uuidv4(),
+        id: sanitizeString(raw.id) || generateId('history'),
         dateOfService: dateOfService,
         societyName: sanitizeString(raw.societyName),
         preacher: sanitizeString(raw.preacher) || sanitizeString(raw.officiant),
@@ -319,4 +319,27 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
         style: 'currency',
         currency: currency,
     }).format(amount);
+}
+let fallbackCounter = 0;
+
+export function generateId(prefix: string = 'gmct'): string {
+    try {
+        const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as typeof globalThis & { crypto?: Crypto }).crypto : undefined;
+        if (cryptoObj?.randomUUID) {
+            return cryptoObj.randomUUID();
+        }
+    } catch (error) {
+        console.warn('generateId: crypto.randomUUID is not available.', error);
+    }
+
+    try {
+        return uuidv4();
+    } catch (error) {
+        console.warn('generateId: uuidv4() failed, falling back to Math.random()', error);
+    }
+
+    fallbackCounter = (fallbackCounter + 1) % 0x10000;
+    const timestamp = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).slice(2, 10);
+    return `${prefix}-${timestamp}-${randomPart}-${fallbackCounter.toString(36).padStart(4, '0')}`;
 }
