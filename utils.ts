@@ -1,5 +1,4 @@
 // utils.ts
-import { v4 as uuidv4 } from 'uuid';
 import type {
     AttendanceRecord,
     AttendanceStatus,
@@ -48,7 +47,7 @@ export function sanitizeEntry(raw: any): Entry {
         : new Date().toISOString().slice(0, 10);
     
     return {
-        id: sanitizeString(raw.id) || uuidv4(),
+        id: sanitizeString(raw.id) || generateId('entry'),
         spId: sanitizeString(raw.spId),
         date: date,
         memberID: sanitizeString(raw.memberID),
@@ -63,7 +62,7 @@ export function sanitizeEntry(raw: any): Entry {
 
 export function sanitizeMember(raw: any): Member {
     return {
-        id: sanitizeString(raw.id) || uuidv4(),
+        id: sanitizeString(raw.id) || generateId('member'),
         spId: sanitizeString(raw.spId),
         name: sanitizeString(raw.name) || "Unnamed Member",
         classNumber: sanitizeString(raw.classNumber),
@@ -147,7 +146,7 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
     };
 
     return {
-        id: sanitizeString(raw.id) || uuidv4(),
+        id: sanitizeString(raw.id) || generateId('history'),
         dateOfService: dateOfService,
         societyName: sanitizeString(raw.societyName),
         preacher: sanitizeString(raw.preacher) || sanitizeString(raw.officiant),
@@ -319,4 +318,56 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
         style: 'currency',
         currency: currency,
     }).format(amount);
+}
+const RANDOM_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
+let fallbackCounter = 0;
+let warnedAboutMathFallback = false;
+
+function randomChunk(length: number, cryptoObj?: Crypto): string {
+    if (length <= 0) return '';
+
+    if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+        try {
+            const bytes = new Uint8Array(length);
+            cryptoObj.getRandomValues(bytes);
+            let result = '';
+            for (let i = 0; i < bytes.length; i += 1) {
+                result += RANDOM_ALPHABET.charAt(bytes[i] % RANDOM_ALPHABET.length);
+            }
+            return result;
+        } catch (error) {
+            console.warn('generateId: crypto.getRandomValues failed, falling back to Math.random()', error);
+        }
+    }
+
+    if (!warnedAboutMathFallback) {
+        console.warn('generateId: cryptographically secure random numbers are unavailable; using Math.random() instead.');
+        warnedAboutMathFallback = true;
+    }
+
+    let result = '';
+    for (let i = 0; i < length; i += 1) {
+        const index = Math.floor(Math.random() * RANDOM_ALPHABET.length);
+        result += RANDOM_ALPHABET.charAt(index);
+    }
+    return result;
+}
+
+export function generateId(prefix: string = 'gmct'): string {
+    const cryptoObj = typeof globalThis !== 'undefined'
+        ? (globalThis as typeof globalThis & { crypto?: Crypto }).crypto
+        : undefined;
+
+    if (cryptoObj && typeof cryptoObj.randomUUID === 'function') {
+        try {
+            return cryptoObj.randomUUID();
+        } catch (error) {
+            console.warn('generateId: crypto.randomUUID failed, using fallback generator.', error);
+        }
+    }
+
+    fallbackCounter = (fallbackCounter + 1) % 0x10000;
+    const timestamp = Date.now().toString(36);
+    const randomPart = randomChunk(16, cryptoObj);
+    return `${prefix}-${timestamp}-${randomPart}-${fallbackCounter.toString(36).padStart(4, '0')}`;
 }

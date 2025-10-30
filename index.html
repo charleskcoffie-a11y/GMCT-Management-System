@@ -12,6 +12,264 @@
     <meta name="theme-color" content="#4338ca" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+      (function applyCompatPolyfills() {
+        if (!Array.prototype.includes) {
+          Object.defineProperty(Array.prototype, 'includes', {
+            value: function (searchElement, fromIndex) {
+              var length = this.length >>> 0;
+              if (length === 0) return false;
+              var start = fromIndex ? Number(fromIndex) || 0 : 0;
+              var index = start >= 0 ? start : Math.max(length + start, 0);
+              for (var i = index; i < length; i += 1) {
+                if (this[i] === searchElement) {
+                  return true;
+                }
+              }
+              return false;
+            },
+            configurable: true,
+            writable: true,
+          });
+        }
+
+        if (!String.prototype.includes) {
+          Object.defineProperty(String.prototype, 'includes', {
+            value: function (search, start) {
+              if (search instanceof RegExp) {
+                throw new TypeError('First argument to String.prototype.includes must not be a regular expression');
+              }
+              var position = start ? Number(start) || 0 : 0;
+              return this.indexOf(search, position) !== -1;
+            },
+            configurable: true,
+            writable: true,
+          });
+        }
+
+        if (!String.prototype.startsWith) {
+          Object.defineProperty(String.prototype, 'startsWith', {
+            value: function (search, position) {
+              var start = position ? Number(position) || 0 : 0;
+              return this.slice(start, start + search.length) === search;
+            },
+            configurable: true,
+            writable: true,
+          });
+        }
+
+        if (!Array.prototype.find) {
+          Object.defineProperty(Array.prototype, 'find', {
+            value: function (predicate, thisArg) {
+              if (typeof predicate !== 'function') {
+                throw new TypeError('Array.prototype.find callback must be a function');
+              }
+              var list = Object(this);
+              var length = list.length >>> 0;
+              for (var i = 0; i < length; i += 1) {
+                var value = list[i];
+                if (predicate.call(thisArg, value, i, list)) {
+                  return value;
+                }
+              }
+              return undefined;
+            },
+            configurable: true,
+            writable: true,
+          });
+        }
+
+        if (!Array.prototype.findIndex) {
+          Object.defineProperty(Array.prototype, 'findIndex', {
+            value: function (predicate, thisArg) {
+              if (typeof predicate !== 'function') {
+                throw new TypeError('Array.prototype.findIndex callback must be a function');
+              }
+              var list = Object(this);
+              var length = list.length >>> 0;
+              for (var i = 0; i < length; i += 1) {
+                if (predicate.call(thisArg, list[i], i, list)) {
+                  return i;
+                }
+              }
+              return -1;
+            },
+            configurable: true,
+            writable: true,
+          });
+        }
+
+        if (!Array.from) {
+          Array.from = function (arrayLike) {
+            var items = Object(arrayLike);
+            if (arrayLike == null) {
+              throw new TypeError('Array.from requires an array-like object');
+            }
+            var length = items.length >>> 0;
+            var result = new Array(length);
+            for (var i = 0; i < length; i += 1) {
+              result[i] = items[i];
+            }
+            return result;
+          };
+        }
+
+        if (!Object.assign) {
+          Object.assign = function (target) {
+            if (target == null) {
+              throw new TypeError('Object.assign target must not be null or undefined');
+            }
+            var to = Object(target);
+            for (var i = 1; i < arguments.length; i += 1) {
+              var source = arguments[i];
+              if (source != null) {
+                for (var key in source) {
+                  if (Object.prototype.hasOwnProperty.call(source, key)) {
+                    to[key] = source[key];
+                  }
+                }
+              }
+            }
+            return to;
+          };
+        }
+
+        if (!Object.entries) {
+          Object.entries = function (obj) {
+            var result = [];
+            for (var key in obj) {
+              if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                result.push([key, obj[key]]);
+              }
+            }
+            return result;
+          };
+        }
+
+        if (!Number.isFinite) {
+          Number.isFinite = function (value) {
+            return typeof value === 'number' && isFinite(value);
+          };
+        }
+
+        if (typeof Map === 'undefined') {
+          var MapPolyfill = function (iterable) {
+            this.__entries = [];
+            if (iterable && typeof iterable.forEach === 'function') {
+              var self = this;
+              iterable.forEach(function (pair) {
+                self.set(pair[0], pair[1]);
+              });
+            }
+          };
+          MapPolyfill.prototype.set = function (key, value) {
+            var index = this.__findIndex(key);
+            if (index >= 0) {
+              this.__entries[index].value = value;
+            } else {
+              this.__entries.push({ key: key, value: value });
+            }
+            return this;
+          };
+          MapPolyfill.prototype.get = function (key) {
+            var index = this.__findIndex(key);
+            return index >= 0 ? this.__entries[index].value : undefined;
+          };
+          MapPolyfill.prototype.has = function (key) {
+            return this.__findIndex(key) >= 0;
+          };
+          MapPolyfill.prototype.delete = function (key) {
+            var index = this.__findIndex(key);
+            if (index === -1) return false;
+            this.__entries.splice(index, 1);
+            return true;
+          };
+          MapPolyfill.prototype.clear = function () {
+            this.__entries.length = 0;
+          };
+          MapPolyfill.prototype.forEach = function (callback, thisArg) {
+            for (var i = 0; i < this.__entries.length; i += 1) {
+              var entry = this.__entries[i];
+              callback.call(thisArg, entry.value, entry.key, this);
+            }
+          };
+          MapPolyfill.prototype.__findIndex = function (key) {
+            for (var i = 0; i < this.__entries.length; i += 1) {
+              if (this.__entries[i].key === key) {
+                return i;
+              }
+            }
+            return -1;
+          };
+          Object.defineProperty(MapPolyfill.prototype, 'size', {
+            get: function () {
+              return this.__entries.length;
+            },
+          });
+          window.Map = MapPolyfill;
+        }
+
+        if (typeof Set === 'undefined') {
+          var SetPolyfill = function (iterable) {
+            this.__map = new Map();
+            if (iterable && typeof iterable.forEach === 'function') {
+              var self = this;
+              iterable.forEach(function (value) {
+                self.add(value);
+              });
+            }
+          };
+          SetPolyfill.prototype.add = function (value) {
+            this.__map.set(value, value);
+            return this;
+          };
+          SetPolyfill.prototype.has = function (value) {
+            return this.__map.has(value);
+          };
+          SetPolyfill.prototype.delete = function (value) {
+            return this.__map.delete(value);
+          };
+          SetPolyfill.prototype.clear = function () {
+            this.__map.clear();
+          };
+          SetPolyfill.prototype.forEach = function (callback, thisArg) {
+            this.__map.forEach(function (value) {
+              callback.call(thisArg, value, value, this);
+            }, this);
+          };
+          Object.defineProperty(SetPolyfill.prototype, 'size', {
+            get: function () {
+              return this.__map.size;
+            },
+          });
+          window.Set = SetPolyfill;
+        }
+      })();
+    </script>
+    <script>
+      (function ensureProcessEnv() {
+        if (typeof window === 'undefined') {
+          return;
+        }
+        var globalProcess = window.process;
+        if (!globalProcess) {
+          globalProcess = { env: {} };
+          window.process = globalProcess;
+        }
+        if (!globalProcess.env) {
+          globalProcess.env = {};
+        }
+        if (typeof globalProcess.env.NODE_ENV === 'undefined') {
+          globalProcess.env.NODE_ENV = 'production';
+        }
+        if (typeof globalProcess.env.API_KEY === 'undefined') {
+          globalProcess.env.API_KEY = '';
+        }
+        if (typeof globalProcess.env.GEMINI_API_KEY === 'undefined') {
+          globalProcess.env.GEMINI_API_KEY = '';
+        }
+      })();
+    </script>
+    <script>
       // Immediately unregister any previously installed service workers before the
       // main bundle runs. This ensures visitors who are stuck on the loading screen
       // because of an outdated offline cache get a clean reload path.
@@ -20,14 +278,14 @@
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker
               .getRegistrations()
-              .then(registrations => {
-                registrations.forEach(registration => {
-                  registration.unregister().catch(() => {
+              .then(function (registrations) {
+                registrations.forEach(function (registration) {
+                  registration.unregister().catch(function () {
                     /* swallow errors - the React boot process will log details */
                   });
                 });
               })
-              .catch(() => {
+              .catch(function () {
                 /* ignore lookup errors */
               });
           }
@@ -35,16 +293,16 @@
           if ('caches' in window) {
             caches
               .keys()
-              .then(keys => {
+              .then(function (keys) {
                 keys
-                  .filter(key => key.startsWith('gmct'))
-                  .forEach(key => {
-                    caches.delete(key).catch(() => {
+                  .filter(function (key) { return key.indexOf('gmct') === 0; })
+                  .forEach(function (key) {
+                    caches.delete(key).catch(function () {
                       /* ignore cache cleanup errors */
                     });
                   });
               })
-              .catch(() => {
+              .catch(function () {
                 /* ignore cache enumeration errors */
               });
           }
@@ -55,21 +313,26 @@
     </script>
     <script>
       (function bootstrapWatchdog() {
-        const HARD_RELOAD_PARAM = 'gmct-hard-reload';
-        const CHECK_INTERVAL_MS = 400;
-        const BOOT_DEADLINE_MS = 7000;
+        var HARD_RELOAD_PARAM = 'gmct-hard-reload';
+        var CHECK_INTERVAL_MS = 500;
+        var BOOT_DEADLINE_MS = 20000;
 
         function start() {
           if (window.__gmctBootstrapWatchdogActive) return;
           window.__gmctBootstrapWatchdogActive = true;
 
-          const startedAt = Date.now();
-          const loaderCard = document.querySelector('.gmct-loader__card');
-          const url = new URL(window.location.href);
-          const alreadyReloaded = url.searchParams.has(HARD_RELOAD_PARAM);
-          let statusLine = null;
+          var startedAt = Date.now();
+          var loaderCard = document.querySelector('.gmct-loader__card');
+          var alreadyReloaded = false;
+          try {
+            var query = window.location.search || '';
+            alreadyReloaded = query.indexOf(HARD_RELOAD_PARAM + '=') >= 0;
+          } catch (error) {
+            console.warn('GMCT bootstrap watchdog could not inspect the current URL.', error);
+          }
+          var statusLine = null;
 
-          const ensureStatusLine = () => {
+          function ensureStatusLine() {
             if (!loaderCard) return null;
             if (statusLine) return statusLine;
             statusLine = document.createElement('p');
@@ -78,31 +341,31 @@
             statusLine.style.fontSize = '0.95rem';
             loaderCard.appendChild(statusLine);
             return statusLine;
-          };
+          }
 
-          const updateStatus = (message) => {
-            const line = ensureStatusLine();
+          function updateStatus(message) {
+            var line = ensureStatusLine();
             if (line) {
               line.textContent = message;
             }
-          };
+          }
 
-          const showFailure = (message, details) => {
+          function showFailure(message, details) {
             if (!loaderCard) return;
             loaderCard.innerHTML = '';
 
-            const title = document.createElement('h1');
+            var title = document.createElement('h1');
             title.textContent = 'Application Failed to Start';
             loaderCard.appendChild(title);
 
-            const body = document.createElement('p');
+            var body = document.createElement('p');
             body.textContent = message;
             body.style.marginTop = '0.75rem';
             body.style.color = '#b91c1c';
             loaderCard.appendChild(body);
 
             if (details) {
-              const detailBlock = document.createElement('pre');
+              var detailBlock = document.createElement('pre');
               detailBlock.textContent = details;
               detailBlock.style.marginTop = '1rem';
               detailBlock.style.padding = '1rem';
@@ -113,65 +376,124 @@
               detailBlock.style.fontFamily = 'ui-monospace, monospace';
               loaderCard.appendChild(detailBlock);
             }
-          };
+          }
 
-          const flushCaches = async () => {
-            try {
-              if ('serviceWorker' in navigator) {
-                const registrations = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(
-                  registrations.map(async (registration) => {
-                    if (registration.active || registration.waiting || registration.installing) {
-                      try {
-                        await registration.unregister();
-                      } catch (error) {
-                        console.warn('GMCT bootstrap watchdog failed to unregister a service worker.', error);
+          function flushCaches() {
+            if (typeof Promise !== 'function') {
+              return {
+                catch: function () {
+                  return this;
+                },
+                then: function (callback) {
+                  if (typeof callback === 'function') {
+                    try {
+                      callback();
+                    } catch (error) {
+                      console.warn('GMCT bootstrap watchdog legacy reload failed during cache flush callback.', error);
+                    }
+                  }
+                  return this;
+                },
+              };
+            }
+            var tasks = [];
+            if ('serviceWorker' in navigator) {
+              tasks.push(
+                navigator.serviceWorker
+                  .getRegistrations()
+                  .then(function (registrations) {
+                    var unregisterTasks = [];
+                    for (var i = 0; i < registrations.length; i += 1) {
+                      var registration = registrations[i];
+                      if (registration && (registration.active || registration.waiting || registration.installing)) {
+                        unregisterTasks.push(
+                          registration.unregister().catch(function (error) {
+                            console.warn('GMCT bootstrap watchdog failed to unregister a service worker.', error);
+                          })
+                        );
                       }
                     }
+                    return Promise.all(unregisterTasks);
                   })
-                );
-              }
-            } catch (error) {
-              console.warn('GMCT bootstrap watchdog could not enumerate service workers.', error);
+                  .catch(function (error) {
+                    console.warn('GMCT bootstrap watchdog could not enumerate service workers.', error);
+                  })
+              );
             }
 
             if ('caches' in window) {
-              try {
-                const keys = await caches.keys();
-                await Promise.all(
-                  keys
-                    .filter((key) => key.startsWith('gmct'))
-                    .map(async (key) => {
-                      try {
-                        await caches.delete(key);
-                      } catch (error) {
-                        console.warn('GMCT bootstrap watchdog failed to delete cache', key, error);
+              tasks.push(
+                caches
+                  .keys()
+                  .then(function (keys) {
+                    var removals = [];
+                    for (var i = 0; i < keys.length; i += 1) {
+                      var key = keys[i];
+                      if (key && key.indexOf('gmct') === 0) {
+                        removals.push(
+                          caches.delete(key).catch(function (error) {
+                            console.warn('GMCT bootstrap watchdog failed to delete cache', key, error);
+                          })
+                        );
                       }
-                    })
-                );
-              } catch (error) {
-                console.warn('GMCT bootstrap watchdog could not enumerate caches.', error);
-              }
+                    }
+                    return Promise.all(removals);
+                  })
+                  .catch(function (error) {
+                    console.warn('GMCT bootstrap watchdog could not enumerate caches.', error);
+                  })
+              );
             }
-          };
 
-          const attemptRecovery = async () => {
+            return Promise.all(tasks);
+          }
+
+          function buildHardReloadUrl() {
+            var href = window.location.href || '';
+            var hashIndex = href.indexOf('#');
+            var hash = '';
+            if (hashIndex >= 0) {
+              hash = href.slice(hashIndex);
+              href = href.slice(0, hashIndex);
+            }
+            var separator = href.indexOf('?') >= 0 ? '&' : '?';
+            var timestamp = Date.now().toString();
+            if (href.indexOf(HARD_RELOAD_PARAM + '=') >= 0) {
+              href = href.replace(new RegExp(HARD_RELOAD_PARAM + '=[^&]*'), HARD_RELOAD_PARAM + '=' + timestamp);
+            } else {
+              href += separator + HARD_RELOAD_PARAM + '=' + timestamp;
+            }
+            return href + hash;
+          }
+
+          function attemptRecovery() {
             if (alreadyReloaded) {
-              const details = window.__gmctBootstrapError ? `Last error: ${window.__gmctBootstrapError}` : '';
+              var details = window.__gmctBootstrapError ? 'Last error: ' + window.__gmctBootstrapError : '';
               showFailure(
                 'We tried reloading the page automatically, but the application is still stuck. Please clear your browser cache and reload.',
                 details
               );
-              return;
+              if (typeof Promise === 'function') {
+                return Promise.resolve();
+              }
+              return {
+                then: function () { return this; },
+                catch: function () { return this; },
+              };
             }
 
             updateStatus('Clearing saved caches and refreshing…');
-            await flushCaches();
-            url.searchParams.set(HARD_RELOAD_PARAM, Date.now().toString());
-            window.location.replace(url.toString());
-          };
+            return flushCaches()
+              .catch(function () {
+                /* ignore cache clearing errors before forcing a refresh */
+              })
+              .then(function () {
+                var nextUrl = buildHardReloadUrl();
+                window.location.replace(nextUrl);
+              });
+          }
 
-          const check = async () => {
+          function check() {
             if (window.__gmctAppBooted) {
               return;
             }
@@ -184,13 +506,19 @@
               return;
             }
 
-            if (Date.now() - startedAt >= BOOT_DEADLINE_MS) {
-              await attemptRecovery();
+            var elapsed = Date.now() - startedAt;
+
+            if (elapsed >= 5000 && elapsed < BOOT_DEADLINE_MS) {
+              updateStatus('Still working… large updates can take a little longer to load on slower networks.');
+            }
+
+            if (elapsed >= BOOT_DEADLINE_MS) {
+              attemptRecovery();
               return;
             }
 
             setTimeout(check, CHECK_INTERVAL_MS);
-          };
+          }
 
           updateStatus('Preparing application…');
           setTimeout(check, CHECK_INTERVAL_MS);
@@ -276,7 +604,93 @@
         </div>
       </div>
     </div>
-    <!-- The main application script, deferred to run after the document is parsed -->
-    <script type="module" src="./index.tsx"></script>
+    <script type="module" data-gmct-entry src="./index.tsx"></script>
+    <!-- Load the legacy bundle on environments that cannot run the module build -->
+    <script>
+      (function selectGmctBundle() {
+        function showFatalError(message) {
+          var root = document.getElementById('root');
+          if (!root) return;
+          root.innerHTML = '';
+          root.style.padding = '1.5rem';
+          root.style.fontFamily = 'ui-sans-serif, system-ui, sans-serif';
+          root.style.color = '#B91C1C';
+
+          var title = document.createElement('h1');
+          title.textContent = 'Application Failed to Load';
+          title.style.fontSize = '1.5rem';
+          title.style.fontWeight = 'bold';
+          root.appendChild(title);
+
+          var details = document.createElement('p');
+          details.textContent = message;
+          details.style.marginTop = '1rem';
+          root.appendChild(details);
+        }
+
+        function loadLegacyBundle() {
+          if (window.__gmctLegacyBundleRequested) {
+            return;
+          }
+          window.__gmctLegacyBundleRequested = true;
+          var script = document.createElement('script');
+          script.src = './assets/index-legacy.js';
+          script.defer = false;
+          script.onload = function () {
+            console.log('GMCT legacy bundle loaded successfully.');
+          };
+          script.onerror = function () {
+            console.error('GMCT legacy bundle failed to load.');
+            showFatalError('Your browser is not fully compatible with the legacy bundle. Please update to a newer version or contact support.');
+          };
+          document.head.appendChild(script);
+        }
+
+        function findModuleScript() {
+          var candidates = document.querySelectorAll('script[type="module"][src]');
+          for (var i = 0; i < candidates.length; i += 1) {
+            var candidate = candidates[i];
+            var src = candidate.getAttribute('src') || '';
+            if (src.indexOf('index') !== -1) {
+              return candidate;
+            }
+          }
+          return candidates.length > 0 ? candidates[0] : null;
+        }
+
+        var moduleScript = findModuleScript();
+        if (!moduleScript) {
+          loadLegacyBundle();
+          return;
+        }
+
+        moduleScript.addEventListener('error', function () {
+          console.warn('Modern module bundle failed to load, attempting legacy fallback.');
+          loadLegacyBundle();
+        });
+
+        var testScript = document.createElement('script');
+        var supportsModule = 'noModule' in testScript;
+        var needsLegacy = !supportsModule;
+
+        if (!needsLegacy) {
+          try {
+            if (typeof Promise === 'undefined') needsLegacy = true;
+            if (typeof Object.assign !== 'function') needsLegacy = true;
+            if (typeof Array.from !== 'function') needsLegacy = true;
+          } catch (error) {
+            needsLegacy = true;
+          }
+        }
+
+        if (needsLegacy) {
+          console.log('Loading GMCT legacy bundle for compatibility.');
+          if (moduleScript.parentNode) {
+            moduleScript.parentNode.removeChild(moduleScript);
+          }
+          loadLegacyBundle();
+        }
+      })();
+    </script>
   </body>
 </html>

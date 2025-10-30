@@ -2,6 +2,40 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 
+declare const global: any;
+
+(function ensureGlobalThis() {
+  if (typeof globalThis !== 'undefined') {
+    return;
+  }
+
+  var getGlobal = function (): any {
+    if (typeof self !== 'undefined') {
+      return self;
+    }
+    if (typeof window !== 'undefined') {
+      return window;
+    }
+    if (typeof global !== 'undefined') {
+      return global;
+    }
+
+    return Function('return this')();
+  };
+
+  var globalObj = getGlobal();
+  try {
+    Object.defineProperty(globalObj, 'globalThis', {
+      value: globalObj,
+      configurable: true,
+      enumerable: false,
+      writable: true,
+    });
+  } catch (error) {
+    (globalObj as any).globalThis = globalObj;
+  }
+})();
+
 declare global {
   interface Window {
     __gmctAppBooted?: boolean;
@@ -21,50 +55,65 @@ try {
 // --- Global Failsafe Error Handler ---
 // This is a new, simplified, and more robust error handler that is guaranteed
 // to display startup errors instead of crashing silently.
-const handleError = (errorEvent: ErrorEvent | PromiseRejectionEvent | { error: any }) => {
+function extractError(event: ErrorEvent | PromiseRejectionEvent | { error: any }): any {
+  if ('reason' in event) {
+    return event.reason;
+  }
+  return (event as { error: any }).error;
+}
+
+function normaliseErrorMessage(error: any): string {
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return String(error || 'An unknown error occurred.');
+}
+
+function getStack(error: any): string {
+  if (error && typeof error === 'object' && 'stack' in error && typeof (error as { stack: unknown }).stack === 'string') {
+    return (error as { stack: string }).stack;
+  }
+  return 'No stack trace available.';
+}
+
+function handleError(errorEvent: ErrorEvent | PromiseRejectionEvent | { error: any }): void {
   try {
     if ('preventDefault' in errorEvent && typeof errorEvent.preventDefault === 'function') {
       errorEvent.preventDefault();
     }
-    
-    // Safely extract the error object or message, regardless of the event type.
-    const error = 'reason' in errorEvent ? errorEvent.reason : errorEvent.error;
 
-    // Log the raw error to the console for developers.
-    console.error("GMCT App Global Error Handler caught:", error);
+    var error = extractError(errorEvent);
+    console.error('GMCT App Global Error Handler caught:', error);
 
-    const message = error?.message || String(error) || 'An unknown error occurred.';
+    var message = normaliseErrorMessage(error);
     window.__gmctBootstrapFailed = true;
     window.__gmctAppBooted = false;
     window.__gmctBootstrapError = message;
 
-    const rootElement = document.getElementById('root');
+    var rootElement = document.getElementById('root');
     if (rootElement) {
-      // Safely convert the error to a string for display.
-      const stack = error?.stack || 'No stack trace available.';
-      
-      // Clear the root element and use textContent for maximum safety.
-      // This avoids any potential issues with innerHTML parsing.
+      var stack = getStack(error);
+
       rootElement.innerHTML = '';
       rootElement.style.padding = '1.5rem';
       rootElement.style.fontFamily = 'ui-sans-serif, system-ui, sans-serif';
-      rootElement.style.color = '#B91C1C'; // text-red-700
-      
-      const title = document.createElement('h1');
+      rootElement.style.color = '#B91C1C';
+
+      var title = document.createElement('h1');
       title.textContent = 'Application Failed to Load';
       title.style.fontSize = '1.5rem';
       title.style.fontWeight = 'bold';
-      
-      const preamble = document.createElement('p');
+
+      var preamble = document.createElement('p');
       preamble.textContent = 'A critical error prevented the application from starting. Please check the browser\'s developer console and report the technical details below.';
       preamble.style.marginTop = '1rem';
 
-      const details = document.createElement('pre');
-      details.textContent = `Error: ${message}\n\nStack Trace:\n${stack}`;
+      var details = document.createElement('pre');
+      details.textContent = 'Error: ' + message + '\n\nStack Trace:\n' + stack;
       details.style.marginTop = '1rem';
       details.style.padding = '1rem';
-      details.style.backgroundColor = '#FEF2F2'; // bg-red-50
-      details.style.border = '1px solid #F87171'; // border-red-400
+      details.style.backgroundColor = '#FEF2F2';
+      details.style.border = '1px solid #F87171';
       details.style.borderRadius = '0.5rem';
       details.style.whiteSpace = 'pre-wrap';
       details.style.wordWrap = 'break-word';
@@ -74,18 +123,19 @@ const handleError = (errorEvent: ErrorEvent | PromiseRejectionEvent | { error: a
       rootElement.appendChild(preamble);
       rootElement.appendChild(details);
     }
-  } catch (e) {
-    // If the error handler itself fails, this is the final fallback.
-    console.error("FATAL: The global error handler itself has crashed.", e);
-    alert("A critical error occurred, and the error handler also failed. Please check the console for details.");
+  } catch (error) {
+    console.error('FATAL: The global error handler itself has crashed.', error);
+    alert('A critical error occurred, and the error handler also failed. Please check the console for details.');
   }
-};
+}
 
 window.addEventListener('error', handleError);
-window.addEventListener('unhandledrejection', handleError as (e: PromiseRejectionEvent) => void);
+window.addEventListener('unhandledrejection', function (event) {
+  handleError(event);
+});
 // --- End of Failsafe ---
 
-const registerServiceWorker = () => {
+function registerServiceWorker(): void {
   // Per user feedback and common GitHub Pages deployment issues, the service worker
   // is being explicitly disabled to prevent silent, script-terminating errors.
   console.log("Service Worker registration has been disabled for maximum compatibility.");
@@ -93,17 +143,17 @@ const registerServiceWorker = () => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker
       .getRegistrations()
-      .then(registrations => {
-        registrations.forEach(registration => {
+      .then(function (registrations) {
+        registrations.forEach(function (registration) {
           if (registration.active || registration.waiting || registration.installing) {
             console.log('Unregistering stale service worker:', registration.scope);
           }
-          registration.unregister().catch(error => {
+          registration.unregister().catch(function (error) {
             console.warn('Failed to unregister service worker', error);
           });
         });
       })
-      .catch(error => {
+      .catch(function (error) {
         console.warn('Unable to enumerate existing service workers', error);
       });
   }
@@ -111,27 +161,29 @@ const registerServiceWorker = () => {
   if ('caches' in window) {
     caches
       .keys()
-      .then(keys => {
+      .then(function (keys) {
         keys
-          .filter(key => key.startsWith('gmct-app-cache') || key.startsWith('gmct-'))
-          .forEach(key => {
-            caches.delete(key).catch(error => {
-              console.warn(`Failed to delete cache ${key}`, error);
+          .filter(function (key) {
+            return key.indexOf('gmct-app-cache') === 0 || key.indexOf('gmct-') === 0;
+          })
+          .forEach(function (key) {
+            caches.delete(key).catch(function (error) {
+              console.warn('Failed to delete cache ' + key, error);
             });
           });
       })
-      .catch(error => {
+      .catch(function (error) {
         console.warn('Unable to enumerate caches for cleanup', error);
       });
   }
-};
+}
 
 // --- App Initialization ---
-const initialize = () => {
+function initialize(): void {
   console.log("Initializing application...");
   registerServiceWorker();
-  
-  const rootElement = document.getElementById('root');
+
+  var rootElement = document.getElementById('root');
   if (!rootElement) {
     throw new Error("Fatal: Could not find the #root element in the HTML to mount the application.");
   }
@@ -139,8 +191,8 @@ const initialize = () => {
   console.log("Root element found, clearing failsafe message...");
   rootElement.innerHTML = '';
 
-  const root = createRoot(rootElement);
-  
+  var root = createRoot(rootElement);
+
   console.log("Rendering React app...");
   root.render(
     <React.StrictMode>
@@ -152,16 +204,15 @@ const initialize = () => {
   window.__gmctBootstrapFailed = false;
   try {
     delete window.__gmctBootstrapError;
-  } catch {
+  } catch (error) {
     window.__gmctBootstrapError = undefined;
   }
-};
+}
 
 
 // --- Startup Logic ---
 try {
   initialize();
 } catch (error) {
-  // This will catch any synchronous errors during the setup phase.
   handleError({ error: error });
 }
