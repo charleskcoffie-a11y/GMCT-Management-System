@@ -1,6 +1,7 @@
 import { build, loadConfigFromFile, mergeConfig } from 'vite';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import fs from 'node:fs/promises';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,6 +41,18 @@ async function buildLegacyBundle() {
 
   console.log('Building legacy GMCT bundle for older browsers...');
   await build(legacyConfig);
+
+  const legacyOutputPath = path.resolve(projectRoot, 'dist', 'assets', 'index-legacy.js');
+  const projectAssetPath = path.resolve(projectRoot, 'assets', 'index-legacy.js');
+
+  try {
+    await fs.mkdir(path.dirname(projectAssetPath), { recursive: true });
+    await fs.copyFile(legacyOutputPath, projectAssetPath);
+    console.log('Legacy bundle copied to assets/index-legacy.js for development compatibility.');
+  } catch (error) {
+    console.warn('Legacy bundle copy step failed:', error);
+  }
+
   console.log('Legacy bundle available at dist/assets/index-legacy.js');
 }
 

@@ -1,5 +1,6 @@
 // App.tsx
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import packageJson from './package.json';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import Members from './components/Members';
@@ -14,6 +15,9 @@ import Utilities from './components/Utilities';
 import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
 import ConfirmationModal from './components/ConfirmationModal';
+import SyncStatus from './components/SyncStatus';
+import HallManagement from './components/HallManagement';
+import TasksTab from './components/TasksTab';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
@@ -30,6 +34,11 @@ import {
     sanitizeAttendanceCollection,
     sanitizeWeeklyHistoryCollection,
     sanitizeString,
+    sanitizeHallRental,
+    sanitizeHallRentalCollection,
+    sanitizeTask,
+    sanitizeTasksCollection,
+    generateId,
 } from './utils';
 import type {
     Entry,
@@ -42,6 +51,10 @@ import type {
     EntryType,
     WeeklyHistoryRecord,
     UserRole,
+    HallRentalRecord,
+    Task,
+    TaskStatus,
+    TaskPriority,
 } from './types';
 import { msalSilentSignIn } from './services/oneDrive';
 import {
@@ -52,6 +65,11 @@ import {
     upsertMemberToSharePoint,
     deleteMemberFromSharePoint,
     resetContextCache,
+    upsertHallRentalToSharePoint,
+    loadHallRentalsFromSharePoint,
+    upsertTaskToSharePoint,
+    loadTasksFromSharePoint,
+    deleteTaskFromSharePoint,
 } from './services/sharepoint';
 import {
     DEFAULT_CURRENCY,
@@ -82,6 +100,8 @@ const INITIAL_SETTINGS: Settings = {
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
+const APP_VERSION = packageJson.version ?? '0.0.0';
+
 const App: React.FC = () => {
     // --- State Management ---
     const [entries, setEntries] = useLocalStorage<Entry[]>('gmct-entries', [], (data) => Array.isArray(data) ? data.map(sanitizeEntry) : []);
@@ -90,6 +110,8 @@ const App: React.FC = () => {
     const [settings, setSettings] = useLocalStorage<Settings>('gmct-settings', INITIAL_SETTINGS, sanitizeSettings);
     const [attendance, setAttendance] = useLocalStorage<AttendanceRecord[]>('gmct-attendance', [], (data) => Array.isArray(data) ? data : []);
     const [weeklyHistory, setWeeklyHistory] = useLocalStorage<WeeklyHistoryRecord[]>('gmct-weekly-history', [], (data) => Array.isArray(data) ? data.map(sanitizeWeeklyHistoryRecord) : []);
+    const [hallRentals, setHallRentals] = useLocalStorage<HallRentalRecord[]>('gmct-hall-rentals', [], (data) => Array.isArray(data) ? data.map(sanitizeHallRental) : []);
+    const [tasks, setTasks] = useLocalStorage<Task[]>('gmct-tasks', [], (data) => Array.isArray(data) ? data.map(sanitizeTask) : []);
     
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [loginError, setLoginError] = useState<string | null>(null);
@@ -100,7 +122,15 @@ const App: React.FC = () => {
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
     const [syncMessage, setSyncMessage] = useState<string | null>(null);
     const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+    const [tasksLastSyncedAt, setTasksLastSyncedAt] = useState<number | null>(null);
     const [, setIsNavOpen] = useState(false);
+    const [lastAttendanceSavedAt, setLastAttendanceSavedAt] = useState<number | null>(null);
+    const [isOffline, setIsOffline] = useState<boolean>(() => {
+        if (typeof navigator === 'undefined') return false;
+        return !navigator.onLine;
+    });
+    const [shouldResync, setShouldResync] = useState(0);
+    const [activeSyncTasks, setActiveSyncTasks] = useState(0);
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -109,6 +139,12 @@ const App: React.FC = () => {
     const [typeFilter, setTypeFilter] = useState<EntryType | 'all'>('all');
     const [startDateFilter, setStartDateFilter] = useState('');
     const [endDateFilter, setEndDateFilter] = useState('');
+    const [totalMode, setTotalMode] = useState<'day' | 'month' | 'year' | 'custom'>('day');
+    const [totalDay, setTotalDay] = useState(() => new Date().toISOString().slice(0, 10));
+    const [totalMonth, setTotalMonth] = useState(() => new Date().toISOString().slice(0, 7));
+    const [totalYear, setTotalYear] = useState(() => String(new Date().getFullYear()));
+    const [totalCustomStart, setTotalCustomStart] = useState('');
+    const [totalCustomEnd, setTotalCustomEnd] = useState('');
 
 
     const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '' });
@@ -116,13 +152,17 @@ const App: React.FC = () => {
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
+    const hallRentalSyncRef = useRef(new Map<string, { signature: string; record: HallRentalRecord }>());
+    const taskSyncRef = useRef(new Map<string, { signature: string; task: Task }>());
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
+        setActiveSyncTasks(syncTaskCountRef.current);
     }, []);
 
     const endSync = useCallback(() => {
         syncTaskCountRef.current = Math.max(0, syncTaskCountRef.current - 1);
+        setActiveSyncTasks(syncTaskCountRef.current);
     }, []);
 
     const computeEntrySignature = useCallback((entry: Entry) => {
@@ -148,6 +188,32 @@ const App: React.FC = () => {
             spId: sanitized.spId ?? null,
             name: sanitized.name,
             classNumber: sanitized.classNumber ?? '',
+        });
+    }, []);
+
+    const computeHallRentalSignature = useCallback((record: HallRentalRecord) => {
+        const sanitized = sanitizeHallRental(record);
+        return JSON.stringify({
+            id: sanitized.id,
+            spId: sanitized.spId ?? null,
+            date: sanitized.date,
+            amount: sanitized.amount,
+        });
+    }, []);
+
+    const computeTaskSignature = useCallback((task: Task) => {
+        const sanitized = sanitizeTask(task);
+        return JSON.stringify({
+            id: sanitized.id,
+            spId: sanitized.spId ?? null,
+            title: sanitized.title,
+            notes: sanitized.notes ?? '',
+            assignedTo: sanitized.assignedTo ?? '',
+            dueDate: sanitized.dueDate ?? '',
+            status: sanitized.status,
+            priority: sanitized.priority,
+            createdAt: sanitized.createdAt,
+            updatedAt: sanitized.updatedAt,
         });
     }, []);
 
@@ -205,6 +271,64 @@ const App: React.FC = () => {
         return merged;
     }, [computeMemberSignature]);
 
+    const mergeHallRentalsFromCloud = useCallback((localRecords: HallRentalRecord[], remoteRecords: HallRentalRecord[]) => {
+        const sanitizedRemote = remoteRecords.map(remote => sanitizeHallRental(remote));
+        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+
+        const merged = localRecords.map(local => {
+            const remote = remoteMap.get(local.id);
+            if (remote) {
+                remoteMap.delete(local.id);
+                return { ...local, ...remote };
+            }
+            return local;
+        });
+
+        for (const remote of remoteMap.values()) {
+            merged.push(remote);
+        }
+
+        const cache = hallRentalSyncRef.current;
+        cache.clear();
+        for (const record of merged) {
+            const sanitized = sanitizeHallRental(record);
+            cache.set(sanitized.id, { signature: computeHallRentalSignature(sanitized), record: sanitized });
+        }
+
+        return merged;
+    }, [computeHallRentalSignature]);
+
+    const mergeTasksFromCloud = useCallback((localTasks: Task[], remoteTasks: Task[]) => {
+        const sanitizedRemote = remoteTasks.map(remote => sanitizeTask({ ...remote, _sync: { ...remote._sync, dirty: false } }));
+        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+
+        const merged = localTasks.map(local => {
+            const remote = remoteMap.get(local.id);
+            if (remote) {
+                remoteMap.delete(local.id);
+                return {
+                    ...local,
+                    ...remote,
+                    _sync: { ...remote._sync, dirty: false },
+                };
+            }
+            return local;
+        });
+
+        for (const remote of remoteMap.values()) {
+            merged.push({ ...remote, _sync: { ...remote._sync, dirty: false } });
+        }
+
+        const cache = taskSyncRef.current;
+        cache.clear();
+        for (const task of merged) {
+            const sanitized = sanitizeTask(task);
+            cache.set(sanitized.id, { signature: computeTaskSignature(sanitized), task: sanitized });
+        }
+
+        return merged;
+    }, [computeTaskSignature]);
+
     useEffect(() => {
         const attemptSilentSignin = async () => {
             const session = await msalSilentSignIn();
@@ -222,12 +346,55 @@ const App: React.FC = () => {
     }, [activeTab]);
 
     useEffect(() => {
+        const cache = hallRentalSyncRef.current;
+        cache.clear();
+        hallRentals.forEach(record => {
+            const sanitized = sanitizeHallRental(record);
+            cache.set(sanitized.id, { signature: computeHallRentalSignature(sanitized), record: sanitized });
+        });
+    }, [hallRentals, computeHallRentalSignature]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const handleOffline = () => {
+            setIsOffline(true);
+            setSyncMessage('Offline: changes will sync when connection returns.');
+            setActiveSyncTasks(0);
+        };
+        const handleOnline = () => {
+            setIsOffline(false);
+            setSyncMessage('Connection restored. Syncing latest updates…');
+            setShouldResync(prev => prev + 1);
+        };
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('online', handleOnline);
+        return () => {
+            window.removeEventListener('offline', handleOffline);
+            window.removeEventListener('online', handleOnline);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (attendance.length === 0) return;
+        setLastAttendanceSavedAt(prev => (prev === null ? Date.now() : prev));
+    }, [attendance]);
+
+    useEffect(() => {
         if (!cloud.signedIn || !cloud.accessToken) {
             entrySyncRef.current.clear();
             memberSyncRef.current.clear();
+            hallRentalSyncRef.current.clear();
+            taskSyncRef.current.clear();
             resetContextCache();
             setSyncMessage(null);
             setLastSyncedAt(null);
+            setTasksLastSyncedAt(null);
+            setActiveSyncTasks(0);
+            return;
+        }
+
+        if (isOffline) {
+            setSyncMessage('Offline: changes will sync when connection returns.');
             return;
         }
 
@@ -236,15 +403,20 @@ const App: React.FC = () => {
         const hydrateFromSharePoint = async () => {
             beginSync();
             try {
-                const [remoteEntries, remoteMembers] = await Promise.all([
+                const [remoteEntries, remoteMembers, remoteHallRentals, remoteTasks] = await Promise.all([
                     loadEntriesFromSharePoint(cloud.accessToken!),
                     loadMembersFromSharePoint(cloud.accessToken!),
+                    loadHallRentalsFromSharePoint(cloud.accessToken!),
+                    loadTasksFromSharePoint(cloud.accessToken!),
                 ]);
                 if (!active) return;
                 setEntries(prev => mergeEntriesFromCloud(prev, remoteEntries));
                 setMembers(prev => mergeMembersFromCloud(prev, remoteMembers));
+                setHallRentals(prev => mergeHallRentalsFromCloud(prev, remoteHallRentals));
+                setTasks(prev => mergeTasksFromCloud(prev, remoteTasks));
                 setSyncMessage(null);
                 setLastSyncedAt(Date.now());
+                setTasksLastSyncedAt(Date.now());
             } catch (error) {
                 if (!active) return;
                 console.error('Initial SharePoint sync failed', error);
@@ -261,10 +433,10 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud]);
+    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud, mergeHallRentalsFromCloud, mergeTasksFromCloud, isOffline, shouldResync]);
 
     useEffect(() => {
-        if (!cloud.signedIn || !cloud.accessToken) {
+        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
             return;
         }
 
@@ -325,10 +497,154 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [entries, cloud.signedIn, cloud.accessToken, computeEntrySignature, setEntries]);
+    }, [entries, cloud.signedIn, cloud.accessToken, computeEntrySignature, setEntries, isOffline, shouldResync]);
 
     useEffect(() => {
-        if (!cloud.signedIn || !cloud.accessToken) {
+        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
+            return;
+        }
+
+        let active = true;
+
+        const pushHallRentalChanges = async () => {
+            beginSync();
+            const known = hallRentalSyncRef.current;
+            const snapshot: Array<[string, { signature: string; record: HallRentalRecord }]> = Array.from(known.entries());
+
+            try {
+                for (const [id, stored] of snapshot) {
+                    if (!active) return;
+                    const current = hallRentals.find(record => record.id === id);
+                    if (!current) {
+                        known.delete(id);
+                        continue;
+                    }
+
+                    const sanitized = sanitizeHallRental(current);
+                    const signature = computeHallRentalSignature(sanitized);
+                    if (stored.signature === signature) {
+                        continue;
+                    }
+
+                    try {
+                        const spId = await upsertHallRentalToSharePoint(sanitized, cloud.accessToken!);
+                        if (!active) return;
+                        const updated = { ...sanitized, spId: spId ?? sanitized.spId };
+                        known.set(updated.id, { signature: computeHallRentalSignature(updated), record: updated });
+                        if (spId && sanitized.spId !== spId) {
+                            setHallRentals(prev => prev.map(record => record.id === updated.id ? { ...record, spId } : record));
+                        }
+                        setSyncMessage(null);
+                        setLastSyncedAt(Date.now());
+                    } catch (error) {
+                        if (!active) return;
+                        console.error('Failed to sync hall rental to SharePoint', error);
+                        setSyncMessage('Unable to sync hall rentals to SharePoint. Data remains saved locally.');
+                    }
+                }
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        pushHallRentalChanges();
+
+        return () => {
+            active = false;
+        };
+    }, [hallRentals, cloud.signedIn, cloud.accessToken, computeHallRentalSignature, isOffline, shouldResync, beginSync, endSync, setHallRentals]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
+            return;
+        }
+
+        let active = true;
+
+        const pushTaskChanges = async () => {
+            beginSync();
+            const known = taskSyncRef.current;
+            const currentMap = new Map(tasks.map(task => [task.id, task]));
+            const snapshot: Array<[string, { signature: string; task: Task }]> = Array.from(known.entries());
+
+            for (const [id, stored] of snapshot) {
+                if (!currentMap.has(id)) {
+                    if (stored.task.spId) {
+                        try {
+                            await deleteTaskFromSharePoint(stored.task, cloud.accessToken!);
+                        } catch (error) {
+                            console.error('Failed to remove SharePoint task', error);
+                        }
+                    }
+                    known.delete(id);
+                }
+            }
+
+            try {
+                for (const task of tasks) {
+                    if (!active) return;
+                    const sanitized = sanitizeTask(task);
+                    sanitized.spId = task.spId;
+                    const signature = computeTaskSignature(sanitized);
+                    const cached = known.get(sanitized.id);
+                    if (cached && cached.signature === signature && !sanitized._sync.dirty) {
+                        continue;
+                    }
+
+                    try {
+                        const spId = await upsertTaskToSharePoint(sanitized, cloud.accessToken!);
+                        if (!active) return;
+                        const timestamp = Date.now();
+                        const isoTimestamp = new Date(timestamp).toISOString();
+                        const updatedTask: Task = {
+                            ...sanitized,
+                            spId: spId ?? sanitized.spId,
+                            _sync: {
+                                lastSyncedAt: isoTimestamp,
+                                dirty: false,
+                            },
+                        };
+                        known.set(updatedTask.id, { signature: computeTaskSignature(updatedTask), task: updatedTask });
+                        setTasks(prev => prev.map(existing => {
+                            if (existing.id !== updatedTask.id) return existing;
+                            const sameSync = existing._sync.dirty === updatedTask._sync.dirty && existing._sync.lastSyncedAt === updatedTask._sync.lastSyncedAt;
+                            const sameSpId = existing.spId === updatedTask.spId;
+                            if (sameSync && sameSpId) {
+                                return existing;
+                            }
+                            return {
+                                ...existing,
+                                spId: updatedTask.spId,
+                                _sync: updatedTask._sync,
+                            };
+                        }));
+                        setSyncMessage(null);
+                        setLastSyncedAt(timestamp);
+                        setTasksLastSyncedAt(timestamp);
+                    } catch (error) {
+                        if (!active) return;
+                        console.error('Failed to sync task to SharePoint', error);
+                        setSyncMessage('Unable to sync tasks to SharePoint. They remain saved locally.');
+                    }
+                }
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        pushTaskChanges();
+
+        return () => {
+            active = false;
+        };
+    }, [tasks, cloud.signedIn, cloud.accessToken, computeTaskSignature, isOffline, shouldResync, beginSync, endSync, setTasks]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
             return;
         }
 
@@ -389,7 +705,7 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [members, cloud.signedIn, cloud.accessToken, computeMemberSignature, setMembers]);
+    }, [members, cloud.signedIn, cloud.accessToken, computeMemberSignature, setMembers, isOffline, shouldResync]);
 
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -457,11 +773,11 @@ const App: React.FC = () => {
 
         return (
             <tr key={entry.id} className="bg-white border-b hover:bg-slate-50">
-                <td className="px-6 py-4">{entry.date}</td>
+                <td className="px-6 py-4 text-base font-semibold text-slate-800">{entry.date}</td>
                 <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName}</td>
-                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
-                <td className="px-6 py-4 text-center">{member?.classNumber || 'N/A'}</td>
-                <td className="px-6 py-4 capitalize">{entry.type}</td>
+                <td className="px-6 py-4 font-mono text-base text-slate-700">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
+                <td className="px-6 py-4 text-center text-base font-semibold text-slate-700">{member?.classNumber || 'N/A'}</td>
+                <td className="px-6 py-4 text-base font-semibold text-slate-700 capitalize">{entry.type}</td>
                 <td className="px-6 py-4">{formatCurrency(entry.amount, settings.currency)}</td>
                 <td className="px-6 py-4 text-right">
                     <button
@@ -477,6 +793,47 @@ const App: React.FC = () => {
             </tr>
         );
     }), [filteredAndSortedEntries, membersMap, settings.currency, setIsModalOpen, setSelectedEntry]);
+
+    const totalRangeEntries = useMemo(() => {
+        switch (totalMode) {
+            case 'day':
+                return entries.filter(entry => entry.date === totalDay);
+            case 'month':
+                return entries.filter(entry => entry.date.startsWith(totalMonth));
+            case 'year':
+                return entries.filter(entry => entry.date.startsWith(totalYear));
+            case 'custom':
+                return entries.filter(entry => {
+                    if (totalCustomStart && entry.date < totalCustomStart) return false;
+                    if (totalCustomEnd && entry.date > totalCustomEnd) return false;
+                    return true;
+                });
+            default:
+                return entries;
+        }
+    }, [entries, totalMode, totalDay, totalMonth, totalYear, totalCustomStart, totalCustomEnd]);
+
+    const totalRangeAmount = useMemo(() => totalRangeEntries.reduce((acc, entry) => acc + entry.amount, 0), [totalRangeEntries]);
+
+    const totalRangeLabel = useMemo(() => {
+        switch (totalMode) {
+            case 'day':
+                return `on ${totalDay}`;
+            case 'month':
+                return `for ${totalMonth}`;
+            case 'year':
+                return `for ${totalYear}`;
+            case 'custom':
+                if (totalCustomStart && totalCustomEnd) {
+                    return `from ${totalCustomStart} to ${totalCustomEnd}`;
+                }
+                if (totalCustomStart) return `from ${totalCustomStart}`;
+                if (totalCustomEnd) return `through ${totalCustomEnd}`;
+                return 'for all time';
+            default:
+                return '';
+        }
+    }, [totalMode, totalDay, totalMonth, totalYear, totalCustomStart, totalCustomEnd]);
 
     // --- Handlers ---
     const handleLogin = (username: string, password: string) => {
@@ -555,7 +912,7 @@ const App: React.FC = () => {
         if (!window.confirm('This will permanently delete all locally stored data for this app. Continue?')) {
             return;
         }
-        const storageKeys = ['gmct-entries', 'gmct-members', 'gmct-users', 'gmct-settings', 'gmct-attendance', 'gmct-weekly-history'];
+        const storageKeys = ['gmct-entries', 'gmct-members', 'gmct-users', 'gmct-settings', 'gmct-attendance', 'gmct-weekly-history', 'gmct-hall-rentals', 'gmct-tasks'];
         storageKeys.forEach(key => localStorage.removeItem(key));
         setEntries([]);
         setMembers([]);
@@ -563,8 +920,11 @@ const App: React.FC = () => {
         setSettings(INITIAL_SETTINGS);
         setAttendance([]);
         setWeeklyHistory([]);
+        setHallRentals([]);
+        setTasks([]);
         setCurrentUser(null);
         setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.' });
+        setTasksLastSyncedAt(null);
     };
     
     const handleExport = (format: 'csv' | 'json') => {
@@ -587,7 +947,7 @@ const App: React.FC = () => {
     };
     
     const handleFullExport = () => {
-        const data = { entries, members, users, settings, attendance, weeklyHistory };
+        const data = { entries, members, users, settings, attendance, weeklyHistory, hallRentals, tasks };
         const json = JSON.stringify(data, null, 2);
         const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
         const link = document.createElement('a');
@@ -598,6 +958,94 @@ const App: React.FC = () => {
 
     const handleSaveTotalClasses = (total: number) => {
         setSettings(prev => ({ ...prev, maxClasses: total }));
+    };
+
+    const handleCreateHallRental = async ({ amount, date }: { amount: number; date: string }) => {
+        const record: HallRentalRecord = sanitizeHallRental({ id: generateId('hall'), amount, date });
+        hallRentalSyncRef.current.set(record.id, { signature: computeHallRentalSignature(record), record });
+        setHallRentals(prev => [...prev, record]);
+
+        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
+            setSyncMessage('Hall rental saved locally. It will sync once you reconnect to Microsoft 365.');
+            return;
+        }
+
+        try {
+            const spId = await upsertHallRentalToSharePoint(record, cloud.accessToken!);
+            if (spId) {
+                const updatedSignature = computeHallRentalSignature({ ...record, spId });
+                hallRentalSyncRef.current.set(record.id, { signature: updatedSignature, record: { ...record, spId } });
+                setHallRentals(prev => prev.map(item => item.id === record.id ? { ...item, spId } : item));
+            }
+            setSyncMessage(null);
+            setLastSyncedAt(Date.now());
+        } catch (error) {
+            console.error('Unable to sync hall rental to SharePoint', error);
+            setSyncMessage('Hall rental stored locally. Sync will retry automatically.');
+            throw error instanceof Error ? error : new Error('SharePoint sync failed.');
+        }
+    };
+
+    const handleCreateTask = (payload: {
+        title: string;
+        notes?: string;
+        dueDate?: string;
+        assignedTo?: string;
+        status: TaskStatus;
+        priority: TaskPriority;
+    }) => {
+        const timestamp = new Date().toISOString();
+        const base = sanitizeTask({
+            id: generateId('task'),
+            title: payload.title,
+            notes: payload.notes,
+            dueDate: payload.dueDate,
+            assignedTo: payload.assignedTo,
+            status: payload.status,
+            priority: payload.priority,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            createdBy: currentUser?.username ?? 'system',
+            _sync: { dirty: true },
+        });
+        const taskToStore: Task = {
+            ...base,
+            _sync: { ...base._sync, dirty: true },
+        };
+        setTasks(prev => [...prev, taskToStore]);
+    };
+
+    const handleUpdateTask = (taskId: string, updates: {
+        title?: string;
+        notes?: string | null;
+        dueDate?: string | null;
+        assignedTo?: string | null;
+        status?: TaskStatus;
+        priority?: TaskPriority;
+    }) => {
+        const timestamp = new Date().toISOString();
+        setTasks(prev => prev.map(task => {
+            if (task.id !== taskId) return task;
+            const next = sanitizeTask({
+                ...task,
+                title: updates.title ?? task.title,
+                notes: updates.notes === null ? '' : updates.notes ?? task.notes,
+                dueDate: updates.dueDate === null ? undefined : updates.dueDate ?? task.dueDate,
+                assignedTo: updates.assignedTo === null ? undefined : updates.assignedTo ?? task.assignedTo,
+                status: updates.status ?? task.status,
+                priority: updates.priority ?? task.priority,
+                updatedAt: timestamp,
+                createdAt: task.createdAt,
+                createdBy: task.createdBy,
+                spId: task.spId,
+                _sync: { ...task._sync, dirty: true },
+            });
+            return { ...next, _sync: { ...next._sync, dirty: true } };
+        }));
+    };
+
+    const handleDeleteTask = (taskId: string) => {
+        setTasks(prev => prev.filter(task => task.id !== taskId));
     };
 
     const handleFullImport = (file: File) => {
@@ -630,6 +1078,14 @@ const App: React.FC = () => {
 
                 if (Object.prototype.hasOwnProperty.call(raw, 'weeklyHistory')) {
                     setWeeklyHistory(sanitizeWeeklyHistoryCollection(raw.weeklyHistory));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'hallRentals')) {
+                    setHallRentals(sanitizeHallRentalCollection(raw.hallRentals));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'tasks')) {
+                    setTasks(sanitizeTasksCollection(raw.tasks));
                 }
 
                 alert('Data imported successfully!');
@@ -668,6 +1124,14 @@ const App: React.FC = () => {
                         <div className="flex justify-between items-center">
                             <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                             <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Add New Entry</button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-4">
+                                <p className="text-sm uppercase tracking-wide text-amber-600 font-semibold">Stored Entries</p>
+                                <p className="text-3xl font-extrabold text-slate-800 mt-1">{entries.length.toLocaleString()}</p>
+                                <p className="text-xs text-slate-500 mt-2">Total financial entries captured in this workspace.</p>
+                            </div>
                         </div>
 
                         {/* Filter Controls */}
@@ -714,9 +1178,79 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
+                        <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-lime-100/70 p-6 space-y-4">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div>
+                                    <h3 className="text-xl font-semibold text-slate-800">Total Amount</h3>
+                                    <p className="text-sm text-slate-500">Showing totals {totalRangeLabel}. Adjust the timeframe below.</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {(['day', 'month', 'year', 'custom'] as const).map(mode => (
+                                        <button
+                                            key={mode}
+                                            type="button"
+                                            onClick={() => setTotalMode(mode)}
+                                            className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${totalMode === mode ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white/70 border-emerald-200 text-emerald-700 hover:bg-white'}`}
+                                        >
+                                            {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="rounded-2xl bg-white/80 border border-white/60 px-4 py-3">
+                                    <p className="text-xs uppercase font-semibold text-emerald-500">Amount</p>
+                                    <p className="text-3xl font-bold text-slate-800">{formatCurrency(totalRangeAmount, settings.currency)}</p>
+                                </div>
+                                <div className="rounded-2xl bg-white/80 border border-white/60 px-4 py-3">
+                                    <p className="text-xs uppercase font-semibold text-emerald-500">Entries</p>
+                                    <p className="text-3xl font-bold text-slate-800">{totalRangeEntries.length}</p>
+                                </div>
+                                <div className="rounded-2xl bg-white/80 border border-white/60 px-4 py-3">
+                                    <p className="text-xs uppercase font-semibold text-emerald-500">Average</p>
+                                    <p className="text-3xl font-bold text-slate-800">{totalRangeEntries.length > 0 ? formatCurrency(totalRangeAmount / totalRangeEntries.length, settings.currency) : formatCurrency(0, settings.currency)}</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {totalMode === 'day' && (
+                                    <label className="flex flex-col gap-2">
+                                        <span className="text-sm font-semibold text-slate-600">Select day</span>
+                                        <input type="date" value={totalDay} onChange={e => setTotalDay(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2" />
+                                    </label>
+                                )}
+                                {totalMode === 'month' && (
+                                    <label className="flex flex-col gap-2">
+                                        <span className="text-sm font-semibold text-slate-600">Select month</span>
+                                        <input type="month" value={totalMonth} onChange={e => setTotalMonth(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2" />
+                                    </label>
+                                )}
+                                {totalMode === 'year' && (
+                                    <label className="flex flex-col gap-2">
+                                        <span className="text-sm font-semibold text-slate-600">Select year</span>
+                                        <input type="number" value={totalYear} onChange={e => setTotalYear(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2" min={1900} max={9999} />
+                                    </label>
+                                )}
+                                {totalMode === 'custom' && (
+                                    <>
+                                        <label className="flex flex-col gap-2">
+                                            <span className="text-sm font-semibold text-slate-600">Start date</span>
+                                            <input type="date" value={totalCustomStart} onChange={e => setTotalCustomStart(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2" />
+                                        </label>
+                                        <label className="flex flex-col gap-2">
+                                            <span className="text-sm font-semibold text-slate-600">End date</span>
+                                            <input type="date" value={totalCustomEnd} onChange={e => setTotalCustomEnd(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2" />
+                                        </label>
+                                        <div className="rounded-2xl bg-white/70 border border-white/60 px-4 py-3 text-sm text-slate-500">
+                                            Leave either field blank to include all dates before or after the provided boundary.
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </section>
+
                         <div className="rounded-3xl shadow-lg border border-white/60 bg-white/80 backdrop-blur overflow-x-auto max-h-[65vh] overflow-y-auto">
                            <table className="w-full text-left text-slate-500">
-                                <thead className="text-base text-slate-700 uppercase bg-slate-100 sticky top-0 z-10">
+                                <thead className="text-sm font-semibold tracking-wide text-slate-600 uppercase bg-slate-100 sticky top-0 z-10">
                                     <tr>
                                         <th className="px-6 py-3"><button onClick={() => handleSort('date')} className="flex items-center gap-1 font-bold">Date {sortConfig.key === 'date' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</button></th>
                                         <th className="px-6 py-3"><button onClick={() => handleSort('memberName')} className="flex items-center gap-1 font-bold">Member {sortConfig.key === 'memberName' && (sortConfig.direction === 'asc' ? '▲' : '▼')}</button></th>
@@ -732,7 +1266,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 );
-            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} />;
+            case 'members': return <Members members={members} setMembers={setMembers} settings={settings} canManage={currentUser.role === 'admin'} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries} settings={settings} />;
             case 'history':
                 return (
@@ -743,8 +1277,8 @@ const App: React.FC = () => {
                     />
                 );
             case 'users': return <UsersTab users={users} setUsers={setUsers} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} />;
-            case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} />;
+            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} onExportFinancialJson={() => handleExport('json')} />;
+            case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} onAttendanceSaved={setLastAttendanceSavedAt} />;
             case 'admin-attendance': return <AdminAttendanceView members={members} attendance={attendance} settings={settings} currentUser={currentUser} />;
             case 'utilities':
                 return (
@@ -757,6 +1291,28 @@ const App: React.FC = () => {
                         onImportMembers={handleBulkAddMembers}
                         onResetData={handleResetAllData}
                         onSaveTotalClasses={handleSaveTotalClasses}
+                    />
+                );
+            case 'hall-management':
+                return (
+                    <HallManagement
+                        records={hallRentals}
+                        currency={settings.currency}
+                        onCreate={handleCreateHallRental}
+                        isSubmitting={activeSyncTasks > 0}
+                        isOffline={isOffline}
+                    />
+                );
+            case 'tasks':
+                return (
+                    <TasksTab
+                        tasks={tasks}
+                        currentUser={currentUser}
+                        onCreate={handleCreateTask}
+                        onUpdate={handleUpdateTask}
+                        onDelete={handleDeleteTask}
+                        isOffline={isOffline}
+                        lastSyncedAt={tasksLastSyncedAt}
                     />
                 );
             default: return <div>Select a tab</div>;
@@ -778,6 +1334,8 @@ const App: React.FC = () => {
         { id: 'admin-attendance', label: 'Attendance Report', roles: ['admin', 'finance'] },
         { id: 'history', label: 'Weekly History', roles: ['admin', 'statistician'] },
         { id: 'users', label: 'Manage Users', roles: ['admin', 'finance'] },
+        { id: 'hall-management', label: 'Hall Management', roles: ['admin', 'finance'] },
+        { id: 'tasks', label: 'Tasks', roles: ['admin', 'finance'] },
         { id: 'utilities', label: 'Utilities', roles: ['admin'] },
         { id: 'settings', label: 'Settings', roles: ['admin'] },
     ];
@@ -794,14 +1352,25 @@ const App: React.FC = () => {
                     : 'text-indigo-100 hover:bg-white/15 hover:text-white'
             }`}
         >
-            {item.label}
+            {item.label.toUpperCase()}
         </button>
     );
 
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
             <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
-                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} />
+                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} appVersion={APP_VERSION} />
+                <div className="mt-4">
+                    <SyncStatus
+                        isOffline={isOffline}
+                        syncMessage={syncMessage}
+                        lastSyncedAt={lastSyncedAt}
+                        lastAttendanceSavedAt={lastAttendanceSavedAt}
+                        activeSyncTasks={activeSyncTasks}
+                        cloudReady={cloud.ready}
+                        cloudSignedIn={cloud.signedIn}
+                    />
+                </div>
                 <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
                     <aside className="hidden lg:block lg:w-72 flex-shrink-0">
                         <nav className="h-full rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-5 space-y-2 overflow-y-auto">

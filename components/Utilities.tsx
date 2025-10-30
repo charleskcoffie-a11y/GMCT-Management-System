@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CloudState, Entry, EntryType, Member, Settings } from '../types';
 import { formatCurrency, fromCsv, sanitizeEntry, sanitizeMember, toCsv } from '../utils';
 import { testSharePointConnection } from '../services/sharepoint';
@@ -6,6 +6,7 @@ import {
     SHAREPOINT_ENTRIES_LIST_NAME,
     SHAREPOINT_MEMBERS_LIST_NAME,
     SHAREPOINT_SITE_URL,
+    SHAREPOINT_HISTORY_LIST_NAME,
 } from '../constants';
 
 type UtilitiesProps = {
@@ -44,33 +45,24 @@ const Utilities: React.FC<UtilitiesProps> = ({
     const [totalClassesInput, setTotalClassesInput] = useState<string>(String(settings.maxClasses));
     const [totalClassesStatus, setTotalClassesStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
-    const sharePointEntriesUrl = useMemo(() => {
+    const buildModernSharePointUrl = useCallback((listName: string) => {
         if (!SHAREPOINT_SITE_URL) return null;
         try {
-            const url = new URL(SHAREPOINT_SITE_URL);
-            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(
-                SHAREPOINT_ENTRIES_LIST_NAME,
-            )}/AllItems.aspx`;
-            return url.toString();
+            const site = new URL(SHAREPOINT_SITE_URL);
+            const basePath = site.pathname.replace(/\/$/, '');
+            const startUrl = new URL(SHAREPOINT_SITE_URL);
+            startUrl.pathname = `${basePath}/_layouts/15/start.aspx`;
+            startUrl.search = `#/Lists/${encodeURIComponent(listName)}/AllItems.aspx`;
+            return startUrl.toString();
         } catch (error) {
             console.error('Invalid SharePoint site URL configuration', error);
             return null;
         }
     }, []);
 
-    const sharePointMembersUrl = useMemo(() => {
-        if (!SHAREPOINT_SITE_URL) return null;
-        try {
-            const url = new URL(SHAREPOINT_SITE_URL);
-            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(
-                SHAREPOINT_MEMBERS_LIST_NAME,
-            )}/AllItems.aspx`;
-            return url.toString();
-        } catch (error) {
-            console.error('Invalid SharePoint site URL configuration', error);
-            return null;
-        }
-    }, []);
+    const sharePointEntriesUrl = useMemo(() => buildModernSharePointUrl(SHAREPOINT_ENTRIES_LIST_NAME), [buildModernSharePointUrl]);
+    const sharePointMembersUrl = useMemo(() => buildModernSharePointUrl(SHAREPOINT_MEMBERS_LIST_NAME), [buildModernSharePointUrl]);
+    const sharePointHistoryUrl = useMemo(() => buildModernSharePointUrl(SHAREPOINT_HISTORY_LIST_NAME), [buildModernSharePointUrl]);
 
     const membersMap = useMemo(() => new Map(members.map(member => [member.id, member])), [members]);
 
@@ -327,6 +319,15 @@ const Utilities: React.FC<UtilitiesProps> = ({
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Members List
+                        </button>
+                    )}
+                    {sharePointHistoryUrl && (
+                        <button
+                            type="button"
+                            onClick={() => window.open(sharePointHistoryUrl, '_blank', 'noopener')}
+                            className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
+                        >
+                            Open SharePoint History List
                         </button>
                     )}
                     <button

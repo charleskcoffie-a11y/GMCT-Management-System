@@ -11,9 +11,13 @@ import type {
     Settings,
     User,
     UserRole,
+    HallRentalRecord,
     WeeklyHistoryAttendanceBreakdown,
     WeeklyHistoryDonations,
     WeeklyHistoryRecord,
+    Task,
+    TaskPriority,
+    TaskStatus,
 } from './types';
 import {
     DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
@@ -66,6 +70,78 @@ export function sanitizeMember(raw: any): Member {
         spId: sanitizeString(raw.spId),
         name: sanitizeString(raw.name) || "Unnamed Member",
         classNumber: sanitizeString(raw.classNumber),
+    };
+}
+
+export function sanitizeHallRental(raw: any): HallRentalRecord {
+    const parsedDate = new Date(raw.date);
+    const date = (raw.date && !isNaN(parsedDate.getTime()))
+        ? parsedDate.toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+
+    const amount = typeof raw.amount === 'number' ? raw.amount : parseFloat(raw.amount);
+
+    return {
+        id: sanitizeString(raw.id) || generateId('hall'),
+        spId: sanitizeString(raw.spId),
+        amount: Number.isFinite(amount) ? amount : 0,
+        date,
+    };
+}
+
+export function sanitizeTaskStatus(status: any): TaskStatus {
+    const valid: TaskStatus[] = ['pending', 'in-progress', 'completed'];
+    if (typeof status === 'string') {
+        const normalized = status.trim().toLowerCase();
+        const mapped: Record<string, TaskStatus> = {
+            pending: 'pending',
+            'in progress': 'in-progress',
+            'in-progress': 'in-progress',
+            completed: 'completed',
+            complete: 'completed',
+            done: 'completed',
+        };
+        if (normalized in mapped) {
+            return mapped[normalized];
+        }
+    }
+    return 'pending';
+}
+
+export function sanitizeTaskPriority(priority: any): TaskPriority {
+    const valid: TaskPriority[] = ['low', 'medium', 'high'];
+    if (typeof priority === 'string') {
+        const normalized = priority.trim().toLowerCase();
+        if (valid.includes(normalized as TaskPriority)) {
+            return normalized as TaskPriority;
+        }
+    }
+    return 'medium';
+}
+
+export function sanitizeTask(raw: any): Task {
+    const nowIso = new Date().toISOString();
+    const createdAt = sanitizeString(raw.createdAt) || nowIso;
+    const updatedAt = sanitizeString(raw.updatedAt) || createdAt;
+    const dueRaw = sanitizeString(raw.dueDate);
+    const dueDate = dueRaw ? new Date(dueRaw) : null;
+
+    return {
+        id: sanitizeString(raw.id) || generateId('task'),
+        spId: sanitizeString(raw.spId),
+        title: sanitizeString(raw.title) || 'Untitled Task',
+        notes: sanitizeString(raw.notes) || undefined,
+        createdBy: sanitizeString(raw.createdBy) || 'system',
+        assignedTo: sanitizeString(raw.assignedTo) || undefined,
+        dueDate: dueDate && !isNaN(dueDate.getTime()) ? dueDate.toISOString().slice(0, 10) : undefined,
+        status: sanitizeTaskStatus(raw.status),
+        priority: sanitizeTaskPriority(raw.priority),
+        createdAt,
+        updatedAt,
+        _sync: {
+            lastSyncedAt: sanitizeString(raw?._sync?.lastSyncedAt),
+            dirty: raw?._sync?.dirty === false ? false : true,
+        },
     };
 }
 
@@ -202,7 +278,7 @@ export function sanitizeUserRole(role: any): UserRole {
 }
 
 export function sanitizeAttendanceStatus(status: any): AttendanceStatus {
-    const validStatuses: AttendanceStatus[] = ['present', 'absent', 'sick', 'travel', 'catechumen'];
+    const validStatuses: AttendanceStatus[] = ['present', 'absent', 'sick', 'travel'];
     return validStatuses.includes(status) ? status : 'absent';
 }
 
@@ -255,6 +331,14 @@ export function sanitizeAttendanceCollection(raw: unknown): AttendanceRecord[] {
 
 export function sanitizeWeeklyHistoryCollection(raw: unknown): WeeklyHistoryRecord[] {
     return Array.isArray(raw) ? raw.map(item => sanitizeWeeklyHistoryRecord(item)) : [];
+}
+
+export function sanitizeHallRentalCollection(raw: unknown): HallRentalRecord[] {
+    return Array.isArray(raw) ? raw.map(item => sanitizeHallRental(item)) : [];
+}
+
+export function sanitizeTasksCollection(raw: unknown): Task[] {
+    return Array.isArray(raw) ? raw.map(item => sanitizeTask(item)) : [];
 }
 
 export function serviceTypeLabel(type: ServiceType): string {

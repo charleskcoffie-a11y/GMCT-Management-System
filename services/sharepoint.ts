@@ -1,5 +1,12 @@
-import { SHAREPOINT_ENTRIES_LIST_NAME, SHAREPOINT_MEMBERS_LIST_NAME, SHAREPOINT_SITE_URL, SHAREPOINT_GRAPH_URL } from '../constants';
-import type { Entry, Member } from '../types';
+import {
+    SHAREPOINT_ENTRIES_LIST_NAME,
+    SHAREPOINT_MEMBERS_LIST_NAME,
+    SHAREPOINT_SITE_URL,
+    SHAREPOINT_GRAPH_URL,
+    SHAREPOINT_HALL_LIST_NAME,
+    SHAREPOINT_TASKS_LIST_NAME,
+} from '../constants';
+import type { Entry, HallRentalRecord, Member, Task } from '../types';
 
 type ConnectionResult = { success: true; message: string } | { success: false; message: string };
 
@@ -97,6 +104,55 @@ export async function deleteMemberFromSharePoint(_member: Member, _accessToken: 
     }
 
     console.info('SharePoint member deletion is not implemented. No remote changes were made.');
+}
+
+export async function upsertHallRentalToSharePoint(record: HallRentalRecord, _accessToken: string): Promise<string | undefined> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_HALL_LIST_NAME) {
+        logMissingConfig('saving a hall rental to SharePoint');
+        return record.spId;
+    }
+
+    console.info('SharePoint hall rental sync is not implemented. Record changes remain local only.');
+    return record.spId;
+}
+
+export async function loadHallRentalsFromSharePoint(_accessToken: string): Promise<HallRentalRecord[]> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_HALL_LIST_NAME) {
+        logMissingConfig('loading hall rentals from SharePoint');
+        return [];
+    }
+
+    console.info('SharePoint hall rental sync is not implemented. Returning cached hall rentals only.');
+    return [];
+}
+
+export async function loadTasksFromSharePoint(_accessToken: string): Promise<Task[]> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_TASKS_LIST_NAME) {
+        logMissingConfig('loading tasks from SharePoint');
+        return [];
+    }
+
+    console.info('SharePoint task sync is not implemented. Returning cached tasks only.');
+    return [];
+}
+
+export async function upsertTaskToSharePoint(task: Task, _accessToken: string): Promise<string | undefined> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_TASKS_LIST_NAME) {
+        logMissingConfig('saving a task to SharePoint');
+        return task.spId;
+    }
+
+    console.info('SharePoint task sync is not implemented. Task changes remain local only.');
+    return task.spId;
+}
+
+export async function deleteTaskFromSharePoint(_task: Task, _accessToken: string): Promise<void> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_TASKS_LIST_NAME) {
+        logMissingConfig('deleting a task from SharePoint');
+        return;
+    }
+
+    console.info('SharePoint task deletion is not implemented. No remote changes were made.');
 }
 
 export async function testSharePointConnection(accessToken?: string | null): Promise<ConnectionResult> {

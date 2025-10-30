@@ -28,11 +28,13 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
         note: '',
     });
     const [memberQuery, setMemberQuery] = useState('');
+    const [amountInput, setAmountInput] = useState('');
 
     useEffect(() => {
         if (entry) {
             setForm(entry);
             setMemberQuery(entry.memberName || '');
+            setAmountInput(entry.amount ? String(entry.amount) : '');
         } else {
             setForm({
                 id: generateId('entry'),
@@ -46,6 +48,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
                 note: '',
             });
             setMemberQuery('');
+            setAmountInput('');
         }
     }, [entry]);
 
@@ -103,6 +106,7 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
             note: '',
         });
         setMemberQuery('');
+        setAmountInput('');
     };
 
     const handleMemberMatch = (value: string) => {
@@ -196,7 +200,17 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
                         </label>
                         <label className="flex flex-col gap-2">
                             <span className="text-sm font-semibold text-slate-600">Amount</span>
-                            <input type="number" step="0.01" value={form.amount} onChange={e => updateField('amount', Number(e.target.value))} className="border border-slate-300 rounded-lg px-3 py-2" />
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={amountInput}
+                                onChange={e => {
+                                    const value = e.target.value;
+                                    setAmountInput(value);
+                                    updateField('amount', value === '' ? 0 : Number(value));
+                                }}
+                                className="border border-slate-300 rounded-lg px-3 py-2"
+                            />
                         </label>
                         <label className="flex flex-col gap-2 md:col-span-2">
                             <span className="text-sm font-semibold text-slate-600">Notes</span>
