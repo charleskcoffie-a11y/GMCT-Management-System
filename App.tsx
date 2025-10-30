@@ -40,7 +40,14 @@ import {
     deleteMemberFromSharePoint,
     resetContextCache,
 } from './services/sharepoint';
-import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES } from './constants';
+import {
+    DEFAULT_CURRENCY,
+    DEFAULT_MAX_CLASSES,
+    DEFAULT_SHAREPOINT_SITE_URL,
+    DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
+    DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
+    DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
+} from './constants';
 
 // Initial Data
 const INITIAL_USERS: User[] = [
@@ -660,79 +667,19 @@ const App: React.FC = () => {
         </button>
     );
 
-    const renderNavButton = (item: typeof navItems[number]) => (
-        <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id as Tab)}
-            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
-                activeTab === item.id
-                    ? 'bg-white/25 text-white shadow-lg'
-                    : 'text-indigo-100 hover:bg-white/15 hover:text-white'
-            }`}
-        >
-            {item.label}
-        </button>
-    );
-
-    const visibleNavItems = navItems.filter(item => item.roles.includes(currentUser.role));
-
-    const NavigationButton: React.FC<{ item: NavItem }> = ({ item }) => (
-        <button
-            onClick={() => setActiveTab(item.id)}
-            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
-                activeTab === item.id
-                    ? 'bg-white/25 text-white shadow-lg'
-                    : 'text-indigo-100 hover:bg-white/15 hover:text-white'
-            }`}
-        >
-            {item.label}
-        </button>
-    );
-
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
             <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} />
                 <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
-                    <aside className="lg:w-72 flex-shrink-0">
-                        <nav className="h-full rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-5 space-y-2 overflow-y-auto">
-                             {navItems.map(item => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => setActiveTab(item.id as Tab)}
-                                    className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
-                                        activeTab === item.id
-                                            ? 'bg-white/25 text-white shadow-lg'
-                                            : 'text-indigo-100 hover:bg-white/15 hover:text-white'
-                                    }`}
-                                >
-                                    {item.label}
-                                </button>
-                            ))}
-                        </nav>
-                    )}
-                </div>
-                <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
                     <aside className="hidden lg:block lg:w-72 flex-shrink-0">
                         <nav className="h-full rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-5 space-y-2 overflow-y-auto">
-                            {navItems.map(item => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => setActiveTab(item.id as Tab)}
-                                    className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
-                                        activeTab === item.id
-                                            ? 'bg-white/25 text-white shadow-lg'
-                                            : 'text-indigo-100 hover:bg-white/15 hover:text-white'
-                                    }`}
-                                >
-                                    {item.label}
-                                </button>
-                            ))}
+                            {visibleNavItems.map(renderNavButton)}
                         </nav>
                     </aside>
                     <section className="flex-1 overflow-hidden">
                         <div className="h-full overflow-y-auto pr-1 sm:pr-2 lg:pr-4 pb-10">
-                           {renderTabContent()}
+                            {renderTabContent()}
                         </div>
                     </section>
                 </main>

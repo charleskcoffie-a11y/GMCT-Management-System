@@ -19,6 +19,11 @@ export const DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME = "Members_DataBase";
 export const DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME = "Finance_Records";
 export const DEFAULT_SHAREPOINT_HISTORY_LIST_NAME = "Weekly_Service_History";
 
+// Backwards-compatible aliases for existing configuration constants
+export const SHAREPOINT_SITE_URL = DEFAULT_SHAREPOINT_SITE_URL;
+export const SHAREPOINT_MEMBERS_LIST_NAME = DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME;
+export const SHAREPOINT_ENTRIES_LIST_NAME = DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME;
+
 // The base URL for Microsoft Graph API requests
 export const SHAREPOINT_GRAPH_URL = "https://graph.microsoft.com/v1.0";
 
