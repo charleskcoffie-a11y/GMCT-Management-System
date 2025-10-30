@@ -58,12 +58,6 @@ The single-page application exposes dedicated modules through a navigation sideb
 * **Custom Reports** – Generate bespoke CSV exports filtered by date ranges, contribution types, and class groupings.
 * **Danger Zone** – A secure utility wipes local storage for a clean slate when necessary.
 
-#### Live SharePoint Synchronization
-
-* **Two-Way Sync** – When an administrator signs in with Microsoft 365, the app now reads from and writes to the configured SharePoint lists in real time so updates from multiple users stay in lock-step.
-* **Automatic Column Provisioning** – The finance list receives the `GMCTId`, `GMCTDate`, `GMCTMemberId`, `GMCTMemberName`, `GMCTType`, `GMCTFund`, `GMCTMethod`, `GMCTAmount`, and `GMCTNote` columns automatically during the first sync.
-* **Conflict-Free Merging** – Local, offline edits remain cached and are reconciled with the authoritative SharePoint copy as soon as connectivity is restored.
-
 ### 3. Technical Architecture & Design
 
 * **Framework** – React with TypeScript delivers a type-safe, component-based SPA.
@@ -71,7 +65,7 @@ The single-page application exposes dedicated modules through a navigation sideb
 * **Styling** – Tailwind CSS provides responsive, utility-first styling across the interface.
 * **Data Persistence** – Local Storage serves as the offline-first datastore for all records.
 * **Data Integrity** – All persisted or imported data flows through sanitizer utilities to enforce expected shapes and prevent corruption.
-* **Optional Cloud Sync** – Microsoft Authentication Library (MSAL) connects to Microsoft 365; when signed in, the app now performs continuous two-way synchronization with SharePoint Lists through the `sharepoint.ts` service. Default locations ship in `constants.ts`, but administrators can update the SharePoint site and list names at runtime from **Settings → SharePoint Storage** or the **Utilities → SharePoint Tools** panel.
+* **Optional Cloud Sync** – Microsoft Authentication Library (MSAL) connects to Microsoft 365; when signed in, the app syncs data with SharePoint Lists through the `sharepoint.ts` service. Configuration lives in `constants.ts`.
 
 ### 4. Deployment & Setup
 
@@ -193,17 +187,6 @@ You can either upload through the GitHub web UI, work through a pull request, or
 3.  Open a pull request targeting `main` and review the diffs as usual.
 4.  Once the pull request is merged, the merge commit lands on `main` and automatically triggers the GitHub Actions deployment workflow—no extra manual steps required.
 
-#### If `git push` fails because `origin` is missing
-
-When you work from a fresh folder or copy files into a new directory, Git might not know which remote repository to use. If you run `git push` or `git pull` and see an error like `fatal: 'origin' does not appear to be a git repository`, add the remote with the following commands (replace the placeholders with your GitHub path):
-
-```bash
-git remote add origin https://github.com/<your-username>/<repository-name>.git
-git push -u origin main
-```
-
-The first command tells Git where the repository lives online. The second command uploads your `main` branch and remembers that `origin/main` is the default upstream, so future pushes only need `git push`.
-
 ### Step 3.3: Enable GitHub Pages
 
 1.  In your repository, go to the **"Settings"** tab.
@@ -240,21 +223,4 @@ If the GitHub Pages site displays **"Loading Application…"** for more than a f
 1.  Open your repository on GitHub and review the **Actions → Deploy to GitHub Pages** workflow run for the most recent commit. Resolve any build errors reported there.
 2.  Confirm **Settings → Pages → Build and deployment → Source** is set to **GitHub Actions**. If it is set to "Deploy from a branch", GitHub will host the uncompiled TypeScript files and the app will never start.
 3.  After a successful deploy, force-refresh your browser (`Ctrl+Shift+R` on Windows/Linux or `Cmd+Shift+R` on macOS) to make sure you are loading the newest bundle.
-
----
-
-## Appendix: Working with Git Changes
-
-### Preventing repeated merge conflicts
-
-Conflicts usually appear when two different edits touch the same file but GitHub cannot decide how to merge them. You can reduce how often they appear by following this routine whenever you update the project:
-
-1. **Pull the latest `main` branch first.** In the GitHub UI, download the newest files before uploading your edits. In a local clone, run `git pull origin main` before you start changing files.
-2. **Edit and save your updates.** Make your changes only after you are sure you have the current files.
-3. **Commit or upload the refreshed copy.** When you push or upload, you will be sending GitHub an updated version that already includes the latest work, so it will not conflict with the new commit from someone else.
-4. **Resolve conflicts once, then repeat the steps above.** After you fix a conflict, make sure to pull again before the next round of edits. That prevents the same conflict from reappearing the next time you upload.
-
-### What do red lines mean on GitHub?
-
-When you review a change on GitHub (for example in a pull request or the file history), the platform highlights **removed or replaced lines in red** and **new lines in green**. Seeing red does not mean the application is broken—it only shows which lines are being deleted compared with the previous version. If you ever see literal conflict markers like `<<<<<<<` or `>>>>>>>` inside a file, those markers mean Git could not merge changes automatically. Remove the markers and choose the correct version of the code, then commit the cleaned file.
 
