@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -20,7 +20,23 @@ import { useLocalStorage } from './hooks/useLocalStorage';
 import { toCsv, sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeAttendanceStatus, formatCurrency, sanitizeWeeklyHistoryRecord } from './utils';
 import type { Entry, Member, Settings, User, Tab, CloudState, AttendanceRecord, EntryType, WeeklyHistoryRecord } from './types';
 import { msalSilentSignIn } from './services/oneDrive';
-import { DEFAULT_CURRENCY, DEFAULT_MAX_CLASSES } from './constants';
+import {
+    loadEntriesFromSharePoint,
+    loadMembersFromSharePoint,
+    upsertEntryToSharePoint,
+    deleteEntryFromSharePoint,
+    upsertMemberToSharePoint,
+    deleteMemberFromSharePoint,
+    resetContextCache,
+} from './services/sharepoint';
+import {
+    DEFAULT_CURRENCY,
+    DEFAULT_MAX_CLASSES,
+    DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
+    DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
+    DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
+    DEFAULT_SHAREPOINT_SITE_URL,
+} from './constants';
 
 // Initial Data
 const INITIAL_USERS: User[] = [
@@ -29,7 +45,15 @@ const INITIAL_USERS: User[] = [
     { username: 'ClassLeader1', password: 'password', role: 'class-leader', classLed: '1' },
     { username: 'Statistician', password: 'Stats', role: 'statistician' },
 ];
-const INITIAL_SETTINGS: Settings = { currency: DEFAULT_CURRENCY, maxClasses: DEFAULT_MAX_CLASSES, enforceDirectory: true };
+const INITIAL_SETTINGS: Settings = {
+    currency: DEFAULT_CURRENCY,
+    maxClasses: DEFAULT_MAX_CLASSES,
+    enforceDirectory: true,
+    sharePointSiteUrl: DEFAULT_SHAREPOINT_SITE_URL,
+    sharePointEntriesListName: DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
+    sharePointMembersListName: DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
+    sharePointHistoryListName: DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
+};
 
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
@@ -60,18 +84,324 @@ const App: React.FC = () => {
     const [endDateFilter, setEndDateFilter] = useState('');
 
 
-    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: "" });
-     useEffect(() => {
+    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '' });
+    const [syncing, setSyncing] = useState(false);
+    const [syncMessage, setSyncMessage] = useState<string | null>(null);
+    const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+    const entrySyncRef = useRef<Map<string, { signature: string; entry: Entry }>>(new Map());
+    const memberSyncRef = useRef<Map<string, { signature: string; member: Member }>>(new Map());
+    const activeSyncOperations = useRef(0);
+    const [isNavOpen, setIsNavOpen] = useState(false);
+
+    const sharePointConfig = useMemo(
+        () => ({
+            siteUrl: settings.sharePointSiteUrl.trim(),
+            entriesListName: settings.sharePointEntriesListName.trim(),
+            membersListName: settings.sharePointMembersListName.trim(),
+            historyListName: settings.sharePointHistoryListName.trim(),
+        }),
+        [
+            settings.sharePointSiteUrl,
+            settings.sharePointEntriesListName,
+            settings.sharePointMembersListName,
+            settings.sharePointHistoryListName,
+        ],
+    );
+
+    const sharePointReady = Boolean(
+        sharePointConfig.siteUrl
+        && sharePointConfig.entriesListName
+        && sharePointConfig.membersListName
+        && sharePointConfig.historyListName,
+    );
+
+    useEffect(() => {
+        entrySyncRef.current.clear();
+        memberSyncRef.current.clear();
+        resetContextCache();
+    }, [
+        sharePointConfig.siteUrl,
+        sharePointConfig.entriesListName,
+        sharePointConfig.membersListName,
+        sharePointConfig.historyListName,
+    ]);
+
+    const beginSync = () => {
+        activeSyncOperations.current += 1;
+        setSyncing(true);
+    };
+
+    const endSync = () => {
+        activeSyncOperations.current = Math.max(0, activeSyncOperations.current - 1);
+        if (activeSyncOperations.current === 0) {
+            setSyncing(false);
+        }
+    };
+
+    const computeEntrySignature = useCallback((entry: Entry) => JSON.stringify({
+        id: entry.id,
+        spId: entry.spId ?? '',
+        date: entry.date,
+        memberID: entry.memberID,
+        memberName: entry.memberName,
+        type: entry.type,
+        fund: entry.fund,
+        method: entry.method,
+        amount: Number(entry.amount.toFixed(2)),
+        note: entry.note ?? '',
+    }), []);
+
+    const computeMemberSignature = useCallback((member: Member) => JSON.stringify({
+        id: member.id,
+        spId: member.spId ?? '',
+        name: member.name,
+        classNumber: member.classNumber ?? '',
+    }), []);
+
+    const mergeEntriesFromCloud = useCallback((existing: Entry[], remote: Entry[]): Entry[] => {
+        const sanitizedRemote = remote.map(remoteEntry => sanitizeEntry(remoteEntry));
+        sanitizedRemote.forEach(remoteEntry => {
+            entrySyncRef.current.set(remoteEntry.id, {
+                signature: computeEntrySignature(remoteEntry),
+                entry: remoteEntry,
+            });
+        });
+
+        const remoteMap = new Map(sanitizedRemote.map(entry => [entry.id, entry]));
+        const combined: Entry[] = [...sanitizedRemote];
+
+        existing.forEach(entry => {
+            if (!entry.spId && !remoteMap.has(entry.id)) {
+                combined.push(entry);
+            } else if (entry.spId && remoteMap.has(entry.id)) {
+                const remoteEntry = remoteMap.get(entry.id)!;
+                combined.splice(combined.indexOf(remoteEntry), 1, {
+                    ...remoteEntry,
+                    note: remoteEntry.note ?? entry.note,
+                });
+            }
+        });
+
+        return combined.sort((a, b) => b.date.localeCompare(a.date));
+    }, [computeEntrySignature]);
+
+    const mergeMembersFromCloud = useCallback((existing: Member[], remote: Member[]): Member[] => {
+        const sanitizedRemote = remote.map(remoteMember => sanitizeMember(remoteMember));
+        sanitizedRemote.forEach(remoteMember => {
+            memberSyncRef.current.set(remoteMember.id, {
+                signature: computeMemberSignature(remoteMember),
+                member: remoteMember,
+            });
+        });
+
+        const remoteMap = new Map(sanitizedRemote.map(member => [member.id, member]));
+        const combined: Member[] = [...sanitizedRemote];
+
+        existing.forEach(member => {
+            if (!member.spId && !remoteMap.has(member.id)) {
+                combined.push(member);
+            }
+        });
+
+        return combined.sort((a, b) => a.name.localeCompare(b.name));
+    }, [computeMemberSignature]);
+
+    useEffect(() => {
         const attemptSilentSignin = async () => {
             const session = await msalSilentSignIn();
             if (session) {
-                setCloud({ ready: true, signedIn: true, account: session.account, accessToken: session.accessToken, message: "Signed in silently." });
+                setCloud({ ready: true, signedIn: true, account: session.account, accessToken: session.accessToken, message: 'Signed in silently.' });
             } else {
-                setCloud({ ready: true, signedIn: false, message: "Ready for manual sign-in." });
+                setCloud({ ready: true, signedIn: false, message: 'Ready for manual sign-in.' });
             }
         };
         attemptSilentSignin();
     }, []);
+
+    useEffect(() => {
+        setIsNavOpen(false);
+    }, [activeTab]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken || !sharePointReady) {
+            entrySyncRef.current.clear();
+            memberSyncRef.current.clear();
+            resetContextCache();
+            setSyncMessage(
+                !sharePointReady
+                    ? 'Configure the SharePoint storage location in Settings or Utilities to enable sync.'
+                    : null,
+            );
+            setLastSyncedAt(null);
+            return;
+        }
+
+        let active = true;
+
+        const hydrateFromSharePoint = async () => {
+            beginSync();
+            try {
+                const [remoteEntries, remoteMembers] = await Promise.all([
+                    loadEntriesFromSharePoint(sharePointConfig, cloud.accessToken!),
+                    loadMembersFromSharePoint(sharePointConfig, cloud.accessToken!),
+                ]);
+                if (!active) return;
+                setEntries(prev => mergeEntriesFromCloud(prev, remoteEntries));
+                setMembers(prev => mergeMembersFromCloud(prev, remoteMembers));
+                setSyncMessage(null);
+                setLastSyncedAt(Date.now());
+            } catch (error) {
+                if (!active) return;
+                console.error('Initial SharePoint sync failed', error);
+                setSyncMessage(error instanceof Error ? error.message : 'Unable to sync with SharePoint right now.');
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        hydrateFromSharePoint();
+
+        return () => {
+            active = false;
+        };
+    }, [
+        cloud.signedIn,
+        cloud.accessToken,
+        mergeEntriesFromCloud,
+        mergeMembersFromCloud,
+        sharePointReady,
+        sharePointConfig,
+    ]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken || !sharePointReady) {
+            return;
+        }
+
+        let active = true;
+
+        const pushEntryChanges = async () => {
+            beginSync();
+            const known = entrySyncRef.current;
+            const currentMap = new Map(entries.map(entry => [entry.id, entry]));
+            const entriesSnapshot: Array<[string, { signature: string; entry: Entry }]> = Array.from(known.entries());
+
+            for (const [id, stored] of entriesSnapshot) {
+                if (!currentMap.has(id)) {
+                    if (stored.entry.spId) {
+                        try {
+                            await deleteEntryFromSharePoint(sharePointConfig, stored.entry, cloud.accessToken!);
+                        } catch (error) {
+                            console.error('Failed to remove SharePoint entry', error);
+                        }
+                    }
+                    known.delete(id);
+                }
+            }
+
+            try {
+                for (const entry of entries) {
+                    const sanitized = sanitizeEntry(entry);
+                    sanitized.spId = entry.spId;
+                    const signature = computeEntrySignature(sanitized);
+                    const cached = known.get(sanitized.id);
+                    if (!cached || cached.signature !== signature) {
+                        try {
+                            const spId = await upsertEntryToSharePoint(sharePointConfig, sanitized, cloud.accessToken!);
+                            if (!active) return;
+                            const updatedEntry = { ...sanitized, spId: spId ?? sanitized.spId };
+                            known.set(updatedEntry.id, { signature: computeEntrySignature(updatedEntry), entry: updatedEntry });
+                            if (spId && sanitized.spId !== spId) {
+                                setEntries(prev => prev.map(existing => existing.id === updatedEntry.id ? { ...existing, spId } : existing));
+                            }
+                            setSyncMessage(null);
+                            setLastSyncedAt(Date.now());
+                        } catch (error) {
+                            if (!active) return;
+                            console.error('Failed to sync entry to SharePoint', error);
+                            setSyncMessage('Unable to upload some financial entries to SharePoint. They remain saved locally.');
+                        }
+                    }
+                }
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        pushEntryChanges();
+
+        return () => {
+            active = false;
+        };
+    }, [entries, cloud.signedIn, cloud.accessToken, computeEntrySignature, setEntries, sharePointReady, sharePointConfig]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken || !sharePointReady) {
+            return;
+        }
+
+        let active = true;
+
+        const pushMemberChanges = async () => {
+            beginSync();
+            const known = memberSyncRef.current;
+            const currentMap = new Map(members.map(member => [member.id, member]));
+            const membersSnapshot: Array<[string, { signature: string; member: Member }]> = Array.from(known.entries());
+
+            for (const [id, stored] of membersSnapshot) {
+                if (!currentMap.has(id)) {
+                    if (stored.member.spId) {
+                        try {
+                            await deleteMemberFromSharePoint(sharePointConfig, stored.member, cloud.accessToken!);
+                        } catch (error) {
+                            console.error('Failed to remove SharePoint member', error);
+                        }
+                    }
+                    known.delete(id);
+                }
+            }
+
+            try {
+                for (const member of members) {
+                    const sanitized = sanitizeMember(member);
+                    sanitized.spId = member.spId;
+                    const signature = computeMemberSignature(sanitized);
+                    const cached = known.get(sanitized.id);
+                    if (!cached || cached.signature !== signature) {
+                        try {
+                            const spId = await upsertMemberToSharePoint(sharePointConfig, sanitized, cloud.accessToken!);
+                            if (!active) return;
+                            const updatedMember = { ...sanitized, spId: spId ?? sanitized.spId };
+                            known.set(updatedMember.id, { signature: computeMemberSignature(updatedMember), member: updatedMember });
+                            if (spId && sanitized.spId !== spId) {
+                                setMembers(prev => prev.map(existing => existing.id === updatedMember.id ? { ...existing, spId } : existing));
+                            }
+                            setSyncMessage(null);
+                            setLastSyncedAt(Date.now());
+                        } catch (error) {
+                            if (!active) return;
+                            console.error('Failed to sync member to SharePoint', error);
+                            setSyncMessage('Unable to sync some members to SharePoint. Data remains saved locally.');
+                        }
+                    }
+                }
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        pushMemberChanges();
+
+        return () => {
+            active = false;
+        };
+    }, [members, cloud.signedIn, cloud.accessToken, computeMemberSignature, setMembers, sharePointReady, sharePointConfig]);
 
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -79,11 +409,18 @@ const App: React.FC = () => {
     const filteredAndSortedEntries = useMemo(() => {
         // 1. Filter the entries
         const filtered = entries.filter(entry => {
-            if (searchFilter && !entry.memberName.toLowerCase().includes(searchFilter.toLowerCase())) return false;
+            if (searchFilter) {
+                const query = searchFilter.toLowerCase();
+                const member = membersMap.get(entry.memberID);
+                const matchesName = entry.memberName.toLowerCase().includes(query);
+                const matchesId = entry.memberID.toLowerCase().includes(query);
+                const matchesDirectoryName = member ? member.name.toLowerCase().includes(query) : false;
+                if (!matchesName && !matchesId && !matchesDirectoryName) return false;
+            }
             if (typeFilter !== 'all' && entry.type !== typeFilter) return false;
             if (startDateFilter && entry.date < startDateFilter) return false;
             if (endDateFilter && entry.date > endDateFilter) return false;
-            
+
             const member = membersMap.get(entry.memberID);
             if (classFilter !== 'all' && (!member || member.classNumber !== classFilter)) return false;
             
@@ -127,6 +464,32 @@ const App: React.FC = () => {
         return sortableEntries;
     }, [entries, sortConfig, membersMap, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter]);
 
+    const recordRows = useMemo(() => filteredAndSortedEntries.map(entry => {
+        const member = membersMap.get(entry.memberID);
+
+        return (
+            <tr key={entry.id} className="bg-white border-b hover:bg-slate-50">
+                <td className="px-6 py-4">{entry.date}</td>
+                <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName}</td>
+                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
+                <td className="px-6 py-4 text-center">{member?.classNumber || 'N/A'}</td>
+                <td className="px-6 py-4 capitalize">{entry.type}</td>
+                <td className="px-6 py-4">{formatCurrency(entry.amount, settings.currency)}</td>
+                <td className="px-6 py-4 text-right">
+                    <button
+                        onClick={() => {
+                            setSelectedEntry(entry);
+                            setIsModalOpen(true);
+                        }}
+                        className="font-medium text-indigo-600 hover:underline"
+                    >
+                        Edit
+                    </button>
+                </td>
+            </tr>
+        );
+    }), [filteredAndSortedEntries, membersMap, settings.currency, setIsModalOpen, setSelectedEntry]);
+
     // --- Handlers ---
     const handleLogin = (username: string, password: string) => {
         const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
@@ -140,7 +503,11 @@ const App: React.FC = () => {
         }
     };
 
-    const handleLogout = () => setCurrentUser(null);
+    const handleLogout = () => {
+        setCurrentUser(null);
+        setIsNavOpen(false);
+        setCloud(prev => ({ ...prev, signedIn: false, accessToken: undefined, account: undefined, message: 'Ready for manual sign-in.' }));
+    };
 
     const handleSaveEntry = (entry: Entry) => {
         const newEntries = [...entries];
@@ -179,6 +546,39 @@ const App: React.FC = () => {
     const handleImport = (newEntries: Entry[]) => {
         setEntries(prev => [...prev, ...newEntries]);
     };
+
+    const handleBulkAddMembers = (importedMembers: Member[]) => {
+        setMembers(prev => {
+            const existingIds = new Set(prev.map(member => member.id));
+            const next = [...prev];
+            importedMembers.forEach(member => {
+                if (!existingIds.has(member.id)) {
+                    next.push(member);
+                }
+            });
+            return next;
+        });
+    };
+
+    const handleResetAllData = () => {
+        if (!window.confirm('This will permanently delete all locally stored data for this app. Continue?')) {
+            return;
+        }
+        const storageKeys = ['gmct-entries', 'gmct-members', 'gmct-users', 'gmct-settings', 'gmct-attendance', 'gmct-weekly-history'];
+        storageKeys.forEach(key => localStorage.removeItem(key));
+        setEntries([]);
+        setMembers([]);
+        setUsers(INITIAL_USERS);
+        setSettings(INITIAL_SETTINGS);
+        setAttendance([]);
+        setWeeklyHistory([]);
+        setCurrentUser(null);
+        setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.' });
+        entrySyncRef.current.clear();
+        memberSyncRef.current.clear();
+        setSyncMessage(null);
+        setLastSyncedAt(null);
+    };
     
     const handleExport = (format: 'csv' | 'json') => {
         const filename = `gmct-export-${new Date().toISOString().slice(0, 10)}`;
@@ -208,6 +608,29 @@ const App: React.FC = () => {
         link.download = `gmct-full-backup-${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
     };
+
+    const handleSaveTotalClasses = (total: number) => {
+        setSettings(prev => ({ ...prev, maxClasses: total }));
+    };
+
+    const handleSaveSharePointLocation = useCallback((config: {
+        siteUrl: string;
+        entriesListName: string;
+        membersListName: string;
+        historyListName: string;
+    }) => {
+        setSettings(prev => ({
+            ...prev,
+            sharePointSiteUrl: config.siteUrl,
+            sharePointEntriesListName: config.entriesListName,
+            sharePointMembersListName: config.membersListName,
+            sharePointHistoryListName: config.historyListName,
+        }));
+        entrySyncRef.current.clear();
+        memberSyncRef.current.clear();
+        resetContextCache();
+        setSyncMessage('SharePoint location updated. The next sync will use the new lists.');
+    }, [setSettings, setSyncMessage]);
 
     const handleFullImport = (file: File) => {
         if (!window.confirm("This will overwrite all current data. Are you sure you want to continue?")) return;
@@ -260,10 +683,10 @@ const App: React.FC = () => {
                         </div>
 
                         {/* Filter Controls */}
-                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/80 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                        <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-sky-50 to-cyan-100/70 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                             <div className="lg:col-span-1">
                                 <label htmlFor="searchFilter" className="block text-sm font-medium text-slate-700">Search Member</label>
-                                <input type="text" id="searchFilter" placeholder="Name..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="mt-1 block w-full border-slate-300 rounded-md shadow-sm"/>
+                                <input type="text" id="searchFilter" placeholder="Name or ID..." value={searchFilter} onChange={e => setSearchFilter(e.target.value)} className="mt-1 block w-full border-slate-300 rounded-md shadow-sm"/>
                             </div>
                             <div className="lg:col-span-1">
                                 <label htmlFor="classFilter" className="block text-sm font-medium text-slate-700">Class</label>
@@ -276,7 +699,19 @@ const App: React.FC = () => {
                                 <label htmlFor="typeFilter" className="block text-sm font-medium text-slate-700">Type</label>
                                 <select id="typeFilter" value={typeFilter} onChange={e => setTypeFilter(e.target.value as EntryType | 'all')} className="mt-1 block w-full border-slate-300 rounded-md shadow-sm">
                                     <option value="all">All Types</option>
-                                    {(["tithe", "offering", "first-fruit", "pledge", "harvest-levy", "other"] as EntryType[]).map(t => <option key={t} value={t}>{t.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>)}
+                                    {([
+                                        "tithe",
+                                        "offering",
+                                        "thanksgiving-offering",
+                                        "first-fruit",
+                                        "pledge",
+                                        "harvest-levy",
+                                        "other",
+                                    ] as EntryType[]).map(t => (
+                                        <option key={t} value={t}>
+                                            {t.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
                             <div className="lg:col-span-2 grid grid-cols-2 gap-4">
@@ -291,7 +726,7 @@ const App: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200/80 overflow-x-auto max-h-[65vh] overflow-y-auto">
+                        <div className="rounded-3xl shadow-lg border border-white/60 bg-white/80 backdrop-blur overflow-x-auto max-h-[65vh] overflow-y-auto">
                            <table className="w-full text-left text-slate-500">
                                 <thead className="text-base text-slate-700 uppercase bg-slate-100 sticky top-0 z-10">
                                     <tr>
@@ -304,36 +739,39 @@ const App: React.FC = () => {
                                         <th className="px-6 py-3"></th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    {filteredAndSortedEntries.map(entry => {
-                                        const member = membersMap.get(entry.memberID);
-                                        return (
-                                            <tr key={entry.id} className="bg-white border-b hover:bg-slate-50">
-                                                <td className="px-6 py-4">{entry.date}</td>
-                                                <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName}</td>
-                                                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
-                                                <td className="px-6 py-4 text-center">{member?.classNumber || 'N/A'}</td>
-                                                <td className="px-6 py-4 capitalize">{entry.type}</td>
-                                                <td className="px-6 py-4">{formatCurrency(entry.amount, settings.currency)}</td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <button onClick={() => { setSelectedEntry(entry); setIsModalOpen(true); }} className="font-medium text-indigo-600 hover:underline">Edit</button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
+                                <tbody>{recordRows}</tbody>
                            </table>
                         </div>
                     </div>
                 );
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries} settings={settings} />;
-            case 'history': return <WeeklyHistory history={weeklyHistory} setHistory={setWeeklyHistory} />;
+            case 'history':
+                return (
+                    <WeeklyHistory
+                        history={weeklyHistory}
+                        setHistory={setWeeklyHistory}
+                        canEdit={['admin', 'statistician'].includes(currentUser.role)}
+                    />
+                );
             case 'users': return <UsersTab users={users} setUsers={setUsers} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} />;
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} />;
             case 'admin-attendance': return <AdminAttendanceView members={members} attendance={attendance} settings={settings} currentUser={currentUser} />;
-            case 'utilities': return <Utilities entries={filteredAndSortedEntries} members={members} settings={settings} />;
+            case 'utilities':
+                return (
+                    <Utilities
+                        entries={entries}
+                        members={members}
+                        settings={settings}
+                        cloud={cloud}
+                        onImportEntries={handleImport}
+                        onImportMembers={handleBulkAddMembers}
+                        onResetData={handleResetAllData}
+                        onSaveTotalClasses={handleSaveTotalClasses}
+                        onSaveSharePointLocation={handleSaveSharePointLocation}
+                    />
+                );
             default: return <div>Select a tab</div>;
         }
     };
@@ -353,29 +791,72 @@ const App: React.FC = () => {
 
 
     return (
-        <div className="bg-slate-50 min-h-screen">
-            <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
+            <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
                 <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} />
-                <main className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    <aside className="lg:col-span-1">
-                        <nav className="bg-white rounded-xl shadow-sm border border-slate-200/80 p-4 space-y-1">
-                             {navItems.map(item => (
+                {cloud.signedIn && (
+                    <div className="mt-3 mb-5 rounded-2xl border border-indigo-100 bg-white/80 px-4 py-3 shadow-sm flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 ${syncing ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                <span className={`h-2 w-2 rounded-full ${syncing ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                                {syncing ? 'Syncing with SharePoint…' : 'SharePoint sync up to date'}
+                            </span>
+                            {lastSyncedAt && !syncing && (
+                                <span className="text-slate-500 font-normal">Last synced at {new Date(lastSyncedAt).toLocaleTimeString()}</span>
+                            )}
+                        </div>
+                        {syncMessage && <p className="text-sm text-red-600 font-medium">{syncMessage}</p>}
+                    </div>
+                )}
+                <div className="lg:hidden mb-5">
+                    <button
+                        type="button"
+                        onClick={() => setIsNavOpen(prev => !prev)}
+                        className="w-full inline-flex items-center justify-between rounded-2xl border border-indigo-200 bg-white/90 px-4 py-3 text-indigo-700 font-semibold shadow-sm"
+                    >
+                        <span>Navigation</span>
+                        <span className="text-sm text-slate-500">{isNavOpen ? 'Close' : 'Open'}</span>
+                    </button>
+                    {isNavOpen && (
+                        <nav className="mt-3 rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-4 space-y-2 max-h-[70vh] overflow-y-auto">
+                            {navItems.map(item => (
                                 <button
                                     key={item.id}
                                     onClick={() => setActiveTab(item.id as Tab)}
-                                    className={`w-full text-left font-bold px-4 py-3 rounded-lg transition-colors text-base uppercase tracking-wide ${
+                                    className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
                                         activeTab === item.id
-                                            ? 'bg-indigo-600 text-white shadow'
-                                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                                            ? 'bg-white/25 text-white shadow-lg'
+                                            : 'text-indigo-100 hover:bg-white/15 hover:text-white'
                                     }`}
                                 >
                                     {item.label}
                                 </button>
-                             ))}
+                            ))}
+                        </nav>
+                    )}
+                </div>
+                <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
+                    <aside className="hidden lg:block lg:w-72 flex-shrink-0">
+                        <nav className="h-full rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-purple-600 text-indigo-50 shadow-xl border border-indigo-400/40 p-5 space-y-2 overflow-y-auto">
+                            {navItems.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setActiveTab(item.id as Tab)}
+                                    className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
+                                        activeTab === item.id
+                                            ? 'bg-white/25 text-white shadow-lg'
+                                            : 'text-indigo-100 hover:bg-white/15 hover:text-white'
+                                    }`}
+                                >
+                                    {item.label}
+                                </button>
+                            ))}
                         </nav>
                     </aside>
-                    <section className="lg:col-span-3">
-                       {renderTabContent()}
+                    <section className="flex-1 overflow-hidden">
+                        <div className="h-full overflow-y-auto pr-1 sm:pr-2 lg:pr-4 pb-10">
+                            {renderTabContent()}
+                        </div>
                     </section>
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} members={members} settings={settings} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
