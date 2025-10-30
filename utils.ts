@@ -11,6 +11,7 @@ import type {
     Settings,
     User,
     UserRole,
+    HallRentalRecord,
     WeeklyHistoryAttendanceBreakdown,
     WeeklyHistoryDonations,
     WeeklyHistoryRecord,
@@ -66,6 +67,22 @@ export function sanitizeMember(raw: any): Member {
         spId: sanitizeString(raw.spId),
         name: sanitizeString(raw.name) || "Unnamed Member",
         classNumber: sanitizeString(raw.classNumber),
+    };
+}
+
+export function sanitizeHallRental(raw: any): HallRentalRecord {
+    const parsedDate = new Date(raw.date);
+    const date = (raw.date && !isNaN(parsedDate.getTime()))
+        ? parsedDate.toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+
+    const amount = typeof raw.amount === 'number' ? raw.amount : parseFloat(raw.amount);
+
+    return {
+        id: sanitizeString(raw.id) || generateId('hall'),
+        spId: sanitizeString(raw.spId),
+        amount: Number.isFinite(amount) ? amount : 0,
+        date,
     };
 }
 
@@ -202,7 +219,7 @@ export function sanitizeUserRole(role: any): UserRole {
 }
 
 export function sanitizeAttendanceStatus(status: any): AttendanceStatus {
-    const validStatuses: AttendanceStatus[] = ['present', 'absent', 'sick', 'travel', 'catechumen'];
+    const validStatuses: AttendanceStatus[] = ['present', 'absent', 'sick', 'travel'];
     return validStatuses.includes(status) ? status : 'absent';
 }
 
@@ -255,6 +272,10 @@ export function sanitizeAttendanceCollection(raw: unknown): AttendanceRecord[] {
 
 export function sanitizeWeeklyHistoryCollection(raw: unknown): WeeklyHistoryRecord[] {
     return Array.isArray(raw) ? raw.map(item => sanitizeWeeklyHistoryRecord(item)) : [];
+}
+
+export function sanitizeHallRentalCollection(raw: unknown): HallRentalRecord[] {
+    return Array.isArray(raw) ? raw.map(item => sanitizeHallRental(item)) : [];
 }
 
 export function serviceTypeLabel(type: ServiceType): string {

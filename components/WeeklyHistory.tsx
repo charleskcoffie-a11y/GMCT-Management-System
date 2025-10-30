@@ -66,6 +66,7 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
     const readOnly = !canEdit;
     const inputClass = 'border border-slate-300 rounded-lg px-3 py-2 disabled:bg-slate-100 disabled:cursor-not-allowed';
     const textareaClass = 'border border-slate-300 rounded-lg px-3 py-2 disabled:bg-slate-100 disabled:cursor-not-allowed';
+    const safeNumber = (value: number): number => (Number.isNaN(value) ? 0 : value);
 
     const handleDateChange = (value: string) => {
         const existing = history.find(record => record.dateOfService === value);
@@ -98,12 +99,12 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
         if (!form.preacher.trim()) requiredMissing.push('Preacher');
         if (!form.memoryText.trim()) requiredMissing.push('Memory text');
         if (!form.sermonTopic.trim()) requiredMissing.push('Theme');
-        const totalAttendance = form.attendance.adultsMale
-            + form.attendance.adultsFemale
-            + form.attendance.children
-            + form.attendance.adherents
-            + form.attendance.catechumens
-            + form.attendance.visitors.total;
+        const totalAttendance = safeNumber(form.attendance.adultsMale)
+            + safeNumber(form.attendance.adultsFemale)
+            + safeNumber(form.attendance.children)
+            + safeNumber(form.attendance.adherents)
+            + safeNumber(form.attendance.catechumens)
+            + safeNumber(form.attendance.visitors.total);
         if (totalAttendance <= 0) requiredMissing.push('Attendance');
 
         if (requiredMissing.length > 0) {
@@ -114,8 +115,18 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
         const payload: WeeklyHistoryRecord = {
             ...form,
             attendance: {
-                ...form.attendance,
-                visitors: { ...form.attendance.visitors },
+                adultsMale: safeNumber(form.attendance.adultsMale),
+                adultsFemale: safeNumber(form.attendance.adultsFemale),
+                children: safeNumber(form.attendance.children),
+                adherents: safeNumber(form.attendance.adherents),
+                catechumens: safeNumber(form.attendance.catechumens),
+                visitors: {
+                    total: safeNumber(form.attendance.visitors.total),
+                    names: form.attendance.visitors.names,
+                    specialVisitorName: form.attendance.visitors.specialVisitorName,
+                    specialVisitorPosition: form.attendance.visitors.specialVisitorPosition,
+                    specialVisitorSummary: form.attendance.visitors.specialVisitorSummary,
+                },
             },
             donations: { ...form.donations },
         };
@@ -155,12 +166,12 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
     };
 
     const totals = useMemo(() => (
-        form.attendance.adultsMale
-        + form.attendance.adultsFemale
-        + form.attendance.children
-        + form.attendance.adherents
-        + form.attendance.catechumens
-        + form.attendance.visitors.total
+        safeNumber(form.attendance.adultsMale)
+        + safeNumber(form.attendance.adultsFemale)
+        + safeNumber(form.attendance.children)
+        + safeNumber(form.attendance.adherents)
+        + safeNumber(form.attendance.catechumens)
+        + safeNumber(form.attendance.visitors.total)
     ), [form.attendance]);
 
     const orderedHistory = useMemo(
@@ -355,10 +366,13 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
                                 <input
                                     type="number"
                                     min={0}
-                                    value={form.attendance.adultsMale}
+                                    value={Number.isNaN(form.attendance.adultsMale) ? '' : form.attendance.adultsMale}
                                     onChange={e => setForm(prev => ({
                                         ...prev,
-                                        attendance: { ...prev.attendance, adultsMale: Math.max(0, Number(e.target.value) || 0) },
+                                        attendance: {
+                                            ...prev.attendance,
+                                            adultsMale: e.target.value === '' ? Number.NaN : Math.max(0, Number(e.target.value)),
+                                        },
                                     }))}
                                     className={inputClass}
                                     disabled={readOnly}
@@ -369,10 +383,13 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
                                 <input
                                     type="number"
                                     min={0}
-                                    value={form.attendance.adultsFemale}
+                                    value={Number.isNaN(form.attendance.adultsFemale) ? '' : form.attendance.adultsFemale}
                                     onChange={e => setForm(prev => ({
                                         ...prev,
-                                        attendance: { ...prev.attendance, adultsFemale: Math.max(0, Number(e.target.value) || 0) },
+                                        attendance: {
+                                            ...prev.attendance,
+                                            adultsFemale: e.target.value === '' ? Number.NaN : Math.max(0, Number(e.target.value)),
+                                        },
                                     }))}
                                     className={inputClass}
                                     disabled={readOnly}
@@ -383,10 +400,13 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
                                 <input
                                     type="number"
                                     min={0}
-                                    value={form.attendance.children}
+                                    value={Number.isNaN(form.attendance.children) ? '' : form.attendance.children}
                                     onChange={e => setForm(prev => ({
                                         ...prev,
-                                        attendance: { ...prev.attendance, children: Math.max(0, Number(e.target.value) || 0) },
+                                        attendance: {
+                                            ...prev.attendance,
+                                            children: e.target.value === '' ? Number.NaN : Math.max(0, Number(e.target.value)),
+                                        },
                                     }))}
                                     className={inputClass}
                                     disabled={readOnly}
@@ -399,10 +419,13 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
                                 <input
                                     type="number"
                                     min={0}
-                                    value={form.attendance.adherents}
+                                    value={Number.isNaN(form.attendance.adherents) ? '' : form.attendance.adherents}
                                     onChange={e => setForm(prev => ({
                                         ...prev,
-                                        attendance: { ...prev.attendance, adherents: Math.max(0, Number(e.target.value) || 0) },
+                                        attendance: {
+                                            ...prev.attendance,
+                                            adherents: e.target.value === '' ? Number.NaN : Math.max(0, Number(e.target.value)),
+                                        },
                                     }))}
                                     className={inputClass}
                                     disabled={readOnly}
@@ -413,10 +436,13 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
                                 <input
                                     type="number"
                                     min={0}
-                                    value={form.attendance.catechumens}
+                                    value={Number.isNaN(form.attendance.catechumens) ? '' : form.attendance.catechumens}
                                     onChange={e => setForm(prev => ({
                                         ...prev,
-                                        attendance: { ...prev.attendance, catechumens: Math.max(0, Number(e.target.value) || 0) },
+                                        attendance: {
+                                            ...prev.attendance,
+                                            catechumens: e.target.value === '' ? Number.NaN : Math.max(0, Number(e.target.value)),
+                                        },
                                     }))}
                                     className={inputClass}
                                     disabled={readOnly}
@@ -427,12 +453,15 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
                                 <input
                                     type="number"
                                     min={0}
-                                    value={form.attendance.visitors.total}
+                                    value={Number.isNaN(form.attendance.visitors.total) ? '' : form.attendance.visitors.total}
                                     onChange={e => setForm(prev => ({
                                         ...prev,
                                         attendance: {
                                             ...prev.attendance,
-                                            visitors: { ...prev.attendance.visitors, total: Math.max(0, Number(e.target.value) || 0) },
+                                            visitors: {
+                                                ...prev.attendance.visitors,
+                                                total: e.target.value === '' ? Number.NaN : Math.max(0, Number(e.target.value)),
+                                            },
                                         },
                                     }))}
                                     className={inputClass}

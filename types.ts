@@ -47,7 +47,7 @@ export interface User {
     classLed?: string; // Class number if role is 'class-leader'
 }
 
-export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel' | 'catechumen';
+export type AttendanceStatus = 'present' | 'absent' | 'sick' | 'travel';
 
 export interface MemberAttendance {
     memberId: string;
@@ -109,7 +109,25 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'members' | 'insights' | 'users' | 'settings' | 'attendance' | 'admin-attendance' | 'utilities' | 'history';
+export interface HallRentalRecord {
+    id: string;
+    spId?: string;
+    amount: number;
+    date: string;
+}
+
+export type Tab =
+    | 'home'
+    | 'records'
+    | 'members'
+    | 'insights'
+    | 'users'
+    | 'settings'
+    | 'attendance'
+    | 'admin-attendance'
+    | 'utilities'
+    | 'history'
+    | 'hall-management';
 
 export interface CloudState {
   ready: boolean;

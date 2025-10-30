@@ -6,17 +6,20 @@ interface MembersProps {
     members: Member[];
     setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
     settings: Settings;
+    canManage: boolean;
 }
 
-const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
+const Members: React.FC<MembersProps> = ({ members, setMembers, settings, canManage }) => {
     const [name, setName] = useState('');
     const [classNumber, setClassNumber] = useState('');
+    const [manualId, setManualId] = useState('');
     const [search, setSearch] = useState('');
     const [classFilter, setClassFilter] = useState<'all' | string>('all');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     const [editClassNumber, setEditClassNumber] = useState('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [validationError, setValidationError] = useState<string | null>(null);
 
     const filteredMembers = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -32,10 +35,25 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
 
     const handleAdd = (event: React.FormEvent) => {
         event.preventDefault();
-        if (!name.trim()) return;
-        setMembers(prev => [...prev, { id: generateId('member'), name: name.trim(), classNumber: classNumber || undefined }]);
+        if (!canManage) {
+            alert('Only administrators can add new members.');
+            return;
+        }
+        if (!name.trim()) {
+            setValidationError('Please provide the member\'s full name before adding them to the directory.');
+            return;
+        }
+        const trimmedId = manualId.trim();
+        const idToUse = trimmedId || generateId('member');
+        if (members.some(member => member.id.toLowerCase() === idToUse.toLowerCase())) {
+            setValidationError('A member with that ID already exists. Choose another or leave blank for automatic.');
+            return;
+        }
+        setMembers(prev => [...prev, { id: idToUse, name: name.trim(), classNumber: classNumber || undefined }]);
         setName('');
         setClassNumber('');
+        setManualId('');
+        setValidationError(null);
     };
 
     const handleRemove = (id: string) => {
@@ -107,16 +125,29 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
         <div className="space-y-6">
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-6">
                 <h2 className="text-xl font-bold text-slate-800 mb-4">Add Member</h2>
-                <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" className="border border-slate-300 rounded-lg px-3 py-2" />
-                    <select value={classNumber} onChange={e => setClassNumber(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2">
+                <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" className="border border-slate-300 rounded-lg px-3 py-2" disabled={!canManage} />
+                    <input value={manualId} onChange={e => setManualId(e.target.value)} placeholder="Member ID (optional)" className="border border-slate-300 rounded-lg px-3 py-2" disabled={!canManage} />
+                    <select value={classNumber} onChange={e => setClassNumber(e.target.value)} className="border border-slate-300 rounded-lg px-3 py-2" disabled={!canManage}>
                         <option value="">No class assigned</option>
                         {Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1)).map(num => (
                             <option key={num} value={num}>Class {num}</option>
                         ))}
                     </select>
-                    <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-3 py-2">Add Member</button>
+                    <button
+                        type="submit"
+                        disabled={!canManage}
+                        className={`font-semibold rounded-lg px-3 py-2 transition-colors w-full ${canManage ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'bg-slate-200 text-slate-500 cursor-not-allowed'}`}
+                    >
+                        Add Member
+                    </button>
                 </form>
+                {validationError && (
+                    <p className="text-sm text-red-600 mt-2" role="alert">{validationError}</p>
+                )}
+                {!canManage && (
+                    <p className="text-xs text-slate-500 mt-2">Only administrators can add new members. Contact an admin for updates.</p>
+                )}
                 <div className="flex flex-wrap gap-3 mt-4">
                     <button type="button" onClick={handleImportClick} className="bg-white/80 border border-emerald-200 text-emerald-700 font-semibold rounded-lg px-3 py-2 hover:bg-white">
                         Import Members (CSV)
@@ -143,6 +174,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                     <table className="w-full text-left text-slate-600">
                         <thead className="uppercase text-sm text-slate-500 border-b">
                             <tr>
+                                <th className="px-4 py-2">Member ID</th>
                                 <th className="px-4 py-2">Name</th>
                                 <th className="px-4 py-2">Class</th>
                                 <th className="px-4 py-2">Actions</th>
@@ -151,6 +183,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                         <tbody>
                             {filteredMembers.map(member => (
                                 <tr key={member.id} className="border-b last:border-0">
+                                    <td className="px-4 py-2 font-mono text-xs text-slate-500 break-all">{member.id}</td>
                                     <td className="px-4 py-2 font-medium text-slate-800">
                                         {editingId === member.id ? (
                                             <input value={editName} onChange={e => setEditName(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1 w-full" />
@@ -187,7 +220,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                             ))}
                             {filteredMembers.length === 0 && (
                                 <tr>
-                                    <td colSpan={3} className="px-4 py-6 text-center text-slate-500">No members found.</td>
+                                    <td colSpan={4} className="px-4 py-6 text-center text-slate-500">No members found.</td>
                                 </tr>
                             )}
                         </tbody>

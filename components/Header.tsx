@@ -8,9 +8,10 @@ type HeaderProps = {
     onExport: (format: 'csv' | 'json') => void;
     currentUser: User;
     onLogout: () => void;
+    appVersion: string;
 };
 
-const Header: React.FC<HeaderProps> = ({ entries, onImport, onExport, currentUser, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ entries: _entries, onImport, onExport, currentUser, onLogout, appVersion }) => {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const handleImportClick = () => {
@@ -46,16 +47,36 @@ const Header: React.FC<HeaderProps> = ({ entries, onImport, onExport, currentUse
 
     return (
         <header className="bg-gradient-to-br from-white via-indigo-50 to-sky-50 rounded-3xl shadow-lg border border-white/60 backdrop-blur p-6 sm:p-8 mb-6">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-slate-800 tracking-tight">GMCT Management System</h1>
-                    <p className="text-slate-500">Welcome back, {currentUser.username}. You have {entries.length} financial entries stored locally.</p>
+                    <p className="text-slate-500">Welcome back, {currentUser.username}. Manage contributions, members, and attendance seamlessly.</p>
                 </div>
-                <div className="flex flex-wrap gap-3">
-                    <button onClick={() => onExport('csv')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow-sm">Export CSV</button>
-                    <button onClick={() => onExport('json')} className="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 py-2 rounded-lg shadow-sm">Export JSON</button>
-                    <button onClick={handleImportClick} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white shadow-sm">Import</button>
-                    <button onClick={onLogout} className="bg-red-500 hover:bg-red-600 text-white font-semibold px-4 py-2 rounded-lg shadow-sm">Log out</button>
+                <div className="flex flex-col items-stretch gap-2 md:items-end">
+                    <span className="text-xs uppercase tracking-wider text-slate-400">Version {appVersion}</span>
+                    <div className="flex flex-wrap gap-3 justify-end">
+                        <div className="flex flex-col items-start">
+                            <button
+                                onClick={() => onExport('csv')}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow-sm"
+                                title="Download financial records as CSV"
+                            >
+                                Export CSV
+                            </button>
+                            <span className="text-xs text-slate-500 mt-1">Financial Records</span>
+                        </div>
+                        <div className="flex flex-col items-start">
+                            <button
+                                onClick={handleImportClick}
+                                className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white shadow-sm"
+                                title="Import financial records from CSV or JSON"
+                            >
+                                Import
+                            </button>
+                            <span className="text-xs text-slate-500 mt-1">Financial Records</span>
+                        </div>
+                        <button onClick={onLogout} className="bg-red-500 hover:bg-red-600 text-white font-semibold px-4 py-2 rounded-lg shadow-sm">Log out</button>
+                    </div>
                     <input ref={fileInputRef} type="file" accept=".csv,.json" className="hidden" onChange={handleFileChange} />
                 </div>
             </div>
