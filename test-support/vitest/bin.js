@@ -23,6 +23,7 @@ if (tscResult.status !== 0) {
 }
 
 const compiledDir = path.join(root, '.vitest-tmp');
+await ensureVitestShim(root, compiledDir);
 await fixCompiledImports(compiledDir);
 const compiledTests = await findCompiledTests(compiledDir);
 
@@ -87,5 +88,28 @@ function ensureJsExtension(spec) {
     return spec;
   }
   return `${spec}.js`;
+}
+
+async function ensureVitestShim(rootDir, compiledDir) {
+  const shimDir = path.join(rootDir, 'test-support', 'vitest');
+  const shimFiles = ['index.js', 'bin.js', 'package.json'];
+  const targetDir = path.join(compiledDir, 'node_modules', 'vitest');
+
+  await fs.mkdir(targetDir, { recursive: true });
+
+  await Promise.all(
+    shimFiles.map(async file => {
+      const source = path.join(shimDir, file);
+      const destination = path.join(targetDir, file);
+      try {
+        await fs.copyFile(source, destination);
+      } catch (error) {
+        if (error && error.code === 'ENOENT') {
+          throw new Error(`Unable to locate Vitest shim file at ${source}`);
+        }
+        throw error;
+      }
+    }),
+  );
 }
 
