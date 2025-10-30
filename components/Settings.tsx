@@ -51,7 +51,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                     <button onClick={() => fileInputRef.current?.click()} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Import Backup</button>
                     <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileSelect} />
                 </div>
-                <p className="text-sm text-slate-500">Backups contain financial records, members, users, settings and attendance data. Importing a backup overwrites current data.</p>
+                <p className="text-sm text-slate-500">Backups contain financial records, members, users, settings, attendance data, and weekly history reports. Importing a backup overwrites current data.</p>
             </section>
 
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-6 space-y-4">
