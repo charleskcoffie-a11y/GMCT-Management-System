@@ -317,6 +317,8 @@
         const HARD_RELOAD_PARAM = 'gmct-hard-reload';
         const CHECK_INTERVAL_MS = 500;
         const BOOT_DEADLINE_MS = 20000;
+        const TIMEOUT_MESSAGE =
+          'The bootstrap watchdog timed out waiting for the application to finish loading.';
 
         function start() {
           if (window.__gmctBootstrapWatchdogActive) return;
@@ -472,6 +474,9 @@
                 'We tried reloading the page automatically, but the application is still stuck. Please clear your browser cache and reload.',
                 details
               );
+              if (!previousError) {
+                console.error('GMCT bootstrap watchdog timed out without a captured error.');
+              }
               return Promise.resolve();
             }
 
