@@ -54,7 +54,7 @@ The single-page application exposes dedicated modules through a navigation sideb
 #### Data Management & Utilities
 
 * **Import/Export** – Financial records and member data can be imported from CSV and exported to CSV or JSON.
-* **Full Backup & Restore** – Admins can export all application state to JSON and restore from that backup.
+* **Full Backup & Restore** – Admins can export all application state—including financial records, member directory, attendance logs, weekly history reports, user accounts, and configuration settings—to JSON and restore from that backup.
 * **Custom Reports** – Generate bespoke CSV exports filtered by date ranges, contribution types, and class groupings.
 * **Danger Zone** – A secure utility wipes local storage for a clean slate when necessary.
 
