@@ -12,10 +12,14 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       esbuild: {
-        target: 'es2019',
+        target: 'es2017',
+        supported: {
+          'optional-chain': false,
+          'nullish-coalescing': false,
+        },
       },
       build: {
-        target: 'es2019',
+        target: 'es2017',
       },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
