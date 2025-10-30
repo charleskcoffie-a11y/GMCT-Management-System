@@ -17,7 +17,20 @@ import WeeklyHistory from './components/WeeklyHistory';
 import ConfirmationModal from './components/ConfirmationModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { toCsv, sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeAttendanceStatus, formatCurrency, sanitizeWeeklyHistoryRecord } from './utils';
+import {
+    toCsv,
+    sanitizeEntry,
+    sanitizeMember,
+    sanitizeUser,
+    sanitizeSettings,
+    formatCurrency,
+    sanitizeWeeklyHistoryRecord,
+    sanitizeEntriesCollection,
+    sanitizeMembersCollection,
+    sanitizeUsersCollection,
+    sanitizeAttendanceCollection,
+    sanitizeWeeklyHistoryCollection,
+} from './utils';
 import type {
     Entry,
     Member,
@@ -571,7 +584,7 @@ const App: React.FC = () => {
     };
     
     const handleFullExport = () => {
-        const data = { entries, members, users, settings, attendance };
+        const data = { entries, members, users, settings, attendance, weeklyHistory };
         const json = JSON.stringify(data, null, 2);
         const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
         const link = document.createElement('a');
@@ -585,21 +598,41 @@ const App: React.FC = () => {
     };
 
     const handleFullImport = (file: File) => {
-        if (!window.confirm("This will overwrite all current data. Are you sure you want to continue?")) return;
-        
+        if (!window.confirm('This will overwrite all current data. Are you sure you want to continue?')) return;
+
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = event => {
             try {
-                const data = JSON.parse(e.target?.result as string);
-                if (data.entries) setEntries(data.entries);
-                if (data.members) setMembers(data.members);
-                if (data.users) setUsers(data.users);
-                if (data.settings) setSettings(data.settings);
-                if (data.attendance) setAttendance(data.attendance);
-                alert("Data imported successfully!");
+                const raw = JSON.parse(event.target?.result as string);
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'entries')) {
+                    setEntries(sanitizeEntriesCollection(raw.entries));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'members')) {
+                    setMembers(sanitizeMembersCollection(raw.members));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'users')) {
+                    setUsers(sanitizeUsersCollection(raw.users, INITIAL_USERS));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'settings')) {
+                    setSettings(sanitizeSettings(raw.settings));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'attendance')) {
+                    setAttendance(sanitizeAttendanceCollection(raw.attendance));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'weeklyHistory')) {
+                    setWeeklyHistory(sanitizeWeeklyHistoryCollection(raw.weeklyHistory));
+                }
+
+                alert('Data imported successfully!');
             } catch (error) {
-                alert("Failed to read or parse the backup file.");
-                console.error("Import error:", error);
+                console.error('Import error:', error);
+                alert('Failed to read or parse the backup file.');
             }
         };
         reader.readAsText(file);

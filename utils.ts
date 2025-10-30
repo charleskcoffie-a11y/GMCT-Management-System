@@ -1,19 +1,27 @@
 // utils.ts
 import { v4 as uuidv4 } from 'uuid';
 import type {
+    AttendanceRecord,
+    AttendanceStatus,
     Entry,
     EntryType,
     Member,
+    MemberAttendance,
     Method,
+    ServiceType,
+    Settings,
     User,
     UserRole,
-    AttendanceStatus,
-    Settings,
-    WeeklyHistoryRecord,
-    ServiceType,
     WeeklyHistoryAttendanceBreakdown,
     WeeklyHistoryDonations,
+    WeeklyHistoryRecord,
 } from './types';
+import {
+    DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
+    DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
+    DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
+    DEFAULT_SHAREPOINT_SITE_URL,
+} from './constants';
 
 // --- String & Sanitization ---
 
@@ -96,6 +104,10 @@ export function sanitizeSettings(raw: any): Settings {
         currency: typeof currencyRaw === 'string' ? sanitizeString(currencyRaw) || 'USD' : 'USD',
         maxClasses: Number.isFinite(parsedMaxClasses) && parsedMaxClasses > 0 ? parsedMaxClasses : 10,
         enforceDirectory,
+        sharePointSiteUrl: sanitizeString(source.sharePointSiteUrl) || DEFAULT_SHAREPOINT_SITE_URL,
+        sharePointEntriesListName: sanitizeString(source.sharePointEntriesListName) || DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
+        sharePointMembersListName: sanitizeString(source.sharePointMembersListName) || DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
+        sharePointHistoryListName: sanitizeString(source.sharePointHistoryListName) || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
     };
 }
 
@@ -208,6 +220,42 @@ export function sanitizeServiceType(type: any): ServiceType {
         if (byLabel) return byLabel;
     }
     return 'divine-service';
+}
+
+function sanitizeMemberAttendance(raw: any): MemberAttendance {
+    return {
+        memberId: sanitizeString(raw.memberId),
+        status: sanitizeAttendanceStatus(raw.status),
+    };
+}
+
+export function sanitizeAttendanceRecord(raw: any): AttendanceRecord {
+    const recordsRaw = Array.isArray(raw?.records) ? raw.records : [];
+    return {
+        date: sanitizeString(raw?.date) || new Date().toISOString().slice(0, 10),
+        records: recordsRaw.map(item => sanitizeMemberAttendance(item)),
+    };
+}
+
+export function sanitizeEntriesCollection(raw: unknown): Entry[] {
+    return Array.isArray(raw) ? raw.map(item => sanitizeEntry(item)) : [];
+}
+
+export function sanitizeMembersCollection(raw: unknown): Member[] {
+    return Array.isArray(raw) ? raw.map(item => sanitizeMember(item)) : [];
+}
+
+export function sanitizeUsersCollection(raw: unknown, fallback: User[] = []): User[] {
+    const users = Array.isArray(raw) ? raw.map(item => sanitizeUser(item)) : [];
+    return users.length > 0 ? users : fallback;
+}
+
+export function sanitizeAttendanceCollection(raw: unknown): AttendanceRecord[] {
+    return Array.isArray(raw) ? raw.map(item => sanitizeAttendanceRecord(item)) : [];
+}
+
+export function sanitizeWeeklyHistoryCollection(raw: unknown): WeeklyHistoryRecord[] {
+    return Array.isArray(raw) ? raw.map(item => sanitizeWeeklyHistoryRecord(item)) : [];
 }
 
 export function serviceTypeLabel(type: ServiceType): string {
