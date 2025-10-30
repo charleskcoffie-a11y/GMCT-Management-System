@@ -631,6 +631,20 @@
           details.textContent = message;
           details.style.marginTop = '1rem';
           root.appendChild(details);
+
+          var storedDetail = window.__gmctBootstrapError || '';
+          if (storedDetail) {
+            var detailBlock = document.createElement('pre');
+            detailBlock.textContent = storedDetail;
+            detailBlock.style.marginTop = '1rem';
+            detailBlock.style.padding = '1rem';
+            detailBlock.style.background = '#fef2f2';
+            detailBlock.style.border = '1px solid #fecaca';
+            detailBlock.style.borderRadius = '0.5rem';
+            detailBlock.style.whiteSpace = 'pre-wrap';
+            detailBlock.style.fontFamily = 'ui-monospace, monospace';
+            root.appendChild(detailBlock);
+          }
         }
 
         function loadLegacyBundle() {
