@@ -171,10 +171,6 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
 
     return (
         <div className="space-y-6">
-            <div className="bg-white/70 border border-amber-100 rounded-3xl p-4 shadow-sm">
-                <h2 className="text-xl font-bold text-slate-800">Weekly Service History</h2>
-                <p className="text-sm text-slate-500">Capture the story behind each service and keep a complete archive.</p>
-            </div>
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-6">
                 <h2 className="text-2xl font-bold text-slate-800 mb-4">Record Weekly History</h2>
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">

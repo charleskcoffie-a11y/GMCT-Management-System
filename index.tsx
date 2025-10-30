@@ -5,8 +5,6 @@ import App from './App';
 declare global {
   interface Window {
     __gmctAppBooted?: boolean;
-    __gmctBootstrapFailed?: boolean;
-    __gmctBootstrapError?: string;
   }
 }
 
@@ -29,11 +27,6 @@ const handleError = (errorEvent: ErrorEvent | PromiseRejectionEvent | { error: a
     window.__gmctBootstrapFailed = true;
     window.__gmctAppBooted = false;
     window.__gmctBootstrapError = message;
-    try {
-      window.dispatchEvent(new CustomEvent('gmct:boot-failed', { detail: message }));
-    } catch (dispatchError) {
-      console.warn('Unable to dispatch gmct:boot-failed event', dispatchError);
-    }
 
     const rootElement = document.getElementById('root');
     if (rootElement) {
@@ -87,46 +80,22 @@ const registerServiceWorker = () => {
   // is being explicitly disabled to prevent silent, script-terminating errors.
   console.log("Service Worker registration has been disabled for maximum compatibility.");
 
-  try {
-    if ('serviceWorker' in navigator) {
-      const { serviceWorker } = navigator;
-
-      if (typeof serviceWorker.getRegistrations === 'function') {
-        serviceWorker
-          .getRegistrations()
-          .then(registrations => {
-            registrations.forEach(registration => {
-              if (registration.active || registration.waiting || registration.installing) {
-                console.log('Unregistering stale service worker:', registration.scope);
-              }
-              registration.unregister().catch(error => {
-                console.warn('Failed to unregister service worker', error);
-              });
-            });
-          })
-          .catch(error => {
-            console.warn('Unable to enumerate existing service workers', error);
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker
+      .getRegistrations()
+      .then(registrations => {
+        registrations.forEach(registration => {
+          if (registration.active || registration.waiting || registration.installing) {
+            console.log('Unregistering stale service worker:', registration.scope);
+          }
+          registration.unregister().catch(error => {
+            console.warn('Failed to unregister service worker', error);
           });
-      } else if (typeof serviceWorker.getRegistration === 'function') {
-        serviceWorker
-          .getRegistration()
-          .then(registration => {
-            if (registration) {
-              if (registration.active || registration.waiting || registration.installing) {
-                console.log('Unregistering stale service worker:', registration.scope);
-              }
-              registration.unregister().catch(error => {
-                console.warn('Failed to unregister legacy service worker', error);
-              });
-            }
-          })
-          .catch(error => {
-            console.warn('Unable to look up legacy service worker', error);
-          });
-      }
-    }
-  } catch (error) {
-    console.warn('Service worker cleanup failed before React booted.', error);
+        });
+      })
+      .catch(error => {
+        console.warn('Unable to enumerate existing service workers', error);
+      });
   }
 
   if ('caches' in window) {
@@ -170,13 +139,6 @@ const initialize = () => {
   );
   console.log("React app rendered.");
   window.__gmctAppBooted = true;
-  window.__gmctBootstrapFailed = false;
-  window.__gmctBootstrapError = undefined;
-  try {
-    window.dispatchEvent(new CustomEvent('gmct:boot-success'));
-  } catch (dispatchError) {
-    console.warn('Unable to dispatch gmct:boot-success event', dispatchError);
-  }
 };
 
 

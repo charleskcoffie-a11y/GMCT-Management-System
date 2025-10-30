@@ -47,9 +47,9 @@ const Header: React.FC<HeaderProps> = ({ entries, onImport, onExport, currentUse
     return (
         <header className="bg-gradient-to-br from-white via-indigo-50 to-sky-50 rounded-3xl shadow-lg border border-white/60 backdrop-blur p-6 sm:p-8 mb-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div className="space-y-1">
+                <div>
                     <h1 className="text-3xl font-black text-slate-800 tracking-tight">GMCT Management System</h1>
-                    <p className="text-slate-500">Welcome back, {currentUser.username}.</p>
+                    <p className="text-slate-500">Welcome back, {currentUser.username}. You have {entries.length} financial entries stored locally.</p>
                 </div>
                 <div className="flex flex-wrap gap-3">
                     <button onClick={() => onExport('csv')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow-sm">Export CSV</button>
