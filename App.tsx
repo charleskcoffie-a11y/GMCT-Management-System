@@ -1,6 +1,5 @@
 // App.tsx
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import Members from './components/Members';
