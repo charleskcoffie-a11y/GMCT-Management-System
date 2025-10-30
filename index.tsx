@@ -5,7 +5,17 @@ import App from './App';
 declare global {
   interface Window {
     __gmctAppBooted?: boolean;
+    __gmctBootstrapFailed?: boolean;
+    __gmctBootstrapError?: string;
   }
+}
+
+window.__gmctAppBooted = false;
+window.__gmctBootstrapFailed = false;
+try {
+  delete window.__gmctBootstrapError;
+} catch {
+  window.__gmctBootstrapError = undefined;
 }
 
 // --- Global Failsafe Error Handler ---
@@ -139,6 +149,12 @@ const initialize = () => {
   );
   console.log("React app rendered.");
   window.__gmctAppBooted = true;
+  window.__gmctBootstrapFailed = false;
+  try {
+    delete window.__gmctBootstrapError;
+  } catch {
+    window.__gmctBootstrapError = undefined;
+  }
 };
 
 
