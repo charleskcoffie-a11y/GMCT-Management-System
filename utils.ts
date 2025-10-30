@@ -27,7 +27,7 @@ import {
 
 export function sanitizeString(input: any): string {
     if (typeof input === 'string') {
-        // Basic trim and santize. In a real app, you might use a library like DOMPurify.
+        // Basic trim and sanitize. In a real app, you might use a library like DOMPurify.
         return input.trim();
     }
     return '';
