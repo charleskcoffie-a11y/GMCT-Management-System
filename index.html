@@ -463,7 +463,13 @@
             }
 
             if (elapsed >= BOOT_DEADLINE_MS) {
-              await attemptRecovery();
+              attemptRecovery().catch(function (error) {
+                console.error('GMCT bootstrap watchdog recovery failed.', error);
+                showFailure(
+                  'A critical error prevented the app from starting. Please share the details below with the support team.',
+                  error instanceof Error ? error.message : String(error || '')
+                );
+              });
               return;
             }
 
