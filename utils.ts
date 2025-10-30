@@ -1,5 +1,4 @@
 // utils.ts
-import { v4 as uuidv4 } from 'uuid';
 import type {
     AttendanceRecord,
     AttendanceStatus,
@@ -27,7 +26,7 @@ import {
 
 export function sanitizeString(input: any): string {
     if (typeof input === 'string') {
-        // Basic trim and santize. In a real app, you might use a library like DOMPurify.
+        // Basic trim and sanitize. In a real app, you might use a library like DOMPurify.
         return input.trim();
     }
     return '';
@@ -48,7 +47,7 @@ export function sanitizeEntry(raw: any): Entry {
         : new Date().toISOString().slice(0, 10);
     
     return {
-        id: sanitizeString(raw.id) || uuidv4(),
+        id: sanitizeString(raw.id) || generateId('entry'),
         spId: sanitizeString(raw.spId),
         date: date,
         memberID: sanitizeString(raw.memberID),
@@ -63,7 +62,7 @@ export function sanitizeEntry(raw: any): Entry {
 
 export function sanitizeMember(raw: any): Member {
     return {
-        id: sanitizeString(raw.id) || uuidv4(),
+        id: sanitizeString(raw.id) || generateId('member'),
         spId: sanitizeString(raw.spId),
         name: sanitizeString(raw.name) || "Unnamed Member",
         classNumber: sanitizeString(raw.classNumber),
@@ -147,7 +146,7 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
     };
 
     return {
-        id: sanitizeString(raw.id) || uuidv4(),
+        id: sanitizeString(raw.id) || generateId('history'),
         dateOfService: dateOfService,
         societyName: sanitizeString(raw.societyName),
         preacher: sanitizeString(raw.preacher) || sanitizeString(raw.officiant),
@@ -319,4 +318,46 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
         style: 'currency',
         currency: currency,
     }).format(amount);
+}
+let fallbackCounter = 0;
+
+function generateUuidFromCrypto(cryptoObj: Crypto | undefined): string | null {
+    if (!cryptoObj) {
+        return null;
+    }
+
+    if (typeof cryptoObj.randomUUID === 'function') {
+        return cryptoObj.randomUUID();
+    }
+
+    if (typeof cryptoObj.getRandomValues === 'function') {
+        const buffer = new Uint8Array(16);
+        cryptoObj.getRandomValues(buffer);
+
+        // Per RFC 4122, version 4 UUIDs set the version and variant bits explicitly
+        buffer[6] = (buffer[6] & 0x0f) | 0x40;
+        buffer[8] = (buffer[8] & 0x3f) | 0x80;
+
+        const hex = Array.from(buffer, byte => byte.toString(16).padStart(2, '0'));
+        return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+    }
+
+    return null;
+}
+
+export function generateId(prefix: string = 'gmct'): string {
+    try {
+        const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as typeof globalThis & { crypto?: Crypto }).crypto : undefined;
+        const uuid = generateUuidFromCrypto(cryptoObj);
+        if (uuid) {
+            return uuid;
+        }
+    } catch (error) {
+        console.warn('generateId: crypto API is unavailable, falling back to pseudo-random id generation.', error);
+    }
+
+    fallbackCounter = (fallbackCounter + 1) % 0x10000;
+    const timestamp = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).slice(2, 10);
+    return `${prefix}-${timestamp}-${randomPart}-${fallbackCounter.toString(36).padStart(4, '0')}`;
 }

@@ -6,18 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "postbuild": "node scripts/build-legacy.mjs",
+    "preview": "vite preview",
+    "test": "node ./test-support/vitest/bin.js"
   },
   "dependencies": {
     "react": "^19.2.0",
-    "uuid": "^13.0.0",
     "react-dom": "^19.2.0",
     "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "@vitest/dom": "file:test-support/vitest-dom",
     "typescript": "~5.8.2",
+    "vitest": "file:test-support/vitest",
     "vite": "^6.2.0"
   }
 }
