@@ -17,6 +17,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
     const [editName, setEditName] = useState('');
     const [editClassNumber, setEditClassNumber] = useState('');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [validationError, setValidationError] = useState<string | null>(null);
 
     const filteredMembers = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -32,10 +33,14 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
 
     const handleAdd = (event: React.FormEvent) => {
         event.preventDefault();
-        if (!name.trim()) return;
+        if (!name.trim()) {
+            setValidationError('Please provide the member\'s full name before adding them to the directory.');
+            return;
+        }
         setMembers(prev => [...prev, { id: generateId('member'), name: name.trim(), classNumber: classNumber || undefined }]);
         setName('');
         setClassNumber('');
+        setValidationError(null);
     };
 
     const handleRemove = (id: string) => {
@@ -115,8 +120,16 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                             <option key={num} value={num}>Class {num}</option>
                         ))}
                     </select>
-                    <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-3 py-2">Add Member</button>
+                    <button
+                        type="submit"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg px-3 py-2 transition-colors w-full"
+                    >
+                        Add Member
+                    </button>
                 </form>
+                {validationError && (
+                    <p className="text-sm text-red-600 mt-2" role="alert">{validationError}</p>
+                )}
                 <div className="flex flex-wrap gap-3 mt-4">
                     <button type="button" onClick={handleImportClick} className="bg-white/80 border border-emerald-200 text-emerald-700 font-semibold rounded-lg px-3 py-2 hover:bg-white">
                         Import Members (CSV)
@@ -143,6 +156,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                     <table className="w-full text-left text-slate-600">
                         <thead className="uppercase text-sm text-slate-500 border-b">
                             <tr>
+                                <th className="px-4 py-2">Member ID</th>
                                 <th className="px-4 py-2">Name</th>
                                 <th className="px-4 py-2">Class</th>
                                 <th className="px-4 py-2">Actions</th>
@@ -151,6 +165,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                         <tbody>
                             {filteredMembers.map(member => (
                                 <tr key={member.id} className="border-b last:border-0">
+                                    <td className="px-4 py-2 font-mono text-xs text-slate-500 break-all">{member.id}</td>
                                     <td className="px-4 py-2 font-medium text-slate-800">
                                         {editingId === member.id ? (
                                             <input value={editName} onChange={e => setEditName(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1 w-full" />
@@ -187,7 +202,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                             ))}
                             {filteredMembers.length === 0 && (
                                 <tr>
-                                    <td colSpan={3} className="px-4 py-6 text-center text-slate-500">No members found.</td>
+                                    <td colSpan={4} className="px-4 py-6 text-center text-slate-500">No members found.</td>
                                 </tr>
                             )}
                         </tbody>

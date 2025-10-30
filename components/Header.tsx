@@ -10,7 +10,7 @@ type HeaderProps = {
     onLogout: () => void;
 };
 
-const Header: React.FC<HeaderProps> = ({ entries, onImport, onExport, currentUser, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ entries: _entries, onImport, onExport, currentUser, onLogout }) => {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     const handleImportClick = () => {
@@ -49,7 +49,7 @@ const Header: React.FC<HeaderProps> = ({ entries, onImport, onExport, currentUse
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-slate-800 tracking-tight">GMCT Management System</h1>
-                    <p className="text-slate-500">Welcome back, {currentUser.username}. You have {entries.length} financial entries stored locally.</p>
+                    <p className="text-slate-500">Welcome back, {currentUser.username}. Manage contributions, members, and attendance seamlessly.</p>
                 </div>
                 <div className="flex flex-wrap gap-3">
                     <button onClick={() => onExport('csv')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow-sm">Export CSV</button>
