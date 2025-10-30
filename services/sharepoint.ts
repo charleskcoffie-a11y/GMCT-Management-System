@@ -1,4 +1,5 @@
 import { SHAREPOINT_ENTRIES_LIST_NAME, SHAREPOINT_MEMBERS_LIST_NAME, SHAREPOINT_SITE_URL, SHAREPOINT_GRAPH_URL } from '../constants';
+import type { Entry, Member } from '../types';
 
 type ConnectionResult = { success: true; message: string } | { success: false; message: string };
 
@@ -30,6 +31,72 @@ function mapErrorToMessage(error: GraphError, context?: { listName?: string }): 
         default:
             return 'Unable to confirm the SharePoint connection right now.';
     }
+}
+
+function logMissingConfig(action: string): void {
+    console.warn(`SharePoint configuration is incomplete. Skipping ${action}.`);
+}
+
+export function resetContextCache(): void {
+    // This implementation keeps no runtime cache yet, but the function exists for API parity.
+}
+
+export async function loadEntriesFromSharePoint(_accessToken: string): Promise<Entry[]> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_ENTRIES_LIST_NAME) {
+        logMissingConfig('loading entries from SharePoint');
+        return [];
+    }
+
+    console.info('SharePoint sync is not fully implemented. Returning cached entries only.');
+    return [];
+}
+
+export async function loadMembersFromSharePoint(_accessToken: string): Promise<Member[]> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_MEMBERS_LIST_NAME) {
+        logMissingConfig('loading members from SharePoint');
+        return [];
+    }
+
+    console.info('SharePoint sync is not fully implemented. Returning cached members only.');
+    return [];
+}
+
+export async function upsertEntryToSharePoint(entry: Entry, _accessToken: string): Promise<string | undefined> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_ENTRIES_LIST_NAME) {
+        logMissingConfig('upserting an entry to SharePoint');
+        return entry.spId;
+    }
+
+    console.info('SharePoint entry sync is not implemented. Entry changes remain local only.');
+    return entry.spId;
+}
+
+export async function deleteEntryFromSharePoint(_entry: Entry, _accessToken: string): Promise<void> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_ENTRIES_LIST_NAME) {
+        logMissingConfig('deleting an entry from SharePoint');
+        return;
+    }
+
+    console.info('SharePoint entry deletion is not implemented. No remote changes were made.');
+}
+
+export async function upsertMemberToSharePoint(member: Member, _accessToken: string): Promise<string | undefined> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_MEMBERS_LIST_NAME) {
+        logMissingConfig('upserting a member to SharePoint');
+        return member.spId;
+    }
+
+    console.info('SharePoint member sync is not implemented. Member changes remain local only.');
+    return member.spId;
+}
+
+export async function deleteMemberFromSharePoint(_member: Member, _accessToken: string): Promise<void> {
+    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_MEMBERS_LIST_NAME) {
+        logMissingConfig('deleting a member from SharePoint');
+        return;
+    }
+
+    console.info('SharePoint member deletion is not implemented. No remote changes were made.');
 }
 
 export async function testSharePointConnection(accessToken?: string | null): Promise<ConnectionResult> {
