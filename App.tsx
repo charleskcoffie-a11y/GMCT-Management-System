@@ -17,7 +17,20 @@ import WeeklyHistory from './components/WeeklyHistory';
 import ConfirmationModal from './components/ConfirmationModal';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
-import { toCsv, sanitizeEntry, sanitizeMember, sanitizeUser, sanitizeSettings, sanitizeAttendanceStatus, formatCurrency, sanitizeWeeklyHistoryRecord } from './utils';
+import {
+    toCsv,
+    sanitizeEntry,
+    sanitizeMember,
+    sanitizeUser,
+    sanitizeSettings,
+    formatCurrency,
+    sanitizeWeeklyHistoryRecord,
+    sanitizeEntriesCollection,
+    sanitizeMembersCollection,
+    sanitizeUsersCollection,
+    sanitizeAttendanceCollection,
+    sanitizeWeeklyHistoryCollection,
+} from './utils';
 import type {
     Entry,
     Member,
@@ -85,6 +98,9 @@ const App: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
+    const [syncMessage, setSyncMessage] = useState<string | null>(null);
+    const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+    const [, setIsNavOpen] = useState(false);
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -96,6 +112,98 @@ const App: React.FC = () => {
 
 
     const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '' });
+
+    const syncTaskCountRef = useRef(0);
+    const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
+    const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
+
+    const beginSync = useCallback(() => {
+        syncTaskCountRef.current += 1;
+    }, []);
+
+    const endSync = useCallback(() => {
+        syncTaskCountRef.current = Math.max(0, syncTaskCountRef.current - 1);
+    }, []);
+
+    const computeEntrySignature = useCallback((entry: Entry) => {
+        const sanitized = sanitizeEntry(entry);
+        return JSON.stringify({
+            id: sanitized.id,
+            spId: sanitized.spId ?? null,
+            date: sanitized.date,
+            memberID: sanitized.memberID,
+            memberName: sanitized.memberName,
+            type: sanitized.type,
+            fund: sanitized.fund,
+            method: sanitized.method,
+            amount: sanitized.amount,
+            note: sanitized.note ?? '',
+        });
+    }, []);
+
+    const computeMemberSignature = useCallback((member: Member) => {
+        const sanitized = sanitizeMember(member);
+        return JSON.stringify({
+            id: sanitized.id,
+            spId: sanitized.spId ?? null,
+            name: sanitized.name,
+            classNumber: sanitized.classNumber ?? '',
+        });
+    }, []);
+
+    const mergeEntriesFromCloud = useCallback((localEntries: Entry[], remoteEntries: Entry[]) => {
+        const sanitizedRemote = remoteEntries.map(remote => sanitizeEntry(remote));
+        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+
+        const merged = localEntries.map(local => {
+            const remote = remoteMap.get(local.id);
+            if (remote) {
+                remoteMap.delete(local.id);
+                return { ...local, ...remote };
+            }
+            return local;
+        });
+
+        for (const remote of remoteMap.values()) {
+            merged.push(remote);
+        }
+
+        const cache = entrySyncRef.current;
+        cache.clear();
+        for (const entry of merged) {
+            const sanitized = sanitizeEntry(entry);
+            cache.set(sanitized.id, { signature: computeEntrySignature(sanitized), entry: sanitized });
+        }
+
+        return merged;
+    }, [computeEntrySignature]);
+
+    const mergeMembersFromCloud = useCallback((localMembers: Member[], remoteMembers: Member[]) => {
+        const sanitizedRemote = remoteMembers.map(remote => sanitizeMember(remote));
+        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+
+        const merged = localMembers.map(local => {
+            const remote = remoteMap.get(local.id);
+            if (remote) {
+                remoteMap.delete(local.id);
+                return { ...local, ...remote };
+            }
+            return local;
+        });
+
+        for (const remote of remoteMap.values()) {
+            merged.push(remote);
+        }
+
+        const cache = memberSyncRef.current;
+        cache.clear();
+        for (const member of merged) {
+            const sanitized = sanitizeMember(member);
+            cache.set(sanitized.id, { signature: computeMemberSignature(sanitized), member: sanitized });
+        }
+
+        return merged;
+    }, [computeMemberSignature]);
 
     useEffect(() => {
         const attemptSilentSignin = async () => {
@@ -476,7 +584,7 @@ const App: React.FC = () => {
     };
     
     const handleFullExport = () => {
-        const data = { entries, members, users, settings, attendance };
+        const data = { entries, members, users, settings, attendance, weeklyHistory };
         const json = JSON.stringify(data, null, 2);
         const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
         const link = document.createElement('a');
@@ -490,21 +598,41 @@ const App: React.FC = () => {
     };
 
     const handleFullImport = (file: File) => {
-        if (!window.confirm("This will overwrite all current data. Are you sure you want to continue?")) return;
-        
+        if (!window.confirm('This will overwrite all current data. Are you sure you want to continue?')) return;
+
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = event => {
             try {
-                const data = JSON.parse(e.target?.result as string);
-                if (data.entries) setEntries(data.entries);
-                if (data.members) setMembers(data.members);
-                if (data.users) setUsers(data.users);
-                if (data.settings) setSettings(data.settings);
-                if (data.attendance) setAttendance(data.attendance);
-                alert("Data imported successfully!");
+                const raw = JSON.parse(event.target?.result as string);
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'entries')) {
+                    setEntries(sanitizeEntriesCollection(raw.entries));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'members')) {
+                    setMembers(sanitizeMembersCollection(raw.members));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'users')) {
+                    setUsers(sanitizeUsersCollection(raw.users, INITIAL_USERS));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'settings')) {
+                    setSettings(sanitizeSettings(raw.settings));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'attendance')) {
+                    setAttendance(sanitizeAttendanceCollection(raw.attendance));
+                }
+
+                if (Object.prototype.hasOwnProperty.call(raw, 'weeklyHistory')) {
+                    setWeeklyHistory(sanitizeWeeklyHistoryCollection(raw.weeklyHistory));
+                }
+
+                alert('Data imported successfully!');
             } catch (error) {
-                alert("Failed to read or parse the backup file.");
-                console.error("Import error:", error);
+                console.error('Import error:', error);
+                alert('Failed to read or parse the backup file.');
             }
         };
         reader.readAsText(file);
