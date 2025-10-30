@@ -469,7 +469,7 @@
           function attemptRecovery() {
             if (alreadyReloaded) {
               var previousError = window.__gmctBootstrapError || readStoredBootstrapError();
-              var details = previousError ? 'Last error: ' + previousError : 'No detailed error message was captured.';
+              var details = previousError ? 'Last error: ' + previousError : '';
               showFailure(
                 'We tried reloading the page automatically, but the application is still stuck. Please clear your browser cache and reload.',
                 details
@@ -512,15 +512,6 @@
             }
 
             if (elapsed >= BOOT_DEADLINE_MS) {
-              var stateSnapshot =
-                'appBooted=' +
-                String(!!window.__gmctAppBooted) +
-                ', bootstrapFailed=' +
-                String(!!window.__gmctBootstrapFailed) +
-                ', storedError=' +
-                String(readStoredBootstrapError() || window.__gmctBootstrapError || '');
-              console.error('GMCT bootstrap watchdog timeout after %dms. %s', elapsed, stateSnapshot);
-              rememberBootstrapError(TIMEOUT_MESSAGE + ' ' + stateSnapshot);
               attemptRecovery().catch(function (error) {
                 console.error('GMCT bootstrap watchdog recovery failed.', error);
                 showFailure(
