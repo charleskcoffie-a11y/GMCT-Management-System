@@ -674,6 +674,20 @@ const App: React.FC = () => {
         </button>
     );
 
+    const visibleNavItems = navItems.filter(item => item.roles.includes(currentUser.role));
+
+    const NavigationButton: React.FC<{ item: NavItem }> = ({ item }) => (
+        <button
+            onClick={() => setActiveTab(item.id)}
+            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
+                activeTab === item.id
+                    ? 'bg-white/25 text-white shadow-lg'
+                    : 'text-indigo-100 hover:bg-white/15 hover:text-white'
+            }`}
+        >
+            {item.label}
+        </button>
+    );
 
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
