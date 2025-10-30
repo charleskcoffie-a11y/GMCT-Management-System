@@ -56,9 +56,9 @@
     </script>
     <script>
       (function bootstrapWatchdog() {
-        var HARD_RELOAD_PARAM = 'gmct-hard-reload';
-        var CHECK_INTERVAL_MS = 500;
-        var BOOT_DEADLINE_MS = 20000;
+        const HARD_RELOAD_PARAM = 'gmct-hard-reload';
+        const CHECK_INTERVAL_MS = 500;
+        const BOOT_DEADLINE_MS = 20000;
 
         function start() {
           if (window.__gmctBootstrapWatchdogActive) return;
@@ -198,14 +198,14 @@
               return;
             }
 
-            var elapsed = Date.now() - startedAt;
+            const elapsed = Date.now() - startedAt;
 
             if (elapsed >= 5000 && elapsed < BOOT_DEADLINE_MS) {
               updateStatus('Still working… large updates can take a little longer to load on slower networks.');
             }
 
             if (elapsed >= BOOT_DEADLINE_MS) {
-              attemptRecovery();
+              await attemptRecovery();
               return;
             }
 

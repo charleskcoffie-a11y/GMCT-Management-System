@@ -13,12 +13,13 @@ export default defineConfig(({ mode }) => {
       plugins: [react()],
       esbuild: {
         target: 'es2017',
+        supported: {
+          'optional-chain': false,
+          'nullish-coalescing': false,
+        },
       },
       build: {
         target: 'es2017',
-        modulePreload: {
-          polyfill: true,
-        },
       },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
