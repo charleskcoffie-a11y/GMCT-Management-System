@@ -1,0 +1,13 @@
+{
+  "name": "vitest",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "index.js",
+  "exports": "./index.js",
+  "bin": {
+    "vitest": "./bin.js"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  }
+}

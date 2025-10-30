@@ -1,0 +1,8 @@
+{
+  "name": "@vitest/dom",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./matchers": "./matchers.js"
+  }
+}
