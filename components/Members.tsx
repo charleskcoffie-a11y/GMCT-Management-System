@@ -1,7 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import type { Member, Settings } from '../types';
-import { fromCsv, sanitizeMember } from '../utils';
+import { fromCsv, generateId, sanitizeMember } from '../utils';
 
 interface MembersProps {
     members: Member[];
@@ -34,7 +33,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
     const handleAdd = (event: React.FormEvent) => {
         event.preventDefault();
         if (!name.trim()) return;
-        setMembers(prev => [...prev, { id: uuidv4(), name: name.trim(), classNumber: classNumber || undefined }]);
+        setMembers(prev => [...prev, { id: generateId('member'), name: name.trim(), classNumber: classNumber || undefined }]);
         setName('');
         setClassNumber('');
     };

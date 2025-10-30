@@ -11,6 +11,7 @@
     <link rel="icon" type="image/svg+xml" href="./gmct-logo.svg" />
     <meta name="theme-color" content="#4338ca" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default%2CArray.prototype.includes%2CString.prototype.includes%2CArray.prototype.find%2CArray.prototype.findIndex%2CArray.from%2CObject.assign%2CObject.entries%2CNumber.isFinite%2CPromise%2CMap%2CSet%2CString.prototype.startsWith%2CURL%2CURLSearchParams" crossorigin="anonymous"></script>
     <script>
       // Immediately unregister any previously installed service workers before the
       // main bundle runs. This ensures visitors who are stuck on the loading screen
@@ -20,14 +21,14 @@
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker
               .getRegistrations()
-              .then(registrations => {
-                registrations.forEach(registration => {
-                  registration.unregister().catch(() => {
+              .then(function (registrations) {
+                registrations.forEach(function (registration) {
+                  registration.unregister().catch(function () {
                     /* swallow errors - the React boot process will log details */
                   });
                 });
               })
-              .catch(() => {
+              .catch(function () {
                 /* ignore lookup errors */
               });
           }
@@ -35,16 +36,16 @@
           if ('caches' in window) {
             caches
               .keys()
-              .then(keys => {
+              .then(function (keys) {
                 keys
-                  .filter(key => key.startsWith('gmct'))
-                  .forEach(key => {
-                    caches.delete(key).catch(() => {
+                  .filter(function (key) { return key.indexOf('gmct') === 0; })
+                  .forEach(function (key) {
+                    caches.delete(key).catch(function () {
                       /* ignore cache cleanup errors */
                     });
                   });
               })
-              .catch(() => {
+              .catch(function () {
                 /* ignore cache enumeration errors */
               });
           }
@@ -55,21 +56,21 @@
     </script>
     <script>
       (function bootstrapWatchdog() {
-        const HARD_RELOAD_PARAM = 'gmct-hard-reload';
-        const CHECK_INTERVAL_MS = 400;
-        const BOOT_DEADLINE_MS = 7000;
+        var HARD_RELOAD_PARAM = 'gmct-hard-reload';
+        var CHECK_INTERVAL_MS = 500;
+        var BOOT_DEADLINE_MS = 20000;
 
         function start() {
           if (window.__gmctBootstrapWatchdogActive) return;
           window.__gmctBootstrapWatchdogActive = true;
 
-          const startedAt = Date.now();
-          const loaderCard = document.querySelector('.gmct-loader__card');
-          const url = new URL(window.location.href);
-          const alreadyReloaded = url.searchParams.has(HARD_RELOAD_PARAM);
-          let statusLine = null;
+          var startedAt = Date.now();
+          var loaderCard = document.querySelector('.gmct-loader__card');
+          var url = new URL(window.location.href);
+          var alreadyReloaded = url.searchParams.has(HARD_RELOAD_PARAM);
+          var statusLine = null;
 
-          const ensureStatusLine = () => {
+          function ensureStatusLine() {
             if (!loaderCard) return null;
             if (statusLine) return statusLine;
             statusLine = document.createElement('p');
@@ -78,31 +79,31 @@
             statusLine.style.fontSize = '0.95rem';
             loaderCard.appendChild(statusLine);
             return statusLine;
-          };
+          }
 
-          const updateStatus = (message) => {
-            const line = ensureStatusLine();
+          function updateStatus(message) {
+            var line = ensureStatusLine();
             if (line) {
               line.textContent = message;
             }
-          };
+          }
 
-          const showFailure = (message, details) => {
+          function showFailure(message, details) {
             if (!loaderCard) return;
             loaderCard.innerHTML = '';
 
-            const title = document.createElement('h1');
+            var title = document.createElement('h1');
             title.textContent = 'Application Failed to Start';
             loaderCard.appendChild(title);
 
-            const body = document.createElement('p');
+            var body = document.createElement('p');
             body.textContent = message;
             body.style.marginTop = '0.75rem';
             body.style.color = '#b91c1c';
             loaderCard.appendChild(body);
 
             if (details) {
-              const detailBlock = document.createElement('pre');
+              var detailBlock = document.createElement('pre');
               detailBlock.textContent = details;
               detailBlock.style.marginTop = '1rem';
               detailBlock.style.padding = '1rem';
@@ -113,65 +114,78 @@
               detailBlock.style.fontFamily = 'ui-monospace, monospace';
               loaderCard.appendChild(detailBlock);
             }
-          };
+          }
 
-          const flushCaches = async () => {
-            try {
-              if ('serviceWorker' in navigator) {
-                const registrations = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(
-                  registrations.map(async (registration) => {
-                    if (registration.active || registration.waiting || registration.installing) {
-                      try {
-                        await registration.unregister();
-                      } catch (error) {
-                        console.warn('GMCT bootstrap watchdog failed to unregister a service worker.', error);
-                      }
-                    }
+          function flushCaches() {
+            var tasks = [];
+            if ('serviceWorker' in navigator) {
+              tasks.push(
+                navigator.serviceWorker
+                  .getRegistrations()
+                  .then(function (registrations) {
+                    return Promise.all(
+                      registrations.map(function (registration) {
+                        if (registration.active || registration.waiting || registration.installing) {
+                          return registration.unregister().catch(function (error) {
+                            console.warn('GMCT bootstrap watchdog failed to unregister a service worker.', error);
+                          });
+                        }
+                        return Promise.resolve();
+                      })
+                    );
                   })
-                );
-              }
-            } catch (error) {
-              console.warn('GMCT bootstrap watchdog could not enumerate service workers.', error);
+                  .catch(function (error) {
+                    console.warn('GMCT bootstrap watchdog could not enumerate service workers.', error);
+                  })
+              );
             }
 
             if ('caches' in window) {
-              try {
-                const keys = await caches.keys();
-                await Promise.all(
-                  keys
-                    .filter((key) => key.startsWith('gmct'))
-                    .map(async (key) => {
-                      try {
-                        await caches.delete(key);
-                      } catch (error) {
-                        console.warn('GMCT bootstrap watchdog failed to delete cache', key, error);
-                      }
-                    })
-                );
-              } catch (error) {
-                console.warn('GMCT bootstrap watchdog could not enumerate caches.', error);
-              }
+              tasks.push(
+                caches
+                  .keys()
+                  .then(function (keys) {
+                    return Promise.all(
+                      keys
+                        .filter(function (key) { return key.indexOf('gmct') === 0; })
+                        .map(function (key) {
+                          return caches.delete(key).catch(function (error) {
+                            console.warn('GMCT bootstrap watchdog failed to delete cache', key, error);
+                          });
+                        })
+                    );
+                  })
+                  .catch(function (error) {
+                    console.warn('GMCT bootstrap watchdog could not enumerate caches.', error);
+                  })
+              );
             }
-          };
 
-          const attemptRecovery = async () => {
+            return Promise.all(tasks);
+          }
+
+          function attemptRecovery() {
             if (alreadyReloaded) {
-              const details = window.__gmctBootstrapError ? `Last error: ${window.__gmctBootstrapError}` : '';
+              var details = window.__gmctBootstrapError ? 'Last error: ' + window.__gmctBootstrapError : '';
               showFailure(
                 'We tried reloading the page automatically, but the application is still stuck. Please clear your browser cache and reload.',
                 details
               );
-              return;
+              return Promise.resolve();
             }
 
             updateStatus('Clearing saved caches and refreshing…');
-            await flushCaches();
-            url.searchParams.set(HARD_RELOAD_PARAM, Date.now().toString());
-            window.location.replace(url.toString());
-          };
+            return flushCaches()
+              .catch(function () {
+                /* ignore cache clearing errors before forcing a refresh */
+              })
+              .then(function () {
+                url.searchParams.set(HARD_RELOAD_PARAM, Date.now().toString());
+                window.location.replace(url.toString());
+              });
+          }
 
-          const check = async () => {
+          function check() {
             if (window.__gmctAppBooted) {
               return;
             }
@@ -184,13 +198,19 @@
               return;
             }
 
-            if (Date.now() - startedAt >= BOOT_DEADLINE_MS) {
-              await attemptRecovery();
+            var elapsed = Date.now() - startedAt;
+
+            if (elapsed >= 5000 && elapsed < BOOT_DEADLINE_MS) {
+              updateStatus('Still working… large updates can take a little longer to load on slower networks.');
+            }
+
+            if (elapsed >= BOOT_DEADLINE_MS) {
+              attemptRecovery();
               return;
             }
 
             setTimeout(check, CHECK_INTERVAL_MS);
-          };
+          }
 
           updateStatus('Preparing application…');
           setTimeout(check, CHECK_INTERVAL_MS);

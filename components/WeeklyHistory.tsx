@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import type { ServiceType, WeeklyHistoryRecord } from '../types';
-import { serviceTypeLabel } from '../utils';
+import { generateId, serviceTypeLabel } from '../utils';
 
 interface WeeklyHistoryProps {
     history: WeeklyHistoryRecord[];
@@ -18,7 +17,7 @@ const SERVICE_TYPES: Array<{ value: ServiceType; label: string }> = [
 ];
 
 const emptyRecord = (): WeeklyHistoryRecord => ({
-    id: uuidv4(),
+    id: generateId('history'),
     dateOfService: new Date().toISOString().slice(0, 10),
     societyName: '',
     preacher: '',
