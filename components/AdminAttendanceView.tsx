@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { AttendanceRecord, Member, Settings, User } from '../types';
+import type { AttendanceRecord, AttendanceStatus, Member, Settings, User } from '../types';
 import { sanitizeAttendanceStatus } from '../utils';
 
 interface AdminAttendanceViewProps {
@@ -9,7 +9,7 @@ interface AdminAttendanceViewProps {
     currentUser: User;
 }
 
-const STATUSES: Array<'present' | 'absent' | 'sick' | 'travel' | 'catechumen'> = ['present', 'absent', 'sick', 'travel', 'catechumen'];
+const STATUSES: Array<'present' | 'absent' | 'sick' | 'travel'> = ['present', 'absent', 'sick', 'travel'];
 
 const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, attendance, settings, currentUser }) => {
     const orderedRecords = useMemo(
@@ -68,21 +68,68 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
         }, {} as Record<string, number>);
     }, [selectedRecord]);
 
-    const memberRows = useMemo(() => {
-        if (!selectedRecord) return [] as Array<{ member: Member | undefined; status: string }>;
-        const map = new Map(members.map(member => [member.id, member]));
-        const baseRows = selectedRecord.records
-            .map(entry => ({ member: map.get(entry.memberId), status: sanitizeAttendanceStatus(entry.status) }))
-            .sort((a, b) => (a.member?.name ?? '').localeCompare(b.member?.name ?? ''));
-
-        const query = memberFilter.trim().toLowerCase();
-        if (!query) return baseRows;
-        return baseRows.filter(row => {
-            const name = row.member?.name?.toLowerCase() ?? '';
-            const id = row.member?.id?.toLowerCase() ?? '';
-            return name.includes(query) || id.includes(query);
+    const classGroups = useMemo(() => {
+        if (!selectedRecord) return [] as Array<{ label: string; members: Array<{ member: Member | undefined; status: AttendanceStatus }>; counts: Record<AttendanceStatus, number> }>;
+        const statusMap = new Map<string, AttendanceStatus>();
+        selectedRecord.records.forEach(entry => {
+            statusMap.set(entry.memberId, sanitizeAttendanceStatus(entry.status));
         });
-    }, [members, selectedRecord, memberFilter]);
+
+        const groups = new Map<string, { label: string; members: Array<{ member: Member | undefined; status: AttendanceStatus }>; counts: Record<AttendanceStatus, number> }>();
+
+        members.forEach(member => {
+            const status = statusMap.get(member.id) ?? 'absent';
+            const key = member.classNumber ?? 'unassigned';
+            const label = member.classNumber ? `Class ${member.classNumber}` : 'No Class Assigned';
+            if (!groups.has(key)) {
+                groups.set(key, {
+                    label,
+                    members: [],
+                    counts: { present: 0, absent: 0, sick: 0, travel: 0 },
+                });
+            }
+            const group = groups.get(key)!;
+            group.members.push({ member, status });
+            group.counts[status] = (group.counts[status] ?? 0) + 1;
+        });
+
+        const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+            const classNumber = (label: string) => {
+                const match = label.match(/Class (\d+)/);
+                return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+            };
+            const aValue = classNumber(a.label);
+            const bValue = classNumber(b.label);
+            if (aValue !== bValue) return aValue - bValue;
+            return a.label.localeCompare(b.label);
+        });
+        sortedGroups.forEach(group => {
+            group.members.sort((a, b) => (a.member?.name ?? '').localeCompare(b.member?.name ?? ''));
+        });
+        return sortedGroups;
+    }, [members, selectedRecord]);
+
+    const filteredClassGroups = useMemo(() => {
+        const query = memberFilter.trim().toLowerCase();
+        if (!query) return classGroups;
+        return classGroups
+            .map(group => {
+                const membersInGroup = group.members.filter(row => {
+                    const name = row.member?.name?.toLowerCase() ?? '';
+                    const id = row.member?.id?.toLowerCase() ?? '';
+                    return name.includes(query) || id.includes(query);
+                });
+                const counts = membersInGroup.reduce(
+                    (acc, row) => {
+                        acc[row.status] = (acc[row.status] ?? 0) + 1;
+                        return acc;
+                    },
+                    { present: 0, absent: 0, sick: 0, travel: 0 } as Record<AttendanceStatus, number>,
+                );
+                return { ...group, members: membersInGroup, counts };
+            })
+            .filter(group => group.members.length > 0);
+    }, [classGroups, memberFilter]);
 
     const selectedMember = members.find(member => member.id === selectedMemberId);
 
@@ -155,40 +202,46 @@ const AdminAttendanceView: React.FC<AdminAttendanceViewProps> = ({ members, atte
                                 </div>
                             ))}
                         </div>
-                        <div className="overflow-x-auto rounded-2xl border border-white/60 bg-white/80">
-                            <table className="w-full text-left text-slate-600">
-                                <thead className="uppercase text-sm text-slate-500 border-b bg-slate-50">
-                                    <tr>
-                                        <th className="px-4 py-2">Member</th>
-                                        <th className="px-4 py-2">Class</th>
-                                        <th className="px-4 py-2">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {memberRows.map((row, index) => (
-                                        <tr key={row.member?.id ?? `${selectedDate}-${row.status}-${index}`} className="border-b last:border-0">
-                                            <td className="px-4 py-2">
-                                                {row.member ? (
-                                                    <button onClick={() => setSelectedMemberId(row.member?.id ?? null)} className="font-semibold text-indigo-600 hover:text-indigo-700">
-                                                        {row.member.name}
-                                                    </button>
-                                                ) : (
-                                                    <span className="text-slate-500">Unknown member</span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-2">{row.member?.classNumber ? `Class ${row.member.classNumber}` : '—'}</td>
-                                            <td className="px-4 py-2 capitalize">{row.status}</td>
-                                        </tr>
-                                    ))}
-                                    {memberRows.length === 0 && (
-                                        <tr>
-                                            <td colSpan={3} className="px-4 py-6 text-center text-slate-500">
-                                                {memberFilter ? 'No members match your filter.' : `No attendance captured for ${selectedDate}.`}
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                        <div className="space-y-4">
+                            {!selectedRecord ? (
+                                <p className="text-slate-500">No attendance captured for {selectedDate}.</p>
+                            ) : filteredClassGroups.length === 0 ? (
+                                <p className="text-slate-500">{memberFilter ? 'No members match your filter.' : 'No members found for the selected criteria.'}</p>
+                            ) : (
+                                filteredClassGroups.map(group => (
+                                    <div key={group.label} className="rounded-2xl border border-white/60 bg-white/80 p-4 space-y-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <h4 className="text-lg font-semibold text-slate-800">{group.label}</h4>
+                                            <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                                                {STATUSES.map(status => (
+                                                    <span key={status} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-600">
+                                                        {status}: {group.counts[status] ?? 0}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                                            {group.members.map((row, index) => (
+                                                <div key={row.member?.id ?? `${group.label}-${index}`} className="rounded-xl border border-slate-200 bg-white/90 px-4 py-3 flex items-center justify-between">
+                                                    <div>
+                                                        {row.member ? (
+                                                            <button onClick={() => setSelectedMemberId(row.member?.id ?? null)} className="font-semibold text-indigo-600 hover:text-indigo-700">
+                                                                {row.member.name}
+                                                            </button>
+                                                        ) : (
+                                                            <span className="font-semibold text-slate-500">Unknown member</span>
+                                                        )}
+                                                        <p className="text-xs text-slate-500 break-all">{row.member?.id ?? 'ID unavailable'}</p>
+                                                    </div>
+                                                    <span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${row.status === 'present' ? 'bg-emerald-100 text-emerald-700' : row.status === 'sick' ? 'bg-amber-100 text-amber-700' : row.status === 'travel' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                        {row.status}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                         <div>
                             <h4 className="text-sm font-semibold text-slate-600">Quick overview</h4>

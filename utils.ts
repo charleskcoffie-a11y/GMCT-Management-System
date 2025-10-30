@@ -202,7 +202,7 @@ export function sanitizeUserRole(role: any): UserRole {
 }
 
 export function sanitizeAttendanceStatus(status: any): AttendanceStatus {
-    const validStatuses: AttendanceStatus[] = ['present', 'absent', 'sick', 'travel', 'catechumen'];
+    const validStatuses: AttendanceStatus[] = ['present', 'absent', 'sick', 'travel'];
     return validStatuses.includes(status) ? status : 'absent';
 }
 
