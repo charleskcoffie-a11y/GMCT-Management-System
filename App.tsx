@@ -159,6 +159,8 @@ const App: React.FC = () => {
             window.sessionStorage.removeItem('gmct-presence-id');
         }
     }, []);
+    const presenceIdRef = useRef<string | null>(null);
+    const presenceIntervalRef = useRef<number | null>(null);
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
@@ -376,6 +378,7 @@ const App: React.FC = () => {
         if (!currentUser) {
             if (typeof window !== 'undefined') {
                 const existingId = getStoredPresenceId();
+                const existingId = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
                 if (existingId) {
                     removePresenceRecord(existingId);
                 }
@@ -385,6 +388,7 @@ const App: React.FC = () => {
                 }
                 setStoredPresenceId(null);
             }
+            presenceStateRef.current.id = null;
             setActiveUserCount(null);
             return;
         }
@@ -398,6 +402,15 @@ const App: React.FC = () => {
             if (!presenceId) {
                 presenceId = generateId('presence');
                 setStoredPresenceId(presenceId);
+            if (!presenceId) {
+                presenceId = generateId('presence');
+                setStoredPresenceId(presenceId);
+            let presenceId = presenceStateRef.current.id;
+            if (!presenceId) {
+                const stored = window.sessionStorage.getItem('gmct-presence-id');
+                presenceId = stored || generateId('presence');
+                presenceStateRef.current.id = presenceId;
+                window.sessionStorage.setItem('gmct-presence-id', presenceId);
             }
             touchPresence(presenceId);
         };
@@ -422,6 +435,7 @@ const App: React.FC = () => {
 
         const handleBeforeUnload = () => {
             const id = getStoredPresenceId();
+            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
             if (id) {
                 removePresenceRecord(id);
             }
@@ -444,6 +458,11 @@ const App: React.FC = () => {
                 removePresenceRecord(id);
             }
             setStoredPresenceId(null);
+            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
+            if (id) {
+                removePresenceRecord(id);
+            }
+            presenceStateRef.current.id = null;
         };
     }, [currentUser, getStoredPresenceId, removePresenceRecord, setStoredPresenceId, touchPresence, updatePresenceCount]);
 
@@ -768,6 +787,7 @@ const App: React.FC = () => {
     const handleLogout = () => {
         if (typeof window !== 'undefined') {
             const id = getStoredPresenceId();
+            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
             if (id) {
                 removePresenceRecord(id);
             }
@@ -777,6 +797,7 @@ const App: React.FC = () => {
                 presenceIntervalRef.current = null;
             }
         }
+        presenceStateRef.current.id = null;
         setActiveUserCount(null);
         setCurrentUser(null);
         setIsNavOpen(false);
@@ -1004,11 +1025,13 @@ const App: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
                             <div className="flex flex-col items-stretch gap-4 sm:self-end">
+                            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
@@ -1017,6 +1040,7 @@ const App: React.FC = () => {
                                     Add New Entry
                                 </button>
                                 <div className="flex flex-wrap gap-2 sm:justify-end pt-2 border-t border-indigo-100">
+                                <div className="flex flex-wrap gap-2 sm:justify-end">
                                     <button
                                         type="button"
                                         onClick={() => handleExport('csv')}
@@ -1114,7 +1138,19 @@ const App: React.FC = () => {
                                 <tbody>{recordRows}</tbody>
                            </table>
                         </div>
-                        
+                        <div className="mt-4 rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-slate-50 to-slate-100/70 px-6 py-5">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <p className="text-sm uppercase tracking-wide text-slate-600 font-semibold">Entries Displayed</p>
+                                    <p className="text-2xl font-bold text-slate-900">{filteredAndSortedEntries.length.toLocaleString()}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm uppercase tracking-wide text-emerald-600 font-semibold">Total Received</p>
+                                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(filteredTotalAmount, settings.currency)}</p>
+                                </div>
+                            </div>
+                            <p className="mt-3 text-xs text-slate-500 leading-relaxed">{filtersSummary}</p>
+                        </div>
                     </div>
                 );
             }
