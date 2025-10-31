@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Entry, EntryType, Member, Method, Settings } from '../types';
-import { generateId, sanitizeEntryType, sanitizeMethod } from '../utils';
+import { generateId, sanitizeEntryType, sanitizeMethod, ENTRY_TYPE_VALUES, entryTypeLabel } from '../utils';
 
 type EntryModalProps = {
     entry: Entry | null;
@@ -12,7 +12,6 @@ type EntryModalProps = {
     onDelete: (id: string) => void;
 };
 
-const entryTypes: EntryType[] = ['tithe', 'offering', 'thanksgiving-offering', 'first-fruit', 'pledge', 'harvest-levy', 'other'];
 const methods: Method[] = ['cash', 'check', 'card', 'e-transfer', 'mobile', 'other'];
 
 const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSave, onSaveAndNew, onClose, onDelete }) => {
@@ -181,8 +180,8 @@ const EntryModal: React.FC<EntryModalProps> = ({ entry, members, settings, onSav
                         <label className="flex flex-col gap-2">
                             <span className="text-sm font-semibold text-slate-600">Type</span>
                             <select value={form.type} onChange={e => updateField('type', e.target.value as EntryType)} className="border border-slate-300 rounded-lg px-3 py-2">
-                                {entryTypes.map(type => (
-                                    <option key={type} value={type}>{type}</option>
+                                {ENTRY_TYPE_VALUES.map(type => (
+                                    <option key={type} value={type}>{entryTypeLabel(type)}</option>
                                 ))}
                             </select>
                         </label>

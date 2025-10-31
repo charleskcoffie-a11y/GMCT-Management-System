@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CloudState, Entry, EntryType, Member, Settings } from '../types';
-import { formatCurrency, fromCsv, sanitizeEntry, sanitizeMember, toCsv } from '../utils';
+import { formatCurrency, fromCsv, sanitizeEntry, sanitizeMember, toCsv, ENTRY_TYPE_VALUES, entryTypeLabel } from '../utils';
 import { testSharePointConnection } from '../services/sharepoint';
 import {
     SHAREPOINT_ENTRIES_LIST_NAME,
     SHAREPOINT_MEMBERS_LIST_NAME,
-    SHAREPOINT_SITE_URL,
 } from '../constants';
 
 type UtilitiesProps = {
@@ -18,8 +17,6 @@ type UtilitiesProps = {
     onResetData: () => void;
     onSaveTotalClasses: (total: number) => void;
 };
-
-const ENTRY_TYPES: EntryType[] = ['tithe', 'offering', 'thanksgiving-offering', 'first-fruit', 'pledge', 'harvest-levy', 'other'];
 
 const Utilities: React.FC<UtilitiesProps> = ({
     entries,
@@ -36,7 +33,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
 
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [selectedTypes, setSelectedTypes] = useState<EntryType[]>(ENTRY_TYPES);
+    const [selectedTypes, setSelectedTypes] = useState<EntryType[]>(ENTRY_TYPE_VALUES);
     const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
     const [showReport, setShowReport] = useState(false);
     const [isTestingConnection, setIsTestingConnection] = useState(false);
@@ -44,33 +41,30 @@ const Utilities: React.FC<UtilitiesProps> = ({
     const [totalClassesInput, setTotalClassesInput] = useState<string>(String(settings.maxClasses));
     const [totalClassesStatus, setTotalClassesStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
-    const sharePointEntriesUrl = useMemo(() => {
-        if (!SHAREPOINT_SITE_URL) return null;
+    const buildSharePointListUrl = useCallback((siteUrl: string, listName: string) => {
+        if (!siteUrl || !listName) {
+            return null;
+        }
         try {
-            const url = new URL(SHAREPOINT_SITE_URL);
-            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(
-                SHAREPOINT_ENTRIES_LIST_NAME,
-            )}/AllItems.aspx`;
+            const url = new URL(siteUrl);
+            const trimmedPath = url.pathname.replace(/\/$/, '');
+            url.pathname = `${trimmedPath}/Lists/${encodeURIComponent(listName)}/AllItems.aspx`;
             return url.toString();
         } catch (error) {
-            console.error('Invalid SharePoint site URL configuration', error);
+            console.error('Invalid SharePoint configuration for list shortcuts', error);
             return null;
         }
     }, []);
 
-    const sharePointMembersUrl = useMemo(() => {
-        if (!SHAREPOINT_SITE_URL) return null;
-        try {
-            const url = new URL(SHAREPOINT_SITE_URL);
-            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(
-                SHAREPOINT_MEMBERS_LIST_NAME,
-            )}/AllItems.aspx`;
-            return url.toString();
-        } catch (error) {
-            console.error('Invalid SharePoint site URL configuration', error);
-            return null;
-        }
-    }, []);
+    const sharePointEntriesUrl = useMemo(
+        () => buildSharePointListUrl(settings.sharePointSiteUrl, settings.sharePointEntriesListName ?? SHAREPOINT_ENTRIES_LIST_NAME),
+        [buildSharePointListUrl, settings.sharePointEntriesListName, settings.sharePointSiteUrl],
+    );
+
+    const sharePointMembersUrl = useMemo(
+        () => buildSharePointListUrl(settings.sharePointSiteUrl, settings.sharePointMembersListName ?? SHAREPOINT_MEMBERS_LIST_NAME),
+        [buildSharePointListUrl, settings.sharePointMembersListName, settings.sharePointSiteUrl],
+    );
 
     const membersMap = useMemo(() => new Map(members.map(member => [member.id, member])), [members]);
 
@@ -314,7 +308,16 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     {sharePointEntriesUrl && (
                         <button
                             type="button"
-                            onClick={() => window.open(sharePointEntriesUrl, '_blank', 'noopener')}
+                            onClick={() => {
+                                if (!sharePointEntriesUrl) {
+                                    setConnectionMessage({ tone: 'error', text: 'SharePoint finance list URL is not configured. Update the settings and try again.' });
+                                    return;
+                                }
+                                const opened = window.open(sharePointEntriesUrl, '_blank', 'noopener');
+                                if (!opened) {
+                                    setConnectionMessage({ tone: 'info', text: 'Please allow pop-ups to open the SharePoint finance list.' });
+                                }
+                            }}
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Finance List
@@ -323,7 +326,16 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     {sharePointMembersUrl && (
                         <button
                             type="button"
-                            onClick={() => window.open(sharePointMembersUrl, '_blank', 'noopener')}
+                            onClick={() => {
+                                if (!sharePointMembersUrl) {
+                                    setConnectionMessage({ tone: 'error', text: 'SharePoint members list URL is not configured. Update the settings and try again.' });
+                                    return;
+                                }
+                                const opened = window.open(sharePointMembersUrl, '_blank', 'noopener');
+                                if (!opened) {
+                                    setConnectionMessage({ tone: 'info', text: 'Please allow pop-ups to open the SharePoint members list.' });
+                                }
+                            }}
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Members List
@@ -369,10 +381,10 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     <div className="flex flex-col gap-2">
                         <span className="text-sm font-semibold text-slate-600">Contribution types</span>
                         <div className="flex flex-wrap gap-2">
-                            {ENTRY_TYPES.map(type => (
+                            {ENTRY_TYPE_VALUES.map(type => (
                                 <label key={type} className="inline-flex items-center gap-2 bg-white/70 border border-slate-200 rounded-full px-3 py-1 text-xs uppercase tracking-wide">
                                     <input type="checkbox" checked={selectedTypes.includes(type)} onChange={() => toggleType(type)} />
-                                    <span>{type.replace('-', ' ')}</span>
+                                    <span>{entryTypeLabel(type)}</span>
                                 </label>
                             ))}
                         </div>
@@ -391,7 +403,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     </div>
                     <div className="lg:col-span-3 flex flex-wrap gap-3">
                         <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg">Generate report</button>
-                        <button type="button" onClick={() => { setStartDate(''); setEndDate(''); setSelectedTypes(ENTRY_TYPES); setSelectedClasses([]); setShowReport(false); }} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Reset filters</button>
+                        <button type="button" onClick={() => { setStartDate(''); setEndDate(''); setSelectedTypes(ENTRY_TYPE_VALUES); setSelectedClasses([]); setShowReport(false); }} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Reset filters</button>
                         {showReport && (
                             <>
                                 <button type="button" onClick={() => exportReport('csv')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg">Export CSV</button>
@@ -436,7 +448,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                                             <td className="px-4 py-2">{row.date}</td>
                                             <td className="px-4 py-2 font-medium text-slate-800">{row.memberName || 'Unassigned'}</td>
                                             <td className="px-4 py-2 text-center">{row.classNumber}</td>
-                                            <td className="px-4 py-2 capitalize">{row.type}</td>
+                                            <td className="px-4 py-2">{entryTypeLabel(row.type)}</td>
                                             <td className="px-4 py-2 capitalize">{row.method}</td>
                                             <td className="px-4 py-2">{formatCurrency(row.amount, settings.currency)}</td>
                                             <td className="px-4 py-2">{row.note}</td>

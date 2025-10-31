@@ -20,6 +20,7 @@ import TasksTab from './components/TasksTab';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
     toCsv,
+    fromCsv,
     sanitizeEntry,
     sanitizeMember,
     sanitizeUser,
@@ -32,6 +33,9 @@ import {
     sanitizeAttendanceCollection,
     sanitizeWeeklyHistoryCollection,
     sanitizeString,
+    ENTRY_TYPE_VALUES,
+    entryTypeLabel,
+    generateId,
 } from './utils';
 import type {
     Entry,
@@ -87,6 +91,9 @@ const INITIAL_SETTINGS: Settings = {
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
+const PRESENCE_STORAGE_KEY = 'gmct-presence';
+const PRESENCE_TIMEOUT_MS = 60_000;
+
 const App: React.FC = () => {
     // --- State Management ---
     const [entries, setEntries] = useLocalStorage<Entry[]>('gmct-entries', [], (data) => Array.isArray(data) ? data.map(sanitizeEntry) : []);
@@ -113,6 +120,10 @@ const App: React.FC = () => {
     });
     const [shouldResync, setShouldResync] = useState(0);
     const [activeSyncTasks, setActiveSyncTasks] = useState(0);
+    const [recordsDataSource, setRecordsDataSource] = useState<'sharepoint' | 'local'>('local');
+    const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false);
+    const [currentDate, setCurrentDate] = useState(() => new Date());
+    const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -128,6 +139,9 @@ const App: React.FC = () => {
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
+    const recordFileInputRef = useRef<HTMLInputElement | null>(null);
+    const presenceIdRef = useRef<string | null>(null);
+    const presenceIntervalRef = useRef<number | null>(null);
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
@@ -219,6 +233,79 @@ const App: React.FC = () => {
         return merged;
     }, [computeMemberSignature]);
 
+    const readPresenceMap = useCallback((): Record<string, number> => {
+        if (typeof window === 'undefined') {
+            return {};
+        }
+        try {
+            const raw = window.localStorage.getItem(PRESENCE_STORAGE_KEY);
+            if (!raw) {
+                return {};
+            }
+            const parsed = JSON.parse(raw) as Record<string, number>;
+            if (!parsed || typeof parsed !== 'object') {
+                return {};
+            }
+            const now = Date.now();
+            const fresh: Record<string, number> = {};
+            let mutated = false;
+            for (const [key, value] of Object.entries(parsed)) {
+                if (typeof value === 'number' && now - value < PRESENCE_TIMEOUT_MS) {
+                    fresh[key] = value;
+                } else {
+                    mutated = true;
+                }
+            }
+            if (mutated) {
+                window.localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify(fresh));
+            }
+            return fresh;
+        } catch (error) {
+            console.warn('Unable to read presence map.', error);
+            return {};
+        }
+    }, []);
+
+    const updatePresenceCount = useCallback(() => {
+        if (typeof window === 'undefined') {
+            setActiveUserCount(null);
+            return;
+        }
+        const map = readPresenceMap();
+        setActiveUserCount(Object.keys(map).length);
+    }, [readPresenceMap]);
+
+    const touchPresence = useCallback((id: string) => {
+        if (!id || typeof window === 'undefined') {
+            return;
+        }
+        try {
+            const map = readPresenceMap();
+            map[id] = Date.now();
+            window.localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify(map));
+            setActiveUserCount(Object.keys(map).length);
+        } catch (error) {
+            console.error('Failed to update presence heartbeat', error);
+            setActiveUserCount(null);
+        }
+    }, [readPresenceMap]);
+
+    const removePresenceRecord = useCallback((id: string | null) => {
+        if (!id || typeof window === 'undefined') {
+            return;
+        }
+        try {
+            const map = readPresenceMap();
+            if (map[id]) {
+                delete map[id];
+                window.localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify(map));
+                setActiveUserCount(Object.keys(map).length);
+            }
+        } catch (error) {
+            console.error('Failed to clear presence record', error);
+        }
+    }, [readPresenceMap]);
+
     useEffect(() => {
         const attemptSilentSignin = async () => {
             const session = await msalSilentSignIn();
@@ -241,6 +328,7 @@ const App: React.FC = () => {
             setIsOffline(true);
             setSyncMessage('Offline: changes will sync when connection returns.');
             setActiveSyncTasks(0);
+            setRecordsDataSource('local');
         };
         const handleOnline = () => {
             setIsOffline(false);
@@ -256,9 +344,94 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const tick = () => setCurrentDate(new Date());
+        const interval = window.setInterval(tick, 60_000);
+        return () => window.clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
         if (attendance.length === 0) return;
         setLastAttendanceSavedAt(prev => (prev === null ? Date.now() : prev));
     }, [attendance]);
+
+    useEffect(() => {
+        if (!currentUser) {
+            if (typeof window !== 'undefined') {
+                const existingId = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+                if (existingId) {
+                    removePresenceRecord(existingId);
+                }
+                if (presenceIntervalRef.current !== null) {
+                    window.clearInterval(presenceIntervalRef.current);
+                    presenceIntervalRef.current = null;
+                }
+                window.sessionStorage.removeItem('gmct-presence-id');
+            }
+            presenceIdRef.current = null;
+            setActiveUserCount(null);
+            return;
+        }
+
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const ensurePresence = () => {
+            let presenceId = presenceIdRef.current;
+            if (!presenceId) {
+                const stored = window.sessionStorage.getItem('gmct-presence-id');
+                presenceId = stored || generateId('presence');
+                presenceIdRef.current = presenceId;
+                window.sessionStorage.setItem('gmct-presence-id', presenceId);
+            }
+            touchPresence(presenceId);
+        };
+
+        ensurePresence();
+        updatePresenceCount();
+
+        const interval = window.setInterval(ensurePresence, 30_000);
+        presenceIntervalRef.current = interval;
+
+        const handleVisibility = () => {
+            if (!document.hidden) {
+                ensurePresence();
+            }
+        };
+
+        const handleStorage = (event: StorageEvent) => {
+            if (event.key === PRESENCE_STORAGE_KEY) {
+                updatePresenceCount();
+            }
+        };
+
+        const handleBeforeUnload = () => {
+            const id = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+            if (id) {
+                removePresenceRecord(id);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('storage', handleStorage);
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibility);
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            if (presenceIntervalRef.current !== null) {
+                window.clearInterval(presenceIntervalRef.current);
+                presenceIntervalRef.current = null;
+            }
+            const id = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+            if (id) {
+                removePresenceRecord(id);
+            }
+            presenceIdRef.current = null;
+        };
+    }, [currentUser, removePresenceRecord, touchPresence, updatePresenceCount]);
 
     useEffect(() => {
         if (!cloud.signedIn || !cloud.accessToken) {
@@ -268,11 +441,13 @@ const App: React.FC = () => {
             setSyncMessage(null);
             setLastSyncedAt(null);
             setActiveSyncTasks(0);
+            setRecordsDataSource('local');
             return;
         }
 
         if (isOffline) {
             setSyncMessage('Offline: changes will sync when connection returns.');
+            setRecordsDataSource('local');
             return;
         }
 
@@ -290,10 +465,12 @@ const App: React.FC = () => {
                 setMembers(prev => mergeMembersFromCloud(prev, remoteMembers));
                 setSyncMessage(null);
                 setLastSyncedAt(Date.now());
+                setRecordsDataSource('sharepoint');
             } catch (error) {
                 if (!active) return;
                 console.error('Initial SharePoint sync failed', error);
                 setSyncMessage(error instanceof Error ? error.message : 'Unable to sync with SharePoint right now.');
+                setRecordsDataSource('local');
             } finally {
                 if (active) {
                     endSync();
@@ -497,16 +674,54 @@ const App: React.FC = () => {
         return sortableEntries;
     }, [entries, sortConfig, membersMap, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter]);
 
+    const filteredTotalAmount = useMemo(() => {
+        return filteredAndSortedEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    }, [filteredAndSortedEntries]);
+
+    const dateFilterLabel = useMemo(() => {
+        const formatDate = (value: string) => {
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime())
+                ? value
+                : parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        };
+
+        if (startDateFilter && endDateFilter) {
+            return `${formatDate(startDateFilter)} – ${formatDate(endDateFilter)}`;
+        }
+        if (startDateFilter) {
+            return `From ${formatDate(startDateFilter)}`;
+        }
+        if (endDateFilter) {
+            return `Through ${formatDate(endDateFilter)}`;
+        }
+        return 'All dates';
+    }, [startDateFilter, endDateFilter]);
+
+    const filtersSummary = useMemo(() => {
+        const parts: string[] = [`Date: ${dateFilterLabel}`];
+        if (typeFilter !== 'all') {
+            parts.push(`Type: ${entryTypeLabel(typeFilter)}`);
+        }
+        if (classFilter !== 'all') {
+            parts.push(`Class ${classFilter}`);
+        }
+        if (searchFilter.trim()) {
+            parts.push('Keyword filter active');
+        }
+        return parts.join(' • ');
+    }, [dateFilterLabel, typeFilter, classFilter, searchFilter]);
+
     const recordRows = useMemo(() => filteredAndSortedEntries.map(entry => {
         const member = membersMap.get(entry.memberID);
 
         return (
             <tr key={entry.id} className="bg-white border-b hover:bg-slate-50">
                 <td className="px-6 py-4">{entry.date}</td>
-                <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName}</td>
-                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
-                <td className="px-6 py-4 text-center">{member?.classNumber || 'N/A'}</td>
-                <td className="px-6 py-4 capitalize">{entry.type}</td>
+                <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName || '—'}</td>
+                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || '—'}</td>
+                <td className="px-6 py-4 text-center">{member?.classNumber ? `Class ${member.classNumber}` : '—'}</td>
+                <td className="px-6 py-4">{entryTypeLabel(entry.type)}</td>
                 <td className="px-6 py-4">{formatCurrency(entry.amount, settings.currency)}</td>
                 <td className="px-6 py-4 text-right">
                     <button
@@ -537,6 +752,19 @@ const App: React.FC = () => {
     };
 
     const handleLogout = () => {
+        if (typeof window !== 'undefined') {
+            const id = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+            if (id) {
+                removePresenceRecord(id);
+            }
+            window.sessionStorage.removeItem('gmct-presence-id');
+            if (presenceIntervalRef.current !== null) {
+                window.clearInterval(presenceIntervalRef.current);
+                presenceIntervalRef.current = null;
+            }
+        }
+        presenceIdRef.current = null;
+        setActiveUserCount(null);
         setCurrentUser(null);
         setIsNavOpen(false);
         setCloud(prev => ({ ...prev, signedIn: false, accessToken: undefined, account: undefined, message: 'Ready for manual sign-in.' }));
@@ -578,6 +806,47 @@ const App: React.FC = () => {
 
     const handleImport = (newEntries: Entry[]) => {
         setEntries(prev => [...prev, ...newEntries]);
+    };
+
+    const handleRecordImportClick = () => {
+        setIsImportConfirmOpen(true);
+    };
+
+    const confirmRecordImport = () => {
+        setIsImportConfirmOpen(false);
+        window.setTimeout(() => {
+            recordFileInputRef.current?.click();
+        }, 0);
+    };
+
+    const handleRecordFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const text = typeof reader.result === 'string' ? reader.result : '';
+                let imported: Entry[] = [];
+                if (file.name.toLowerCase().endsWith('.csv')) {
+                    const rows = fromCsv(text);
+                    imported = rows.map(row => sanitizeEntry(row));
+                } else {
+                    const raw = JSON.parse(text) as unknown;
+                    const array = Array.isArray(raw) ? raw : [];
+                    imported = array.map(item => sanitizeEntry(item));
+                }
+                handleImport(imported);
+                alert(`Imported ${imported.length} financial record${imported.length === 1 ? '' : 's'}.`);
+            } catch (error) {
+                console.error('Failed to import financial records', error);
+                alert('Unable to import the selected file. Ensure it is a valid CSV or JSON export.');
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
     };
 
     const handleBulkAddMembers = (importedMembers: Member[]) => {
@@ -708,19 +977,71 @@ const App: React.FC = () => {
     const renderTabContent = () => {
         switch (activeTab) {
             case 'home': return currentUser.role === 'admin' || currentUser.role === 'finance' ? <AdminLandingPage onNavigate={setActiveTab} currentUser={currentUser} /> : <Dashboard entries={filteredAndSortedEntries} settings={settings} />;
-            case 'records':
+            case 'records': {
+                const isSharePointLive = recordsDataSource === 'sharepoint';
+                const dataSourceText = isSharePointLive
+                    ? 'Data source: SharePoint (live)'
+                    : 'Data source: Local records (not synced)';
+                const dataSourceTone = isSharePointLive
+                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border border-amber-200 bg-amber-50 text-amber-700';
                 return (
                     <div className="space-y-6">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
-                            <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Add New Entry</button>
+                        <div className="space-y-4">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
+                                    <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('csv')}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                    >
+                                        Export CSV
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('json')}
+                                        className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
+                                    >
+                                        Export JSON
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleRecordImportClick}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                    >
+                                        Import
+                                    </button>
+                                </div>
+                            </div>
+                            <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${dataSourceTone}`}>
+                                {dataSourceText}
+                            </div>
+                            <div className="flex justify-start">
+                                <button
+                                    type="button"
+                                    onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm w-full sm:w-auto"
+                                >
+                                    Add New Entry
+                                </button>
+                            </div>
                         </div>
+                        <input ref={recordFileInputRef} type="file" accept=".csv,.json" className="hidden" onChange={handleRecordFileChange} />
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-4">
                                 <p className="text-sm uppercase tracking-wide text-amber-600 font-semibold">Stored Entries</p>
                                 <p className="text-3xl font-extrabold text-slate-800 mt-1">{entries.length.toLocaleString()}</p>
                                 <p className="text-xs text-slate-500 mt-2">Total financial entries captured in this workspace.</p>
+                            </div>
+                            <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-4">
+                                <p className="text-sm uppercase tracking-wide text-emerald-600 font-semibold">Filtered Total</p>
+                                <p className="text-3xl font-extrabold text-slate-800 mt-1">{formatCurrency(filteredTotalAmount, settings.currency)}</p>
+                                <p className="text-xs text-slate-500 mt-2 leading-relaxed">{filtersSummary}</p>
                             </div>
                         </div>
 
@@ -741,18 +1062,8 @@ const App: React.FC = () => {
                                 <label htmlFor="typeFilter" className="block text-sm font-medium text-slate-700">Type</label>
                                 <select id="typeFilter" value={typeFilter} onChange={e => setTypeFilter(e.target.value as EntryType | 'all')} className="mt-1 block w-full border-slate-300 rounded-md shadow-sm">
                                     <option value="all">All Types</option>
-                                    {([
-                                        "tithe",
-                                        "offering",
-                                        "thanksgiving-offering",
-                                        "first-fruit",
-                                        "pledge",
-                                        "harvest-levy",
-                                        "other",
-                                    ] as EntryType[]).map(t => (
-                                        <option key={t} value={t}>
-                                            {t.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                        </option>
+                                    {ENTRY_TYPE_VALUES.map(type => (
+                                        <option key={type} value={type}>{entryTypeLabel(type)}</option>
                                     ))}
                                 </select>
                             </div>
@@ -786,6 +1097,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 );
+            }
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries} settings={settings} />;
             case 'history':
@@ -836,17 +1148,17 @@ const App: React.FC = () => {
     };
 
     const navItems: NavItem[] = [
-        { id: 'home', label: 'Home', roles: ['admin', 'finance'] },
+        { id: 'home', label: 'HOME', roles: ['admin', 'finance'] },
         { id: 'tasks', label: 'TASKS', roles: ['admin', 'finance'] },
-        { id: 'records', label: 'Financial Records', roles: ['admin', 'finance'] },
-        { id: 'members', label: 'Member Directory', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
-        { id: 'insights', label: 'Insights', roles: ['admin', 'finance'] },
-        { id: 'attendance', label: 'Mark Attendance', roles: ['admin', 'class-leader'] },
-        { id: 'admin-attendance', label: 'Attendance Report', roles: ['admin', 'finance'] },
-        { id: 'history', label: 'Weekly History', roles: ['admin', 'statistician'] },
-        { id: 'users', label: 'Manage Users', roles: ['admin', 'finance'] },
-        { id: 'utilities', label: 'Utilities', roles: ['admin'] },
-        { id: 'settings', label: 'Settings', roles: ['admin'] },
+        { id: 'records', label: 'FINANCIAL RECORDS', roles: ['admin', 'finance'] },
+        { id: 'members', label: 'MEMBER DIRECTORY', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
+        { id: 'insights', label: 'INSIGHTS', roles: ['admin', 'finance'] },
+        { id: 'attendance', label: 'MARK ATTENDANCE', roles: ['admin', 'class-leader'] },
+        { id: 'admin-attendance', label: 'ATTENDANCE REPORT', roles: ['admin', 'finance'] },
+        { id: 'history', label: 'WEEKLY HISTORY', roles: ['admin', 'statistician'] },
+        { id: 'users', label: 'MANAGE USERS', roles: ['admin', 'finance'] },
+        { id: 'utilities', label: 'UTILITIES', roles: ['admin'] },
+        { id: 'settings', label: 'SETTINGS', roles: ['admin'] },
     ];
 
     const visibleNavItems = navItems.filter(item => item.roles.includes(currentUser.role));
@@ -868,7 +1180,12 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
             <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
-                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} />
+                <Header
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    currentDate={currentDate}
+                    activeUserCount={activeUserCount}
+                />
                 <div className="mt-4">
                     <SyncStatus
                         isOffline={isOffline}
@@ -902,6 +1219,15 @@ const App: React.FC = () => {
                     onConfirm={confirmDeleteEntry}
                     title="Confirm Deletion"
                     message="Are you sure you want to delete this financial entry? This action cannot be undone."
+                />
+                <ConfirmationModal
+                    isOpen={isImportConfirmOpen}
+                    onClose={() => setIsImportConfirmOpen(false)}
+                    onConfirm={confirmRecordImport}
+                    title="Confirm Import"
+                    message="Importing may overwrite or merge existing records. Do you want to continue?"
+                    confirmLabel="Import"
+                    confirmTone="primary"
                 />
             </div>
         </div>

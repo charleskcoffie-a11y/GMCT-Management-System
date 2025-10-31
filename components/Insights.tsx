@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Entry, EntryType, Settings } from '../types';
-import { formatCurrency } from '../utils';
+import { formatCurrency, ENTRY_TYPE_VALUES, entryTypeLabel } from '../utils';
 import {
     ResponsiveContainer,
     BarChart,
@@ -17,8 +17,7 @@ import {
 
 type FilterMode = 'day' | 'month' | 'range';
 
-const ENTRY_TYPES: EntryType[] = ['tithe', 'offering', 'thanksgiving-offering', 'first-fruit', 'pledge', 'harvest-levy', 'other'];
-const PIE_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#0ea5e9', '#f97316'];
+const PIE_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6', '#0ea5e9', '#f97316', '#f472b6'];
 
 function formatDayLabel(isoDate: string): string {
     return new Date(isoDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -133,23 +132,18 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
     const pieData = useMemo<Array<{ type: EntryType; label: string; value: number; color: string }>>(() => {
         if (filteredEntries.length === 0) return [];
 
-        const totals: Record<EntryType, number> = {
-            'tithe': 0,
-            'offering': 0,
-            'thanksgiving-offering': 0,
-            'first-fruit': 0,
-            'pledge': 0,
-            'harvest-levy': 0,
-            'other': 0,
-        };
+        const totals = ENTRY_TYPE_VALUES.reduce((acc, type) => {
+            acc[type] = 0;
+            return acc;
+        }, {} as Record<EntryType, number>);
 
         filteredEntries.forEach(entry => {
             totals[entry.type] = (totals[entry.type] ?? 0) + entry.amount;
         });
 
-        return ENTRY_TYPES.filter(type => totals[type] > 0).map((type, index) => ({
+        return ENTRY_TYPE_VALUES.filter(type => totals[type] > 0).map((type, index) => ({
             type,
-            label: type.replace('-', ' ').replace(/\b\w/g, letter => letter.toUpperCase()),
+            label: entryTypeLabel(type),
             value: totals[type],
             color: PIE_COLORS[index % PIE_COLORS.length],
         }));
@@ -243,12 +237,12 @@ const Insights: React.FC<InsightsProps> = ({ entries, settings }) => {
                         <div className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-sky-50 to-cyan-100/60">
                             <h3 className="text-sm font-semibold text-slate-500 uppercase">Largest Gift</h3>
                             <p className="text-2xl font-bold text-slate-800">{stats.largest ? formatCurrency(stats.largest.amount, settings.currency) : '—'}</p>
-                            {stats.largest && <p className="text-sm text-slate-500">{stats.largest.memberName}</p>}
+                            {stats.largest && <p className="text-sm text-slate-500">Highest contribution recorded for the selected filters.</p>}
                         </div>
                         <div className="rounded-2xl p-4 shadow-sm border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/60">
                             <h3 className="text-sm font-semibold text-slate-500 uppercase">Latest Entry</h3>
                             <p className="text-2xl font-bold text-slate-800">{stats.latest ? formatDayLabel(stats.latest.date) : '—'}</p>
-                            {stats.latest && <p className="text-sm text-slate-500">{stats.latest.memberName}</p>}
+                            {stats.latest && <p className="text-sm text-slate-500">Most recent record within the current filters.</p>}
                         </div>
                     </div>
                 )}

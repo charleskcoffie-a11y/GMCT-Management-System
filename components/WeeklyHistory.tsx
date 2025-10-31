@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ServiceType, WeeklyHistoryRecord } from '../types';
-import { generateId, serviceTypeLabel } from '../utils';
+import { generateId, serviceTypeLabel, fromCsv, toCsv, sanitizeWeeklyHistoryRecord } from '../utils';
 
 interface WeeklyHistoryProps {
     history: WeeklyHistoryRecord[];
@@ -14,6 +14,42 @@ const SERVICE_TYPES: Array<{ value: ServiceType; label: string }> = [
     { value: 'divine-service', label: 'Divine Service' },
     { value: 'teaching-service', label: 'Teaching Service' },
     { value: 'other', label: 'Other' },
+];
+
+const WEEKLY_HISTORY_HEADERS = [
+    'Record ID',
+    'Date Of Service',
+    'Society Name',
+    'Preacher',
+    'Guest Preacher',
+    'Preacher Society',
+    'Liturgist',
+    'Service Type',
+    'Service Type Other',
+    'Sermon Topic',
+    'Memory Text',
+    'Sermon Summary',
+    'Worship Highlights',
+    'Announcements By',
+    'Announcements Key Points',
+    'Attendance Adults Male',
+    'Attendance Adults Female',
+    'Attendance Children',
+    'Attendance Adherents',
+    'Attendance Catechumens',
+    'Attendance Visitors Total',
+    'Visitor Names',
+    'Special Visitor Name',
+    'Special Visitor Position',
+    'Special Visitor Summary',
+    'New Members Details',
+    'New Members Contact',
+    'Donations Description',
+    'Donations Quantity',
+    'Donations Donated By',
+    'Events',
+    'Observations',
+    'Prepared By',
 ];
 
 const emptyRecord = (): WeeklyHistoryRecord => ({
@@ -58,14 +94,194 @@ const emptyRecord = (): WeeklyHistoryRecord => ({
     preparedBy: '',
 });
 
+const weeklyHistoryToCsvRow = (record: WeeklyHistoryRecord): Record<string, string | number> => {
+    const row: Record<string, string | number> = {};
+    row['Record ID'] = record.id;
+    row['Date Of Service'] = record.dateOfService;
+    row['Society Name'] = record.societyName;
+    row['Preacher'] = record.preacher;
+    row['Guest Preacher'] = record.guestPreacher ? 'true' : 'false';
+    row['Preacher Society'] = record.preacherSociety ?? '';
+    row['Liturgist'] = record.liturgist ?? '';
+    row['Service Type'] = record.serviceType;
+    row['Service Type Other'] = record.serviceTypeOther ?? '';
+    row['Sermon Topic'] = record.sermonTopic ?? '';
+    row['Memory Text'] = record.memoryText ?? '';
+    row['Sermon Summary'] = record.sermonSummary ?? '';
+    row['Worship Highlights'] = record.worshipHighlights ?? '';
+    row['Announcements By'] = record.announcementsBy ?? '';
+    row['Announcements Key Points'] = record.announcementsKeyPoints ?? '';
+    row['Attendance Adults Male'] = record.attendance.adultsMale;
+    row['Attendance Adults Female'] = record.attendance.adultsFemale;
+    row['Attendance Children'] = record.attendance.children;
+    row['Attendance Adherents'] = record.attendance.adherents;
+    row['Attendance Catechumens'] = record.attendance.catechumens;
+    row['Attendance Visitors Total'] = record.attendance.visitors.total;
+    row['Visitor Names'] = record.attendance.visitors.names ?? '';
+    row['Special Visitor Name'] = record.attendance.visitors.specialVisitorName ?? '';
+    row['Special Visitor Position'] = record.attendance.visitors.specialVisitorPosition ?? '';
+    row['Special Visitor Summary'] = record.attendance.visitors.specialVisitorSummary ?? '';
+    row['New Members Details'] = record.newMembersDetails ?? '';
+    row['New Members Contact'] = record.newMembersContact ?? '';
+    row['Donations Description'] = record.donations.description ?? '';
+    row['Donations Quantity'] = record.donations.quantity ?? '';
+    row['Donations Donated By'] = record.donations.donatedBy ?? '';
+    row['Events'] = record.events ?? '';
+    row['Observations'] = record.observations ?? '';
+    row['Prepared By'] = record.preparedBy ?? '';
+    return row;
+};
+
+const weeklyHistoryFromCsvRow = (row: Record<string, string>): WeeklyHistoryRecord => {
+    const value = (key: string) => (row[key] ?? '').toString();
+    const shaped = {
+        id: value('Record ID'),
+        dateOfService: value('Date Of Service'),
+        societyName: value('Society Name'),
+        preacher: value('Preacher'),
+        guestPreacher: value('Guest Preacher'),
+        preacherSociety: value('Preacher Society'),
+        liturgist: value('Liturgist'),
+        serviceType: value('Service Type'),
+        serviceTypeOther: value('Service Type Other'),
+        sermonTopic: value('Sermon Topic'),
+        memoryText: value('Memory Text'),
+        sermonSummary: value('Sermon Summary'),
+        worshipHighlights: value('Worship Highlights'),
+        announcementsBy: value('Announcements By'),
+        announcementsKeyPoints: value('Announcements Key Points'),
+        attendance: {
+            adultsMale: value('Attendance Adults Male'),
+            adultsFemale: value('Attendance Adults Female'),
+            children: value('Attendance Children'),
+            adherents: value('Attendance Adherents'),
+            catechumens: value('Attendance Catechumens'),
+            visitors: {
+                total: value('Attendance Visitors Total'),
+                names: value('Visitor Names'),
+                specialVisitorName: value('Special Visitor Name'),
+                specialVisitorPosition: value('Special Visitor Position'),
+                specialVisitorSummary: value('Special Visitor Summary'),
+            },
+        },
+        newMembersDetails: value('New Members Details'),
+        newMembersContact: value('New Members Contact'),
+        donations: {
+            description: value('Donations Description'),
+            quantity: value('Donations Quantity'),
+            donatedBy: value('Donations Donated By'),
+        },
+        events: value('Events'),
+        observations: value('Observations'),
+        preparedBy: value('Prepared By'),
+    };
+    return sanitizeWeeklyHistoryRecord(shaped);
+};
+
 const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canEdit = true }) => {
     const [form, setForm] = useState<WeeklyHistoryRecord>(() => emptyRecord());
     const [editingId, setEditingId] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [flash, setFlash] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
     const readOnly = !canEdit;
     const inputClass = 'border border-slate-300 rounded-lg px-3 py-2 disabled:bg-slate-100 disabled:cursor-not-allowed';
     const textareaClass = 'border border-slate-300 rounded-lg px-3 py-2 disabled:bg-slate-100 disabled:cursor-not-allowed';
+    const csvInputRef = useRef<HTMLInputElement | null>(null);
+
+    const handleExportCsv = () => {
+        if (history.length === 0) {
+            setFlash({ tone: 'error', message: 'No weekly history records available to export yet.' });
+            return;
+        }
+        const rows = history.map(record => weeklyHistoryToCsvRow(record));
+        const csv = toCsv(rows);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `weekly-history-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        setFlash({ tone: 'success', message: `Exported ${rows.length} weekly history record${rows.length === 1 ? '' : 's'}.` });
+    };
+
+    const handleImportCsvChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const text = typeof reader.result === 'string' ? reader.result : '';
+                const parsedRows = fromCsv(text);
+                if (!parsedRows || parsedRows.length === 0) {
+                    setFlash({ tone: 'error', message: 'The selected CSV file did not contain any records to import.' });
+                    return;
+                }
+
+                const firstRow = parsedRows[0] as Record<string, string>;
+                const missingHeaders = WEEKLY_HISTORY_HEADERS.filter(header => !(header in firstRow));
+                if (missingHeaders.length > 0) {
+                    setFlash({ tone: 'error', message: `CSV is missing columns: ${missingHeaders.join(', ')}.` });
+                    return;
+                }
+
+                const sanitizedRecords: WeeklyHistoryRecord[] = [];
+                let skipped = 0;
+                for (const raw of parsedRows) {
+                    const row = raw as Record<string, string>;
+                    const hasValues = WEEKLY_HISTORY_HEADERS.some(header => (row[header] ?? '').toString().trim().length > 0);
+                    if (!hasValues) {
+                        continue;
+                    }
+                    try {
+                        const record = weeklyHistoryFromCsvRow(row);
+                        sanitizedRecords.push(record);
+                    } catch (error) {
+                        console.warn('Skipping invalid weekly history row', error);
+                        skipped += 1;
+                    }
+                }
+
+                if (sanitizedRecords.length === 0) {
+                    setFlash({
+                        tone: 'error',
+                        message: skipped > 0
+                            ? 'No weekly history records were imported because each row failed validation.'
+                            : 'No weekly history rows were found in the CSV.',
+                    });
+                    return;
+                }
+
+                let added = 0;
+                let updatedCount = 0;
+                setHistory(prev => {
+                    const next = [...prev];
+                    sanitizedRecords.forEach(record => {
+                        const existingIndex = next.findIndex(item => item.id === record.id);
+                        if (existingIndex >= 0) {
+                            next[existingIndex] = record;
+                            updatedCount += 1;
+                        } else {
+                            next.push(record);
+                            added += 1;
+                        }
+                    });
+                    return next;
+                });
+
+                const summaryParts = [`${sanitizedRecords.length} processed`, `${added} added`, `${updatedCount} updated`];
+                if (skipped > 0) {
+                    summaryParts.push(`${skipped} skipped`);
+                }
+                setFlash({ tone: 'success', message: `Import complete: ${summaryParts.join(', ')}.` });
+            } catch (error) {
+                console.error('Failed to import weekly history CSV', error);
+                setFlash({ tone: 'error', message: 'Unable to import weekly history. Confirm the CSV matches the exported format.' });
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
+    };
 
     const handleDateChange = (value: string) => {
         const existing = history.find(record => record.dateOfService === value);
@@ -168,8 +384,43 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
         [history],
     );
 
+    useEffect(() => {
+        if (!flash) return;
+        if (typeof window === 'undefined') return;
+        const timeout = window.setTimeout(() => setFlash(null), 4000);
+        return () => window.clearTimeout(timeout);
+    }, [flash]);
+
     return (
         <div className="space-y-6">
+            <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-slate-50 to-slate-100/70 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 className="text-lg font-semibold text-slate-800">Weekly Attendance CSV</h2>
+                    <p className="text-sm text-slate-500">Export or import weekly attendance summaries for archival or reporting.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        onClick={handleExportCsv}
+                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
+                    >
+                        Export CSV
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => csvInputRef.current?.click()}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg"
+                    >
+                        Import CSV
+                    </button>
+                </div>
+            </section>
+            <input ref={csvInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportCsvChange} />
+            {flash && (
+                <div className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${flash.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+                    {flash.message}
+                </div>
+            )}
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-6">
                 <h2 className="text-2xl font-bold text-slate-800 mb-4">Record Weekly History</h2>
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
