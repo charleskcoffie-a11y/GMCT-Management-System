@@ -402,6 +402,9 @@ const App: React.FC = () => {
             if (!presenceId) {
                 presenceId = generateId('presence');
                 setStoredPresenceId(presenceId);
+            if (!presenceId) {
+                presenceId = generateId('presence');
+                setStoredPresenceId(presenceId);
             let presenceId = presenceStateRef.current.id;
             if (!presenceId) {
                 const stored = window.sessionStorage.getItem('gmct-presence-id');
@@ -739,7 +742,7 @@ const App: React.FC = () => {
         if (searchFilter.trim()) {
             parts.push('Keyword filter active');
         }
-        return parts.join(' • ');
+        return `Current filters — ${parts.join(' • ')}`;
     }, [dateFilterLabel, typeFilter, classFilter, searchFilter]);
 
     const recordRows = useMemo(() => filteredAndSortedEntries.map(entry => {
@@ -1079,7 +1082,7 @@ const App: React.FC = () => {
                                 <p className="text-xs text-slate-500 mt-2">Total financial entries captured in this workspace.</p>
                             </div>
                             <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-4">
-                                <p className="text-sm uppercase tracking-wide text-emerald-600 font-semibold">Filtered Total</p>
+                                <p className="text-sm uppercase tracking-wide text-emerald-600 font-semibold">Total Received</p>
                                 <p className="text-3xl font-extrabold text-slate-800 mt-1">{formatCurrency(filteredTotalAmount, settings.currency)}</p>
                                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">{filtersSummary}</p>
                             </div>
@@ -1134,6 +1137,19 @@ const App: React.FC = () => {
                                 </thead>
                                 <tbody>{recordRows}</tbody>
                            </table>
+                        </div>
+                        <div className="mt-4 rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-slate-50 to-slate-100/70 px-6 py-5">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <p className="text-sm uppercase tracking-wide text-slate-600 font-semibold">Entries Displayed</p>
+                                    <p className="text-2xl font-bold text-slate-900">{filteredAndSortedEntries.length.toLocaleString()}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm uppercase tracking-wide text-emerald-600 font-semibold">Total Received</p>
+                                    <p className="text-2xl font-bold text-emerald-600">{formatCurrency(filteredTotalAmount, settings.currency)}</p>
+                                </div>
+                            </div>
+                            <p className="mt-3 text-xs text-slate-500 leading-relaxed">{filtersSummary}</p>
                         </div>
                     </div>
                 );
