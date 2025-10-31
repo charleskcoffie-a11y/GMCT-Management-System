@@ -35,6 +35,7 @@ import {
     sanitizeString,
     ENTRY_TYPE_VALUES,
     entryTypeLabel,
+    generateId,
 } from './utils';
 import type {
     Entry,
@@ -357,7 +358,7 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!currentUser) {
             if (typeof window !== 'undefined') {
-                const existingId = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+                const existingId = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
                 if (existingId) {
                     removePresenceRecord(existingId);
                 }
@@ -367,7 +368,7 @@ const App: React.FC = () => {
                 }
                 window.sessionStorage.removeItem('gmct-presence-id');
             }
-            presenceIdRef.current = null;
+            presenceStateRef.current.id = null;
             setActiveUserCount(null);
             return;
         }
@@ -377,11 +378,11 @@ const App: React.FC = () => {
         }
 
         const ensurePresence = () => {
-            let presenceId = presenceIdRef.current;
+            let presenceId = presenceStateRef.current.id;
             if (!presenceId) {
                 const stored = window.sessionStorage.getItem('gmct-presence-id');
                 presenceId = stored || generateId('presence');
-                presenceIdRef.current = presenceId;
+                presenceStateRef.current.id = presenceId;
                 window.sessionStorage.setItem('gmct-presence-id', presenceId);
             }
             touchPresence(presenceId);
@@ -406,7 +407,7 @@ const App: React.FC = () => {
         };
 
         const handleBeforeUnload = () => {
-            const id = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
             if (id) {
                 removePresenceRecord(id);
             }
@@ -424,11 +425,11 @@ const App: React.FC = () => {
                 window.clearInterval(presenceIntervalRef.current);
                 presenceIntervalRef.current = null;
             }
-            const id = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
             if (id) {
                 removePresenceRecord(id);
             }
-            presenceIdRef.current = null;
+            presenceStateRef.current.id = null;
         };
     }, [currentUser, removePresenceRecord, touchPresence, updatePresenceCount]);
 
@@ -752,7 +753,7 @@ const App: React.FC = () => {
 
     const handleLogout = () => {
         if (typeof window !== 'undefined') {
-            const id = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
             if (id) {
                 removePresenceRecord(id);
             }
@@ -762,7 +763,7 @@ const App: React.FC = () => {
                 presenceIntervalRef.current = null;
             }
         }
-        presenceIdRef.current = null;
+        presenceStateRef.current.id = null;
         setActiveUserCount(null);
         setCurrentUser(null);
         setIsNavOpen(false);
