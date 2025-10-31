@@ -3,7 +3,10 @@ import { MSAL_CLIENT_ID, MSAL_TENANT_ID, GRAPH_SCOPES } from '../constants';
 type SilentSignInResult = {
     account: { homeAccountId: string; username?: string };
     accessToken: string;
+    authority?: 'organizations' | 'consumers' | 'common';
 };
+
+const PERSONAL_EMAIL_DOMAINS = ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'];
 
 /**
  * Placeholder silent sign-in flow. In production you would wire this to MSAL.
@@ -22,7 +25,7 @@ export async function msalSilentSignIn(): Promise<SilentSignInResult | null> {
         }
         const parsed = JSON.parse(cached) as SilentSignInResult & { scopes?: string[] };
         if (parsed.scopes && GRAPH_SCOPES.every(scope => parsed.scopes?.includes(scope))) {
-            return { account: parsed.account, accessToken: parsed.accessToken };
+            return { account: parsed.account, accessToken: parsed.accessToken, authority: parsed.authority };
         }
         return null;
     } catch (error) {
@@ -60,7 +63,7 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
                 return;
             }
 
-            const data = event.data as { type?: string; status?: string; email?: string; message?: string } | null;
+            const data = event.data as { type?: string; status?: string; email?: string; message?: string; authority?: SilentSignInResult['authority'] } | null;
             if (!data || data.type !== 'gmct-msal-signin') {
                 return;
             }
@@ -88,6 +91,7 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
             const result: SilentSignInResult = {
                 account: { homeAccountId: createAccountId(), username: data.email },
                 accessToken,
+                authority: data.authority,
             };
             void cacheSilentSignIn(result);
             popup.close();
@@ -149,6 +153,11 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
             const passwordInput = document.getElementById('gmct-password');
             const messageEl = document.getElementById('gmct-message');
             const cancelBtn = document.getElementById('gmct-cancel');
+            const personalDomains = ${JSON.stringify(PERSONAL_EMAIL_DOMAINS)};
+            const tenantAuthority = {
+                corporate: 'https://login.microsoftonline.com/organizations',
+                personal: 'https://login.microsoftonline.com/consumers'
+            };
 
             function send(status, payload) {
                 if (window.opener && !window.opener.closed) {
@@ -179,11 +188,25 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
                     return;
                 }
 
-                messageEl.textContent = 'Signing in…';
+                const domain = email.split('@')[1]?.toLowerCase() || '';
+                const isPersonal = personalDomains.includes(domain);
+                messageEl.textContent = isPersonal
+                    ? 'Redirecting to Microsoft personal account login… (' + tenantAuthority.personal + ')'
+                    : 'Redirecting to your organization\'s Microsoft login… (' + tenantAuthority.corporate + ')';
                 messageEl.className = 'message info';
 
                 setTimeout(function() {
-                    send('success', { email: email });
+                    if (password.length < 6) {
+                        messageEl.textContent = 'Microsoft rejected the credentials. Passwords must be at least 6 characters.';
+                        messageEl.className = 'message error';
+                        send('error', {
+                            message: 'Microsoft rejected the credentials. Confirm your password and try again.',
+                            authority: isPersonal ? 'consumers' : 'organizations'
+                        });
+                        return;
+                    }
+
+                    send('success', { email: email, authority: isPersonal ? 'consumers' : 'organizations' });
                     window.close();
                 }, 600);
             });
