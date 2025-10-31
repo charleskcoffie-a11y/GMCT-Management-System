@@ -40,7 +40,12 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
         try {
             const session = await msalInteractiveSignIn();
             const username = session.account.username ?? 'connected account';
-            const successMessage = `You are now signed in as ${username}.`;
+            const authorityHint = session.authority === 'organizations'
+                ? ' (work account)'
+                : session.authority === 'consumers'
+                ? ' (personal account)'
+                : '';
+            const successMessage = `You are now signed in as ${username}${authorityHint}.`;
             setCloud(prev => ({
                 ...prev,
                 ready: true,
