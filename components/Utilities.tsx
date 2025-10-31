@@ -42,18 +42,8 @@ const Utilities: React.FC<UtilitiesProps> = ({
     const [totalClassesInput, setTotalClassesInput] = useState<string>(String(settings.maxClasses));
     const [totalClassesStatus, setTotalClassesStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
-    const configuredSiteUrl = useMemo(() => settings.sharePointSiteUrl?.trim() || SHAREPOINT_SITE_URL, [settings.sharePointSiteUrl]);
-    const configuredEntriesListName = useMemo(
-        () => settings.sharePointEntriesListName?.trim() || SHAREPOINT_ENTRIES_LIST_NAME,
-        [settings.sharePointEntriesListName],
-    );
-    const configuredMembersListName = useMemo(
-        () => settings.sharePointMembersListName?.trim() || SHAREPOINT_MEMBERS_LIST_NAME,
-        [settings.sharePointMembersListName],
-    );
-
-    const handleOpenSharePointList = async (listName: string | null, listLabel: string) => {
-        if (!configuredSiteUrl || !listName) {
+    const handleOpenSharePointList = async (url: string | null, listLabel: string) => {
+        if (!url) {
             setConnectionMessage({ tone: 'error', text: `${listLabel} URL is not configured.` });
             return;
         }
@@ -63,21 +53,46 @@ const Utilities: React.FC<UtilitiesProps> = ({
         }
         setConnectionMessage({ tone: 'info', text: `Checking access to ${listLabel}…` });
         try {
-            const result = await resolveSharePointListUrl(cloud.accessToken, {
-                siteUrl: configuredSiteUrl,
-                listName,
-            });
+            const result = await testSharePointConnection(cloud.accessToken);
             if (!result.success) {
                 setConnectionMessage({ tone: 'error', text: result.message });
                 return;
             }
-            window.open(result.url, '_blank', 'noopener');
+            window.open(url, '_blank', 'noopener');
             setConnectionMessage({ tone: 'success', text: `${listLabel} opened in a new tab.` });
         } catch (error) {
             console.error('Failed to open SharePoint list', error);
             setConnectionMessage({ tone: 'error', text: 'Unable to open SharePoint list right now.' });
         }
     };
+
+    const sharePointEntriesUrl = useMemo(() => {
+        const siteUrl = settings.sharePointSiteUrl?.trim() || SHAREPOINT_SITE_URL;
+        const listName = settings.sharePointEntriesListName?.trim() || SHAREPOINT_ENTRIES_LIST_NAME;
+        if (!siteUrl || !listName) return null;
+        try {
+            const url = new URL(siteUrl);
+            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(listName)}/AllItems.aspx`;
+            return url.toString();
+        } catch (error) {
+            console.error('Invalid SharePoint site URL configuration', error);
+            return null;
+        }
+    }, [settings.sharePointSiteUrl, settings.sharePointEntriesListName]);
+
+    const sharePointMembersUrl = useMemo(() => {
+        const siteUrl = settings.sharePointSiteUrl?.trim() || SHAREPOINT_SITE_URL;
+        const listName = settings.sharePointMembersListName?.trim() || SHAREPOINT_MEMBERS_LIST_NAME;
+        if (!siteUrl || !listName) return null;
+        try {
+            const url = new URL(siteUrl);
+            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(listName)}/AllItems.aspx`;
+            return url.toString();
+        } catch (error) {
+            console.error('Failed to open SharePoint list', error);
+            setConnectionMessage({ tone: 'error', text: 'Unable to open SharePoint list right now.' });
+        }
+    }, [settings.sharePointSiteUrl, settings.sharePointMembersListName]);
 
     const membersMap = useMemo(() => new Map(members.map(member => [member.id, member])), [members]);
 
@@ -212,7 +227,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
             !window.confirm('Manual imports bypass SharePoint safeguards. Continue with a local file import?')
         ) {
             event.target.value = '';
-            void handleOpenSharePointList(configuredMembersListName, 'SharePoint members list');
+            void handleOpenSharePointList(sharePointMembersUrl, 'SharePoint members list');
             return;
         }
         const reader = new FileReader();
@@ -327,7 +342,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     {configuredEntriesListName && configuredSiteUrl && (
                         <button
                             type="button"
-                            onClick={() => void handleOpenSharePointList(configuredEntriesListName, 'SharePoint finance list')}
+                            onClick={() => void handleOpenSharePointList(sharePointEntriesUrl, 'SharePoint finance list')}
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Finance List
@@ -336,7 +351,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     {configuredMembersListName && configuredSiteUrl && (
                         <button
                             type="button"
-                            onClick={() => void handleOpenSharePointList(configuredMembersListName, 'SharePoint members list')}
+                            onClick={() => void handleOpenSharePointList(sharePointMembersUrl, 'SharePoint members list')}
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Members List

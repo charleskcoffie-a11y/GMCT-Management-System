@@ -12,75 +12,18 @@ type MicrosoftAccount = {
 export type SilentSignInResult = {
     account: MicrosoftAccount;
     accessToken: string;
-    authority?: AuthorityHint;
+    authority?: 'organizations' | 'consumers' | 'common';
 };
 
-type StoredSession = SilentSignInResult & {
-    expiresAt: number;
-    scopes: string[];
-    idToken?: string;
-};
+const PERSONAL_EMAIL_DOMAINS = ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'];
 
-type PendingSession = {
-    tenant: string;
-    nonce: string;
-    origin: string;
-    createdAt: number;
-};
-
-type AuthorizePayload = {
-    type?: string;
-    state?: string;
-    accessToken?: string;
-    idToken?: string;
-    expiresIn?: string;
-    scope?: string;
-    tokenType?: string;
-    error?: string;
-    errorDescription?: string;
-    tenant?: string;
-};
-
-const STORAGE_KEY = 'gmct-msal-token';
-const SESSION_PREFIX = 'gmct-msal:';
-const DEFAULT_SCOPES = Array.isArray(GRAPH_SCOPES) && GRAPH_SCOPES.length > 0 ? GRAPH_SCOPES : ['User.Read'];
-const CONSUMER_TENANT_ID = '9188040d-6c67-4c5b-b112-36a304b66dad';
-
-class MicrosoftSignInError extends Error {
-    retryable: boolean;
-
-    constructor(message: string, retryable = false) {
-        super(message);
-        this.name = 'MicrosoftSignInError';
-        this.retryable = retryable;
-    }
-}
-
-function isBrowser(): boolean {
-    return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
-
-function decodeBase64Url(payload: string): string {
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-    try {
-        return window.atob(padded);
-    } catch (error) {
-        console.warn('Failed to decode base64url token payload.', error);
-        return '';
-    }
-}
-
-function decodeJwt(token?: string | null): Record<string, unknown> | null {
-    if (!token) {
-        return null;
-    }
-    const segments = token.split('.');
-    if (segments.length < 2) {
-        return null;
-    }
-    const payload = decodeBase64Url(segments[1] ?? '');
-    if (!payload) {
+/**
+ * Placeholder silent sign-in flow. In production you would wire this to MSAL.
+ * For local development we simply resolve to null so the UI knows manual sign-in is required.
+ */
+export async function msalSilentSignIn(): Promise<SilentSignInResult | null> {
+    if (!MSAL_CLIENT_ID || !MSAL_TENANT_ID) {
+        console.warn('MSAL configuration missing client or tenant id.');
         return null;
     }
     try {
@@ -177,27 +120,10 @@ function readPendingSession(state: string): PendingSession | null {
         if (!raw) {
             return null;
         }
-        return JSON.parse(raw) as PendingSession;
-    } catch (error) {
-        console.warn('Unable to read Microsoft sign-in session data.', error);
-        return null;
-    }
-}
-
-function clearPendingSession(state: string): void {
-    window.sessionStorage.removeItem(`${SESSION_PREFIX}${state}`);
-}
-
-function persistSession(session: StoredSession): void {
-    try {
-        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-    } catch (error) {
-        console.warn('Unable to persist Microsoft access token.', error);
-    }
-}
-
-function readStoredSession(): StoredSession | null {
-    if (!isBrowser()) {
+        const parsed = JSON.parse(cached) as SilentSignInResult & { scopes?: string[] };
+        if (parsed.scopes && GRAPH_SCOPES.every(scope => parsed.scopes?.includes(scope))) {
+            return { account: parsed.account, accessToken: parsed.accessToken, authority: parsed.authority };
+        }
         return null;
     }
     try {
@@ -346,8 +272,8 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
             }
             cleanup();
 
-            if (data.error) {
-                fail(mapAuthorizeError(data.error, data.errorDescription));
+            const data = event.data as { type?: string; status?: string; email?: string; message?: string; authority?: SilentSignInResult['authority'] } | null;
+            if (!data || data.type !== 'gmct-msal-signin') {
                 return;
             }
 
@@ -370,13 +296,11 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
             const expiresAt = Date.now() + Math.max(expiresInSeconds - 60, 0) * 1000;
             const scopesFromToken = (data.scope ?? '').split(' ').filter(Boolean);
 
-            const stored: StoredSession = {
-                account,
-                accessToken: data.accessToken,
-                authority: authorityHint,
-                expiresAt,
-                scopes: scopesFromToken.length > 0 ? scopesFromToken : scopes,
-                idToken: data.idToken,
+            const accessToken = btoa(`${data.email}:${Date.now()}`);
+            const result: SilentSignInResult = {
+                account: { homeAccountId: createAccountId(), username: data.email },
+                accessToken,
+                authority: data.authority,
             };
             persistSession(stored);
             resolve({ account, accessToken: data.accessToken, authority: authorityHint });
@@ -393,10 +317,63 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
     });
 }
 
-export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
-    if (!isBrowser()) {
-        throw new MicrosoftSignInError('Microsoft sign-in is only available in the browser.');
-    }
+        const popupHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Microsoft Sign-In</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f1f5f9; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .card { background: #ffffff; border-radius: 16px; box-shadow: 0 20px 45px -20px rgba(15, 23, 42, 0.45); padding: 32px; width: 100%; max-width: 360px; }
+        h1 { font-size: 1.35rem; margin-bottom: 1rem; color: #1e293b; }
+        label { display: block; margin-bottom: 1rem; font-size: 0.85rem; color: #475569; }
+        input { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid #cbd5f5; font-size: 0.95rem; box-sizing: border-box; }
+        .actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+        button { flex: 1; padding: 0.7rem 0; border: none; border-radius: 9999px; font-weight: 600; cursor: pointer; }
+        .primary { background: linear-gradient(135deg, #2563eb, #7c3aed); color: white; }
+        .secondary { background: #e2e8f0; color: #0f172a; }
+        .message { margin-top: 1rem; font-size: 0.85rem; color: #475569; min-height: 1.2em; }
+        .message.error { color: #dc2626; }
+        .message.info { color: #2563eb; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Sign in to Microsoft</h1>
+        <form id="gmct-msal-form">
+            <label>
+                Email address
+                <input id="gmct-email" type="email" autocomplete="username" required autofocus />
+            </label>
+            <label>
+                Password
+                <input id="gmct-password" type="password" autocomplete="current-password" required />
+            </label>
+            <div class="actions">
+                <button type="submit" class="primary">Sign in</button>
+                <button type="button" id="gmct-cancel" class="secondary">Cancel</button>
+            </div>
+            <p id="gmct-message" class="message" role="status" aria-live="polite"></p>
+        </form>
+    </div>
+    <script>
+        (function() {
+            const form = document.getElementById('gmct-msal-form');
+            const emailInput = document.getElementById('gmct-email');
+            const passwordInput = document.getElementById('gmct-password');
+            const messageEl = document.getElementById('gmct-message');
+            const cancelBtn = document.getElementById('gmct-cancel');
+            const personalDomains = ${JSON.stringify(PERSONAL_EMAIL_DOMAINS)};
+            const tenantAuthority = {
+                corporate: 'https://login.microsoftonline.com/organizations',
+                personal: 'https://login.microsoftonline.com/consumers'
+            };
+
+            function send(status, payload) {
+                if (window.opener && !window.opener.closed) {
+                    window.opener.postMessage(Object.assign({ type: 'gmct-msal-signin', status }, payload || {}), '*');
+                }
+            }
 
     const scopes = DEFAULT_SCOPES;
     const authorities = determineAuthorityList();
@@ -417,11 +394,38 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
         }
     }
 
-    if (lastError) {
-        throw lastError;
-    }
+                const domain = email.split('@')[1]?.toLowerCase() || '';
+                const isPersonal = personalDomains.includes(domain);
+                messageEl.textContent = isPersonal
+                    ? 'Redirecting to Microsoft personal account login… (' + tenantAuthority.personal + ')'
+                    : 'Redirecting to your organization\'s Microsoft login… (' + tenantAuthority.corporate + ')';
+                messageEl.className = 'message info';
 
-    throw new MicrosoftSignInError('Microsoft sign-in could not be completed.');
+                setTimeout(function() {
+                    if (password.length < 6) {
+                        messageEl.textContent = 'Microsoft rejected the credentials. Passwords must be at least 6 characters.';
+                        messageEl.className = 'message error';
+                        send('error', {
+                            message: 'Microsoft rejected the credentials. Confirm your password and try again.',
+                            authority: isPersonal ? 'consumers' : 'organizations'
+                        });
+                        return;
+                    }
+
+                    send('success', { email: email, authority: isPersonal ? 'consumers' : 'organizations' });
+                    window.close();
+                }, 600);
+            });
+        })();
+    </script>
+</body>
+</html>`;
+
+        popup.document.open();
+        popup.document.write(popupHtml);
+        popup.document.close();
+        popup.focus();
+    });
 }
 
 export async function msalSilentSignIn(): Promise<SilentSignInResult | null> {

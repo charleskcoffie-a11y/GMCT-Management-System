@@ -39,7 +39,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
         setCloud(prev => ({ ...prev, ready: true, message: 'Awaiting authentication response…' }));
         try {
             const session = await msalInteractiveSignIn();
-            const username = session.account.username ?? session.account.name ?? 'connected account';
+            const username = session.account.username ?? 'connected account';
             const authorityHint = session.authority === 'organizations'
                 ? ' (work account)'
                 : session.authority === 'consumers'
@@ -58,10 +58,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             setAuthMessage(successMessage);
             setToast({ message: successMessage, tone: 'success' });
         } catch (error) {
-            const failureMessage =
-                error instanceof Error
-                    ? error.message
-                    : 'Sign in failed. Please check your credentials or network connection.';
+            const failureMessage = 'Sign in failed. Please check your credentials or network connection.';
             setCloud(prev => ({
                 ...prev,
                 ready: true,
