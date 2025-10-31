@@ -9,6 +9,9 @@ import type {
     Method,
     ServiceType,
     Settings,
+    Task,
+    TaskPriority,
+    TaskStatus,
     User,
     UserRole,
     WeeklyHistoryAttendanceBreakdown,
@@ -20,6 +23,7 @@ import {
     DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
     DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
     DEFAULT_SHAREPOINT_SITE_URL,
+    DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
 } from './constants';
 
 // --- String & Sanitization ---
@@ -107,6 +111,7 @@ export function sanitizeSettings(raw: any): Settings {
         sharePointEntriesListName: sanitizeString(source.sharePointEntriesListName) || DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
         sharePointMembersListName: sanitizeString(source.sharePointMembersListName) || DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
         sharePointHistoryListName: sanitizeString(source.sharePointHistoryListName) || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
+        sharePointTasksListName: sanitizeString(source.sharePointTasksListName) || DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
     };
 }
 
@@ -169,6 +174,76 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
         observations: sanitizeString(raw.observations),
         preparedBy: sanitizeString(raw.preparedBy),
     };
+}
+
+export function sanitizeTaskStatus(status: any): TaskStatus {
+    const valid: TaskStatus[] = ['Pending', 'In Progress', 'Completed'];
+    return valid.includes(status) ? status : 'Pending';
+}
+
+export function sanitizeTaskPriority(priority: any): TaskPriority {
+    const valid: TaskPriority[] = ['Low', 'Medium', 'High'];
+    return valid.includes(priority) ? priority : 'Medium';
+}
+
+export function sanitizeTask(raw: any): Task {
+    const nowIso = new Date().toISOString();
+    const sanitizedTitle = sanitizeString(raw?.title).slice(0, 120);
+    const rawNotes = typeof raw?.notes === 'string' ? raw.notes : '';
+    const notes = rawNotes ? rawNotes.slice(0, 2000) : undefined;
+
+    let dueDate: string | undefined;
+    if (raw?.dueDate) {
+        const parsed = new Date(raw.dueDate);
+        if (!Number.isNaN(parsed.getTime())) {
+            dueDate = parsed.toISOString().slice(0, 10);
+        }
+    }
+
+    let createdAt: string;
+    if (typeof raw?.createdAt === 'string' && !Number.isNaN(Date.parse(raw.createdAt))) {
+        createdAt = new Date(raw.createdAt).toISOString();
+    } else {
+        createdAt = nowIso;
+    }
+
+    let updatedAt: string;
+    if (typeof raw?.updatedAt === 'string' && !Number.isNaN(Date.parse(raw.updatedAt))) {
+        updatedAt = new Date(raw.updatedAt).toISOString();
+    } else {
+        updatedAt = createdAt;
+    }
+
+    const syncBlock = raw && typeof raw === 'object' && '_sync' in raw ? (raw as Task)._sync : undefined;
+    const lastSyncedAt = syncBlock && typeof syncBlock.lastSyncedAt === 'string' && !Number.isNaN(Date.parse(syncBlock.lastSyncedAt))
+        ? new Date(syncBlock.lastSyncedAt).toISOString()
+        : undefined;
+    const dirty = !!(syncBlock ? syncBlock.dirty : false);
+
+    return {
+        id: sanitizeString(raw?.id) || generateId('task'),
+        spId: sanitizeString(raw?.spId),
+        title: sanitizedTitle || 'Untitled Task',
+        notes,
+        createdBy: sanitizeString(raw?.createdBy) || 'system',
+        assignedTo: sanitizeString(raw?.assignedTo) || undefined,
+        dueDate,
+        status: sanitizeTaskStatus(raw?.status),
+        priority: sanitizeTaskPriority(raw?.priority),
+        createdAt,
+        updatedAt,
+        _sync: {
+            dirty,
+            lastSyncedAt,
+        },
+    };
+}
+
+export function sanitizeTasksCollection(raw: any): Task[] {
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    return raw.map(item => sanitizeTask(item));
 }
 
 function normalizeNumber(value: any): number {
