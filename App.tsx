@@ -105,6 +105,7 @@ const App: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
     const [syncMessage, setSyncMessage] = useState<string | null>(null);
     const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -126,7 +127,7 @@ const App: React.FC = () => {
     const [endDateFilter, setEndDateFilter] = useState('');
 
 
-    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '' });
+    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '', activeUsers: null });
 
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
@@ -227,9 +228,17 @@ const App: React.FC = () => {
         const attemptSilentSignin = async () => {
             const session = await msalSilentSignIn();
             if (session) {
-                setCloud({ ready: true, signedIn: true, account: session.account, accessToken: session.accessToken, message: 'Signed in silently.' });
+                setCloud(prev => ({
+                    ...prev,
+                    ready: true,
+                    signedIn: true,
+                    account: session.account,
+                    accessToken: session.accessToken,
+                    activeUsers: typeof prev.activeUsers === 'number' ? Math.max(prev.activeUsers, 1) : 1,
+                    message: 'Signed in silently.',
+                }));
             } else {
-                setCloud({ ready: true, signedIn: false, message: 'Ready for manual sign-in.' });
+                setCloud(prev => ({ ...prev, ready: true, signedIn: false, message: 'Ready for manual sign-in.' }));
             }
         };
         attemptSilentSignin();
@@ -581,7 +590,14 @@ const App: React.FC = () => {
     const handleLogout = () => {
         setCurrentUser(null);
         setIsNavOpen(false);
-        setCloud(prev => ({ ...prev, signedIn: false, accessToken: undefined, account: undefined, message: 'Ready for manual sign-in.' }));
+        setCloud(prev => ({
+            ...prev,
+            signedIn: false,
+            accessToken: undefined,
+            account: undefined,
+            message: 'Ready for manual sign-in.',
+            activeUsers: null,
+        }));
     };
 
     const handleSaveEntry = (entry: Entry) => {
@@ -623,7 +639,14 @@ const App: React.FC = () => {
     };
 
     const handleRecordImportClick = () => {
-        recordFileInputRef.current?.click();
+        setIsImportConfirmOpen(true);
+    };
+
+    const confirmRecordImport = () => {
+        setIsImportConfirmOpen(false);
+        window.setTimeout(() => {
+            recordFileInputRef.current?.click();
+        }, 0);
     };
 
     const handleRecordFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -686,7 +709,7 @@ const App: React.FC = () => {
         setAttendance([]);
         setWeeklyHistory([]);
         setCurrentUser(null);
-        setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.' });
+        setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.', activeUsers: null });
     };
     
     const handleExport = (format: 'csv' | 'json') => {
@@ -781,10 +804,20 @@ const App: React.FC = () => {
         return <Login onLogin={handleLogin} error={loginError} />;
     }
 
+    const activeUsersCount = cloud.activeUsers ?? (cloud.signedIn ? 1 : (currentUser ? 1 : null));
+
     const renderTabContent = () => {
         switch (activeTab) {
             case 'home': return currentUser.role === 'admin' || currentUser.role === 'finance' ? <AdminLandingPage onNavigate={setActiveTab} currentUser={currentUser} /> : <Dashboard entries={filteredAndSortedEntries} settings={settings} />;
-            case 'records':
+            case 'records': {
+                const isLiveSharePoint = cloud.signedIn && !isOffline;
+                const dataSourceMessage = isLiveSharePoint
+                    ? 'Data source: SharePoint (live)'
+                    : 'Data source: Local records (not synced)';
+                const dataSourceStyles = isLiveSharePoint
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-amber-200 bg-amber-50 text-amber-700';
+
                 return (
                     <div className="space-y-6">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -792,38 +825,53 @@ const App: React.FC = () => {
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
+                            <div className="flex flex-col gap-3 items-stretch sm:flex-row sm:items-center sm:justify-end">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg w-full sm:w-auto"
                                 >
                                     Add New Entry
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleExport('csv')}
-                                    className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                >
-                                    Export CSV
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleExport('json')}
-                                    className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
-                                >
-                                    Export JSON
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleRecordImportClick}
-                                    className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                >
-                                    Import
-                                </button>
+                                <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('csv')}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white w-full sm:w-auto"
+                                    >
+                                        Export CSV
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('json')}
+                                        className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg w-full sm:w-auto"
+                                    >
+                                        Export JSON
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleRecordImportClick}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white w-full sm:w-auto"
+                                    >
+                                        Import
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <input ref={recordFileInputRef} type="file" accept=".csv,.json" className="hidden" onChange={handleRecordFileChange} />
+                        <ConfirmationModal
+                            isOpen={isImportConfirmOpen}
+                            onClose={() => setIsImportConfirmOpen(false)}
+                            onConfirm={confirmRecordImport}
+                            title="Confirm Import"
+                            message="Importing may overwrite or merge existing records. Do you want to continue?"
+                            confirmLabel="Import"
+                            confirmTone="primary"
+                        />
+
+                        <div className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${dataSourceStyles}`} role="status">
+                            {dataSourceMessage}
+                        </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-4">
@@ -890,6 +938,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 );
+            }
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries} settings={settings} />;
             case 'history':
@@ -943,7 +992,7 @@ const App: React.FC = () => {
         { id: 'home', label: 'HOME', roles: ['admin', 'finance'] },
         { id: 'tasks', label: 'TASKS', roles: ['admin', 'finance'] },
         { id: 'records', label: 'FINANCIAL RECORDS', roles: ['admin', 'finance'] },
-        { id: 'members', label: 'MEMBER DIRECTORY', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
+        { id: 'members', label: 'MEMBERS', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
         { id: 'insights', label: 'INSIGHTS', roles: ['admin', 'finance'] },
         { id: 'attendance', label: 'MARK ATTENDANCE', roles: ['admin', 'class-leader'] },
         { id: 'admin-attendance', label: 'ATTENDANCE REPORT', roles: ['admin', 'finance'] },
@@ -972,7 +1021,7 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
             <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
-                <Header currentUser={currentUser} onLogout={handleLogout} />
+                <Header currentUser={currentUser} onLogout={handleLogout} activeUsers={activeUsersCount} />
                 <div className="mt-4">
                     <SyncStatus
                         isOffline={isOffline}
@@ -1006,6 +1055,7 @@ const App: React.FC = () => {
                     onConfirm={confirmDeleteEntry}
                     title="Confirm Deletion"
                     message="Are you sure you want to delete this financial entry? This action cannot be undone."
+                    confirmLabel="Delete"
                 />
             </div>
         </div>

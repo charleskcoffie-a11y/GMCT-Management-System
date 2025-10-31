@@ -138,5 +138,6 @@ export interface CloudState {
   signedIn: boolean;
   account?: any;
   accessToken?: string;
+  activeUsers?: number | null;
   message: string;
 }
