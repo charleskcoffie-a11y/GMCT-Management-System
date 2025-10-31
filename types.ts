@@ -109,7 +109,29 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'members' | 'insights' | 'users' | 'settings' | 'attendance' | 'admin-attendance' | 'utilities' | 'history';
+export type TaskStatus = 'Pending' | 'In Progress' | 'Completed';
+export type TaskPriority = 'Low' | 'Medium' | 'High';
+
+export interface TaskSyncState {
+    lastSyncedAt?: string;
+    dirty: boolean;
+}
+
+export interface Task {
+    id: string;
+    title: string;
+    notes?: string;
+    createdBy: string;
+    assignedTo?: string;
+    dueDate?: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    createdAt: string;
+    updatedAt: string;
+    _sync: TaskSyncState;
+}
+
+export type Tab = 'home' | 'records' | 'members' | 'insights' | 'users' | 'settings' | 'attendance' | 'admin-attendance' | 'utilities' | 'history' | 'tasks';
 
 export interface CloudState {
   ready: boolean;

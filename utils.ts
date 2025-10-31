@@ -7,6 +7,9 @@ import type {
     Member,
     MemberAttendance,
     Method,
+    Task,
+    TaskPriority,
+    TaskStatus,
     ServiceType,
     Settings,
     User,
@@ -66,6 +69,77 @@ export function sanitizeMember(raw: any): Member {
         spId: sanitizeString(raw.spId),
         name: sanitizeString(raw.name) || "Unnamed Member",
         classNumber: sanitizeString(raw.classNumber),
+    };
+}
+
+export function sanitizeTaskStatus(status: any): TaskStatus {
+    const validStatuses: TaskStatus[] = ['Pending', 'In Progress', 'Completed'];
+    if (typeof status === 'string') {
+        const normalized = status.trim();
+        const matched = validStatuses.find(option => option.toLowerCase() === normalized.toLowerCase());
+        if (matched) {
+            return matched;
+        }
+    }
+    return 'Pending';
+}
+
+export function sanitizeTaskPriority(priority: any): TaskPriority {
+    const validPriorities: TaskPriority[] = ['Low', 'Medium', 'High'];
+    if (typeof priority === 'string') {
+        const normalized = priority.trim();
+        const matched = validPriorities.find(option => option.toLowerCase() === normalized.toLowerCase());
+        if (matched) {
+            return matched;
+        }
+    }
+    return 'Medium';
+}
+
+export function sanitizeTask(raw: any): Task {
+    const rawTask = (raw && typeof raw === 'object') ? raw as Record<string, unknown> : {};
+    const nowIso = new Date().toISOString();
+
+    const parseIsoDate = (value: unknown): string | undefined => {
+        if (typeof value !== 'string') return undefined;
+        const timestamp = Date.parse(value);
+        if (Number.isNaN(timestamp)) return undefined;
+        return new Date(timestamp).toISOString();
+    };
+
+    const parseIsoDay = (value: unknown): string | undefined => {
+        if (typeof value !== 'string') return undefined;
+        const parsed = Date.parse(value);
+        if (Number.isNaN(parsed)) return undefined;
+        return new Date(parsed).toISOString().slice(0, 10);
+    };
+
+    const sanitizedTitle = sanitizeString(rawTask.title) || 'Untitled Task';
+    const sanitizedNotes = sanitizeString(rawTask.notes);
+    const sanitizedAssignedTo = sanitizeString(rawTask.assignedTo);
+    const sanitizedDueDate = parseIsoDay(rawTask.dueDate);
+    const createdAt = parseIsoDate(rawTask.createdAt) ?? nowIso;
+    const updatedAt = parseIsoDate(rawTask.updatedAt) ?? createdAt;
+
+    const syncRaw = (rawTask._sync && typeof rawTask._sync === 'object') ? rawTask._sync as Record<string, unknown> : {};
+    const lastSyncedAt = parseIsoDate(syncRaw.lastSyncedAt);
+    const dirty = typeof syncRaw.dirty === 'boolean' ? syncRaw.dirty : true;
+
+    return {
+        id: sanitizeString(rawTask.id) || generateId('task'),
+        title: sanitizedTitle.slice(0, 120),
+        notes: sanitizedNotes ? sanitizedNotes.slice(0, 2000) : undefined,
+        createdBy: sanitizeString(rawTask.createdBy) || 'system',
+        assignedTo: sanitizedAssignedTo || undefined,
+        dueDate: sanitizedDueDate,
+        status: sanitizeTaskStatus(rawTask.status),
+        priority: sanitizeTaskPriority(rawTask.priority),
+        createdAt,
+        updatedAt,
+        _sync: {
+            dirty,
+            lastSyncedAt,
+        },
     };
 }
 
@@ -249,6 +323,10 @@ export function sanitizeUsersCollection(raw: unknown, fallback: User[] = []): Us
     return users.length > 0 ? users : fallback;
 }
 
+export function sanitizeTasksCollection(raw: unknown): Task[] {
+    return Array.isArray(raw) ? raw.map(item => sanitizeTask(item)) : [];
+}
+
 export function sanitizeAttendanceCollection(raw: unknown): AttendanceRecord[] {
     return Array.isArray(raw) ? raw.map(item => sanitizeAttendanceRecord(item)) : [];
 }
@@ -321,20 +399,39 @@ export function formatCurrency(amount: number, currency: string = 'USD'): string
 }
 let fallbackCounter = 0;
 
+function generateUuidFromCrypto(cryptoObj: Crypto | undefined): string | null {
+    if (!cryptoObj) {
+        return null;
+    }
+
+    if (typeof cryptoObj.randomUUID === 'function') {
+        return cryptoObj.randomUUID();
+    }
+
+    if (typeof cryptoObj.getRandomValues === 'function') {
+        const buffer = new Uint8Array(16);
+        cryptoObj.getRandomValues(buffer);
+
+        // Per RFC 4122, version 4 UUIDs set the version and variant bits explicitly
+        buffer[6] = (buffer[6] & 0x0f) | 0x40;
+        buffer[8] = (buffer[8] & 0x3f) | 0x80;
+
+        const hex = Array.from(buffer, byte => byte.toString(16).padStart(2, '0'));
+        return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+    }
+
+    return null;
+}
+
 export function generateId(prefix: string = 'gmct'): string {
     try {
         const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis as typeof globalThis & { crypto?: Crypto }).crypto : undefined;
-        if (cryptoObj?.randomUUID) {
-            return cryptoObj.randomUUID();
+        const uuid = generateUuidFromCrypto(cryptoObj);
+        if (uuid) {
+            return uuid;
         }
     } catch (error) {
-        console.warn('generateId: crypto.randomUUID is not available.', error);
-    }
-
-    try {
-        return uuidv4();
-    } catch (error) {
-        console.warn('generateId: uuidv4() failed, falling back to Math.random()', error);
+        console.warn('generateId: crypto API is unavailable, falling back to pseudo-random id generation.', error);
     }
 
     fallbackCounter = (fallbackCounter + 1) % 0x10000;
