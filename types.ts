@@ -36,6 +36,7 @@ export interface Settings {
     sharePointEntriesListName: string;
     sharePointMembersListName: string;
     sharePointHistoryListName: string;
+    sharePointTasksListName: string;
 }
 
 export type UserRole = 'admin' | 'finance' | 'class-leader' | 'statistician';
@@ -109,7 +110,28 @@ export interface WeeklyHistoryRecord {
     preparedBy: string;
 }
 
-export type Tab = 'home' | 'records' | 'members' | 'insights' | 'users' | 'settings' | 'attendance' | 'admin-attendance' | 'utilities' | 'history';
+export type TaskStatus = 'Pending' | 'In Progress' | 'Completed';
+export type TaskPriority = 'Low' | 'Medium' | 'High';
+
+export interface Task {
+    id: string;
+    spId?: string;
+    title: string;
+    notes?: string;
+    createdBy: string;
+    assignedTo?: string;
+    dueDate?: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    createdAt: string;
+    updatedAt: string;
+    _sync: {
+        lastSyncedAt?: string;
+        dirty: boolean;
+    };
+}
+
+export type Tab = 'home' | 'records' | 'members' | 'insights' | 'users' | 'settings' | 'attendance' | 'admin-attendance' | 'utilities' | 'history' | 'tasks';
 
 export interface CloudState {
   ready: boolean;

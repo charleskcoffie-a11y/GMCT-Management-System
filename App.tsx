@@ -15,6 +15,7 @@ import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
 import ConfirmationModal from './components/ConfirmationModal';
 import SyncStatus from './components/SyncStatus';
+import TasksTab from './components/TasksTab';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
@@ -54,6 +55,7 @@ import {
     deleteMemberFromSharePoint,
     resetContextCache,
 } from './services/sharepoint';
+import { clearAllTaskData } from './services/tasksStorage';
 import {
     DEFAULT_CURRENCY,
     DEFAULT_MAX_CLASSES,
@@ -61,6 +63,7 @@ import {
     DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
     DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
     DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
+    DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
 } from './constants';
 
 // Initial Data
@@ -78,6 +81,7 @@ const INITIAL_SETTINGS: Settings = {
     sharePointEntriesListName: DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
     sharePointMembersListName: DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
     sharePointHistoryListName: DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
+    sharePointTasksListName: DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
 };
 
 // Define the keys we can sort the financial records table by
@@ -598,6 +602,7 @@ const App: React.FC = () => {
         }
         const storageKeys = ['gmct-entries', 'gmct-members', 'gmct-users', 'gmct-settings', 'gmct-attendance', 'gmct-weekly-history'];
         storageKeys.forEach(key => localStorage.removeItem(key));
+        void clearAllTaskData().catch(error => console.error('Failed to clear task storage', error));
         setEntries([]);
         setMembers([]);
         setUsers(INITIAL_USERS);
@@ -791,6 +796,18 @@ const App: React.FC = () => {
                         canEdit={['admin', 'statistician'].includes(currentUser.role)}
                     />
                 );
+            case 'tasks':
+                if (!['admin', 'finance'].includes(currentUser.role)) {
+                    return <div className="p-6 text-slate-600">You do not have access to task management.</div>;
+                }
+                return (
+                    <TasksTab
+                        currentUser={currentUser}
+                        users={users}
+                        cloud={cloud}
+                        isOffline={isOffline}
+                    />
+                );
             case 'users': return <UsersTab users={users} setUsers={setUsers} />;
             case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} />;
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} onAttendanceSaved={setLastAttendanceSavedAt} />;
@@ -820,6 +837,7 @@ const App: React.FC = () => {
 
     const navItems: NavItem[] = [
         { id: 'home', label: 'Home', roles: ['admin', 'finance'] },
+        { id: 'tasks', label: 'TASKS', roles: ['admin', 'finance'] },
         { id: 'records', label: 'Financial Records', roles: ['admin', 'finance'] },
         { id: 'members', label: 'Member Directory', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
         { id: 'insights', label: 'Insights', roles: ['admin', 'finance'] },
