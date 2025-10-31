@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CloudState, Entry, EntryType, Member, Settings } from '../types';
-import { formatCurrency, fromCsv, sanitizeEntry, sanitizeMember, toCsv } from '../utils';
+import { formatCurrency, fromCsv, sanitizeEntry, sanitizeMember, toCsv, ENTRY_TYPE_VALUES, entryTypeLabel } from '../utils';
 import { testSharePointConnection } from '../services/sharepoint';
 import {
     SHAREPOINT_ENTRIES_LIST_NAME,
@@ -19,8 +19,6 @@ type UtilitiesProps = {
     onSaveTotalClasses: (total: number) => void;
 };
 
-const ENTRY_TYPES: EntryType[] = ['tithe', 'offering', 'thanksgiving-offering', 'first-fruit', 'pledge', 'harvest-levy', 'other'];
-
 const Utilities: React.FC<UtilitiesProps> = ({
     entries,
     members,
@@ -36,7 +34,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
 
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [selectedTypes, setSelectedTypes] = useState<EntryType[]>(ENTRY_TYPES);
+    const [selectedTypes, setSelectedTypes] = useState<EntryType[]>(ENTRY_TYPE_VALUES);
     const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
     const [showReport, setShowReport] = useState(false);
     const [isTestingConnection, setIsTestingConnection] = useState(false);
@@ -369,10 +367,10 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     <div className="flex flex-col gap-2">
                         <span className="text-sm font-semibold text-slate-600">Contribution types</span>
                         <div className="flex flex-wrap gap-2">
-                            {ENTRY_TYPES.map(type => (
+                            {ENTRY_TYPE_VALUES.map(type => (
                                 <label key={type} className="inline-flex items-center gap-2 bg-white/70 border border-slate-200 rounded-full px-3 py-1 text-xs uppercase tracking-wide">
                                     <input type="checkbox" checked={selectedTypes.includes(type)} onChange={() => toggleType(type)} />
-                                    <span>{type.replace('-', ' ')}</span>
+                                    <span>{entryTypeLabel(type)}</span>
                                 </label>
                             ))}
                         </div>
@@ -391,7 +389,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     </div>
                     <div className="lg:col-span-3 flex flex-wrap gap-3">
                         <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg">Generate report</button>
-                        <button type="button" onClick={() => { setStartDate(''); setEndDate(''); setSelectedTypes(ENTRY_TYPES); setSelectedClasses([]); setShowReport(false); }} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Reset filters</button>
+                        <button type="button" onClick={() => { setStartDate(''); setEndDate(''); setSelectedTypes(ENTRY_TYPE_VALUES); setSelectedClasses([]); setShowReport(false); }} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Reset filters</button>
                         {showReport && (
                             <>
                                 <button type="button" onClick={() => exportReport('csv')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg">Export CSV</button>
@@ -436,7 +434,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                                             <td className="px-4 py-2">{row.date}</td>
                                             <td className="px-4 py-2 font-medium text-slate-800">{row.memberName || 'Unassigned'}</td>
                                             <td className="px-4 py-2 text-center">{row.classNumber}</td>
-                                            <td className="px-4 py-2 capitalize">{row.type}</td>
+                                            <td className="px-4 py-2">{entryTypeLabel(row.type)}</td>
                                             <td className="px-4 py-2 capitalize">{row.method}</td>
                                             <td className="px-4 py-2">{formatCurrency(row.amount, settings.currency)}</td>
                                             <td className="px-4 py-2">{row.note}</td>

@@ -26,6 +26,57 @@ import {
     DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
 } from './constants';
 
+export const ENTRY_TYPE_VALUES: EntryType[] = [
+    'tithe',
+    'offering',
+    'thanksgiving-offering',
+    'kofi-ama',
+    'harvest',
+    'pledge',
+    'harvest-levy',
+    'other',
+];
+
+const ENTRY_TYPE_LABEL_MAP: Record<EntryType, string> = {
+    'tithe': 'Tithe',
+    'offering': 'Offering',
+    'thanksgiving-offering': 'Thanksgiving Offering',
+    'kofi-ama': 'Kofi & Ama',
+    'harvest': 'Harvest',
+    'pledge': 'Pledge',
+    'harvest-levy': 'Harvest Levy',
+    'other': 'Donation',
+};
+
+const ENTRY_TYPE_ALIAS_MAP: Record<string, EntryType> = {
+    'tithe': 'tithe',
+    'offering': 'offering',
+    'thanksgiving-offering': 'thanksgiving-offering',
+    'thanksgivingoffering': 'thanksgiving-offering',
+    'kofi-ama': 'kofi-ama',
+    'kofiandama': 'kofi-ama',
+    'kofi&ama': 'kofi-ama',
+    'kofi & ama': 'kofi-ama',
+    'kofi and ama': 'kofi-ama',
+    'first-fruit': 'kofi-ama',
+    'first fruit': 'kofi-ama',
+    'firstfruit': 'kofi-ama',
+    'harvest': 'harvest',
+    'harvest-offering': 'harvest',
+    'harvest offering': 'harvest',
+    'harvestoffering': 'harvest',
+    'pledge': 'pledge',
+    'harvest-levy': 'harvest-levy',
+    'harvest levy': 'harvest-levy',
+    'harvestlevy': 'harvest-levy',
+    'donation': 'other',
+    'other': 'other',
+};
+
+export function entryTypeLabel(type: EntryType): string {
+    return ENTRY_TYPE_LABEL_MAP[type] ?? type.charAt(0).toUpperCase() + type.slice(1);
+}
+
 // --- String & Sanitization ---
 
 export function sanitizeString(input: any): string {
@@ -254,16 +305,37 @@ function normalizeNumber(value: any): number {
 // --- Enum Sanitizers ---
 
 export function sanitizeEntryType(type: any): EntryType {
-    const validTypes: EntryType[] = [
-        "tithe",
-        "offering",
-        "thanksgiving-offering",
-        "first-fruit",
-        "pledge",
-        "harvest-levy",
-        "other",
-    ];
-    return validTypes.includes(type) ? type : "other";
+    if (typeof type === 'string') {
+        const trimmed = sanitizeString(type);
+        const normalized = trimmed.toLowerCase();
+        const variations = new Set<string>();
+
+        if (normalized) {
+            variations.add(normalized);
+            variations.add(normalized.replace(/&/g, 'and'));
+            variations.add(normalized.replace(/[\s_]+/g, '-'));
+            variations.add(normalized.replace(/[\s_&-]+/g, ''));
+        }
+
+        for (const candidate of variations) {
+            const match = ENTRY_TYPE_ALIAS_MAP[candidate];
+            if (match) {
+                return match;
+            }
+        }
+
+        for (const value of ENTRY_TYPE_VALUES) {
+            if (variations.has(value)) {
+                return value;
+            }
+            const label = ENTRY_TYPE_LABEL_MAP[value].toLowerCase();
+            if (variations.has(label) || variations.has(label.replace(/&/g, 'and'))) {
+                return value;
+            }
+        }
+    }
+
+    return 'other';
 }
 
 export function sanitizeMethod(method: any): Method {

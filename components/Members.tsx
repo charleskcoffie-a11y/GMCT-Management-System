@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { Member, Settings } from '../types';
-import { fromCsv, generateId, sanitizeMember } from '../utils';
+import { fromCsv, generateId, sanitizeMember, toCsv } from '../utils';
 
 interface MembersProps {
     members: Member[];
@@ -76,6 +76,38 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
         setEditClassNumber('');
     };
 
+    const handleExportMembers = (format: 'csv' | 'json') => {
+        if (members.length === 0) {
+            alert('No members to export yet. Add members before exporting.');
+            return;
+        }
+
+        const rows = members.map(member => ({
+            id: member.id,
+            name: member.name,
+            classNumber: member.classNumber ?? '',
+            spId: member.spId ?? '',
+        }));
+
+        const filename = `gmct-members-${new Date().toISOString().slice(0, 10)}`;
+
+        if (format === 'csv') {
+            const csv = toCsv(rows);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${filename}.csv`;
+            link.click();
+        } else {
+            const json = JSON.stringify(rows, null, 2);
+            const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${filename}.json`;
+            link.click();
+        }
+    };
+
     const handleImportClick = () => fileInputRef.current?.click();
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,6 +165,12 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                 <div className="flex flex-wrap gap-3 mt-4">
                     <button type="button" onClick={handleImportClick} className="bg-white/80 border border-emerald-200 text-emerald-700 font-semibold rounded-lg px-3 py-2 hover:bg-white">
                         Import Members (CSV)
+                    </button>
+                    <button type="button" onClick={() => handleExportMembers('csv')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-3 py-2">
+                        Export CSV
+                    </button>
+                    <button type="button" onClick={() => handleExportMembers('json')} className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold rounded-lg px-3 py-2 hover:bg-white">
+                        Export JSON
                     </button>
                     <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
                     <p className="text-sm text-slate-500">CSV headers supported: <code>name</code>, <code>classNumber</code>, <code>spId</code>, <code>id</code>.</p>
