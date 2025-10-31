@@ -20,6 +20,7 @@ import TasksTab from './components/TasksTab';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
     toCsv,
+    fromCsv,
     sanitizeEntry,
     sanitizeMember,
     sanitizeUser,
@@ -32,6 +33,8 @@ import {
     sanitizeAttendanceCollection,
     sanitizeWeeklyHistoryCollection,
     sanitizeString,
+    ENTRY_TYPE_VALUES,
+    entryTypeLabel,
 } from './utils';
 import type {
     Entry,
@@ -128,6 +131,7 @@ const App: React.FC = () => {
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
+    const recordFileInputRef = useRef<HTMLInputElement | null>(null);
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
@@ -497,16 +501,54 @@ const App: React.FC = () => {
         return sortableEntries;
     }, [entries, sortConfig, membersMap, searchFilter, classFilter, typeFilter, startDateFilter, endDateFilter]);
 
+    const filteredTotalAmount = useMemo(() => {
+        return filteredAndSortedEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    }, [filteredAndSortedEntries]);
+
+    const dateFilterLabel = useMemo(() => {
+        const formatDate = (value: string) => {
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime())
+                ? value
+                : parsed.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        };
+
+        if (startDateFilter && endDateFilter) {
+            return `${formatDate(startDateFilter)} – ${formatDate(endDateFilter)}`;
+        }
+        if (startDateFilter) {
+            return `From ${formatDate(startDateFilter)}`;
+        }
+        if (endDateFilter) {
+            return `Through ${formatDate(endDateFilter)}`;
+        }
+        return 'All dates';
+    }, [startDateFilter, endDateFilter]);
+
+    const filtersSummary = useMemo(() => {
+        const parts: string[] = [`Date: ${dateFilterLabel}`];
+        if (typeFilter !== 'all') {
+            parts.push(`Type: ${entryTypeLabel(typeFilter)}`);
+        }
+        if (classFilter !== 'all') {
+            parts.push(`Class ${classFilter}`);
+        }
+        if (searchFilter.trim()) {
+            parts.push('Keyword filter active');
+        }
+        return parts.join(' • ');
+    }, [dateFilterLabel, typeFilter, classFilter, searchFilter]);
+
     const recordRows = useMemo(() => filteredAndSortedEntries.map(entry => {
         const member = membersMap.get(entry.memberID);
 
         return (
             <tr key={entry.id} className="bg-white border-b hover:bg-slate-50">
                 <td className="px-6 py-4">{entry.date}</td>
-                <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName}</td>
-                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || 'N/A'}</td>
-                <td className="px-6 py-4 text-center">{member?.classNumber || 'N/A'}</td>
-                <td className="px-6 py-4 capitalize">{entry.type}</td>
+                <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName || '—'}</td>
+                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || '—'}</td>
+                <td className="px-6 py-4 text-center">{member?.classNumber ? `Class ${member.classNumber}` : '—'}</td>
+                <td className="px-6 py-4">{entryTypeLabel(entry.type)}</td>
                 <td className="px-6 py-4">{formatCurrency(entry.amount, settings.currency)}</td>
                 <td className="px-6 py-4 text-right">
                     <button
@@ -578,6 +620,40 @@ const App: React.FC = () => {
 
     const handleImport = (newEntries: Entry[]) => {
         setEntries(prev => [...prev, ...newEntries]);
+    };
+
+    const handleRecordImportClick = () => {
+        recordFileInputRef.current?.click();
+    };
+
+    const handleRecordFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) {
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const text = typeof reader.result === 'string' ? reader.result : '';
+                let imported: Entry[] = [];
+                if (file.name.toLowerCase().endsWith('.csv')) {
+                    const rows = fromCsv(text);
+                    imported = rows.map(row => sanitizeEntry(row));
+                } else {
+                    const raw = JSON.parse(text) as unknown;
+                    const array = Array.isArray(raw) ? raw : [];
+                    imported = array.map(item => sanitizeEntry(item));
+                }
+                handleImport(imported);
+                alert(`Imported ${imported.length} financial record${imported.length === 1 ? '' : 's'}.`);
+            } catch (error) {
+                console.error('Failed to import financial records', error);
+                alert('Unable to import the selected file. Ensure it is a valid CSV or JSON export.');
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
     };
 
     const handleBulkAddMembers = (importedMembers: Member[]) => {
@@ -711,16 +787,54 @@ const App: React.FC = () => {
             case 'records':
                 return (
                     <div className="space-y-6">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
-                            <button onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Add New Entry</button>
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
+                                <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
+                                >
+                                    Add New Entry
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleExport('csv')}
+                                    className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                >
+                                    Export CSV
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleExport('json')}
+                                    className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
+                                >
+                                    Export JSON
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleRecordImportClick}
+                                    className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                >
+                                    Import
+                                </button>
+                            </div>
                         </div>
+                        <input ref={recordFileInputRef} type="file" accept=".csv,.json" className="hidden" onChange={handleRecordFileChange} />
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-4">
                                 <p className="text-sm uppercase tracking-wide text-amber-600 font-semibold">Stored Entries</p>
                                 <p className="text-3xl font-extrabold text-slate-800 mt-1">{entries.length.toLocaleString()}</p>
                                 <p className="text-xs text-slate-500 mt-2">Total financial entries captured in this workspace.</p>
+                            </div>
+                            <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-4">
+                                <p className="text-sm uppercase tracking-wide text-emerald-600 font-semibold">Filtered Total</p>
+                                <p className="text-3xl font-extrabold text-slate-800 mt-1">{formatCurrency(filteredTotalAmount, settings.currency)}</p>
+                                <p className="text-xs text-slate-500 mt-2 leading-relaxed">{filtersSummary}</p>
                             </div>
                         </div>
 
@@ -741,18 +855,8 @@ const App: React.FC = () => {
                                 <label htmlFor="typeFilter" className="block text-sm font-medium text-slate-700">Type</label>
                                 <select id="typeFilter" value={typeFilter} onChange={e => setTypeFilter(e.target.value as EntryType | 'all')} className="mt-1 block w-full border-slate-300 rounded-md shadow-sm">
                                     <option value="all">All Types</option>
-                                    {([
-                                        "tithe",
-                                        "offering",
-                                        "thanksgiving-offering",
-                                        "first-fruit",
-                                        "pledge",
-                                        "harvest-levy",
-                                        "other",
-                                    ] as EntryType[]).map(t => (
-                                        <option key={t} value={t}>
-                                            {t.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                        </option>
+                                    {ENTRY_TYPE_VALUES.map(type => (
+                                        <option key={type} value={type}>{entryTypeLabel(type)}</option>
                                     ))}
                                 </select>
                             </div>
@@ -836,17 +940,17 @@ const App: React.FC = () => {
     };
 
     const navItems: NavItem[] = [
-        { id: 'home', label: 'Home', roles: ['admin', 'finance'] },
+        { id: 'home', label: 'HOME', roles: ['admin', 'finance'] },
         { id: 'tasks', label: 'TASKS', roles: ['admin', 'finance'] },
-        { id: 'records', label: 'Financial Records', roles: ['admin', 'finance'] },
-        { id: 'members', label: 'Member Directory', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
-        { id: 'insights', label: 'Insights', roles: ['admin', 'finance'] },
-        { id: 'attendance', label: 'Mark Attendance', roles: ['admin', 'class-leader'] },
-        { id: 'admin-attendance', label: 'Attendance Report', roles: ['admin', 'finance'] },
-        { id: 'history', label: 'Weekly History', roles: ['admin', 'statistician'] },
-        { id: 'users', label: 'Manage Users', roles: ['admin', 'finance'] },
-        { id: 'utilities', label: 'Utilities', roles: ['admin'] },
-        { id: 'settings', label: 'Settings', roles: ['admin'] },
+        { id: 'records', label: 'FINANCIAL RECORDS', roles: ['admin', 'finance'] },
+        { id: 'members', label: 'MEMBER DIRECTORY', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
+        { id: 'insights', label: 'INSIGHTS', roles: ['admin', 'finance'] },
+        { id: 'attendance', label: 'MARK ATTENDANCE', roles: ['admin', 'class-leader'] },
+        { id: 'admin-attendance', label: 'ATTENDANCE REPORT', roles: ['admin', 'finance'] },
+        { id: 'history', label: 'WEEKLY HISTORY', roles: ['admin', 'statistician'] },
+        { id: 'users', label: 'MANAGE USERS', roles: ['admin', 'finance'] },
+        { id: 'utilities', label: 'UTILITIES', roles: ['admin'] },
+        { id: 'settings', label: 'SETTINGS', roles: ['admin'] },
     ];
 
     const visibleNavItems = navItems.filter(item => item.roles.includes(currentUser.role));
@@ -868,7 +972,7 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
             <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
-                <Header entries={entries} onImport={handleImport} onExport={handleExport} currentUser={currentUser} onLogout={handleLogout} />
+                <Header currentUser={currentUser} onLogout={handleLogout} />
                 <div className="mt-4">
                     <SyncStatus
                         isOffline={isOffline}

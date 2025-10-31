@@ -1,4 +1,4 @@
-export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "first-fruit" | "pledge" | "harvest-levy" | "other";
+export type EntryType = "tithe" | "offering" | "thanksgiving-offering" | "kofi-ama" | "harvest" | "pledge" | "harvest-levy" | "other";
 export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "other";
 
 export interface Entry {

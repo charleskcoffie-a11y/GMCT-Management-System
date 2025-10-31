@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import type { CloudState, Settings } from '../types';
+import { msalInteractiveSignIn } from '../services/oneDrive';
 
 interface SettingsProps {
     settings: Settings;
@@ -26,9 +27,34 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
         event.target.value = '';
     };
 
-    const handleManualSignIn = () => {
+    const handleManualSignIn = async () => {
         setAuthMessage('Preparing secure sign-in. Complete the Microsoft prompt in the pop-up window.');
-        setCloud(prev => ({ ...prev, message: 'Awaiting authentication response…' }));
+        setCloud(prev => ({ ...prev, ready: true, message: 'Awaiting authentication response…' }));
+        try {
+            const session = await msalInteractiveSignIn();
+            const username = session.account.username ?? 'connected account';
+            const successMessage = `You are now signed in as ${username}.`;
+            setCloud(prev => ({
+                ...prev,
+                ready: true,
+                signedIn: true,
+                account: session.account,
+                accessToken: session.accessToken,
+                message: successMessage,
+            }));
+            setAuthMessage(successMessage);
+        } catch (error) {
+            const failureMessage = error instanceof Error ? error.message : 'Sign in failed. Please check your credentials or network connection.';
+            setCloud(prev => ({
+                ...prev,
+                ready: true,
+                signedIn: false,
+                account: undefined,
+                accessToken: undefined,
+                message: failureMessage,
+            }));
+            setAuthMessage(failureMessage);
+        }
     };
 
     const handleShareAccess = () => {

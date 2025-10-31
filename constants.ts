@@ -1,8 +1,11 @@
 // constants.ts
 
+// --- Application Metadata ---
+export const APP_VERSION = '0.0.0';
+
 // --- MSAL / OneDrive Configuration ---
 // IMPORTANT: Replace with your actual Azure App Registration Client ID
-export const MSAL_CLIENT_ID = "c8358699-db35-45ca-997d-dc15c2be9553"; 
+export const MSAL_CLIENT_ID = "c8358699-db35-45ca-997d-dc15c2be9553";
 // IMPORTANT: To fix sign-in errors for single-tenant apps, replace this with your Azure Tenant ID.
 // You can find this on the Overview page of your Azure Active Directory.
 // e.g., "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" or "yourtenant.onmicrosoft.com"
