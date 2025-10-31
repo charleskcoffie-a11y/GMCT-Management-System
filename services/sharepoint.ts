@@ -40,7 +40,7 @@ function parseSiteResource(url: string): string | null {
 function mapErrorToMessage(error: GraphError, context?: { listName?: string }): string {
     switch (error) {
         case 'not-signed-in':
-            return "You're not signed in / no permission.";
+            return 'Access denied. Sign in with an authorised Microsoft account that can view this SharePoint list.';
         case 'missing-config':
             return 'A required field is missing.';
         case 'list-missing':
