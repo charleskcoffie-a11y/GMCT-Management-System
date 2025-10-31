@@ -139,6 +139,8 @@ const App: React.FC = () => {
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
     const recordFileInputRef = useRef<HTMLInputElement | null>(null);
+    const presenceIdRef = useRef<string | null>(null);
+    const presenceIntervalRef = useRef<number | null>(null);
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
