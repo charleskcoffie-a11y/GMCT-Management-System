@@ -35,7 +35,6 @@ import {
     sanitizeString,
     ENTRY_TYPE_VALUES,
     entryTypeLabel,
-    generateId,
 } from './utils';
 import type {
     Entry,
@@ -140,8 +139,6 @@ const App: React.FC = () => {
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
     const recordFileInputRef = useRef<HTMLInputElement | null>(null);
-    const presenceIdRef = useRef<string | null>(null);
-    const presenceIntervalRef = useRef<number | null>(null);
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
@@ -809,14 +806,7 @@ const App: React.FC = () => {
     };
 
     const handleRecordImportClick = () => {
-        setIsImportConfirmOpen(true);
-    };
-
-    const confirmRecordImport = () => {
-        setIsImportConfirmOpen(false);
-        window.setTimeout(() => {
-            recordFileInputRef.current?.click();
-        }, 0);
+        recordFileInputRef.current?.click();
     };
 
     const handleRecordFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -987,46 +977,39 @@ const App: React.FC = () => {
                     : 'border border-amber-200 bg-amber-50 text-amber-700';
                 return (
                     <div className="space-y-6">
-                        <div className="space-y-4">
-                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
-                                    <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
-                                </div>
-                                <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleExport('csv')}
-                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                    >
-                                        Export CSV
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleExport('json')}
-                                        className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
-                                    >
-                                        Export JSON
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleRecordImportClick}
-                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                    >
-                                        Import
-                                    </button>
-                                </div>
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
+                                <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${dataSourceTone}`}>
-                                {dataSourceText}
-                            </div>
-                            <div className="flex justify-start">
+                            <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm w-full sm:w-auto"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
                                 >
                                     Add New Entry
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleExport('csv')}
+                                    className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                >
+                                    Export CSV
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleExport('json')}
+                                    className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
+                                >
+                                    Export JSON
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleRecordImportClick}
+                                    className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                >
+                                    Import
                                 </button>
                             </div>
                         </div>
@@ -1180,12 +1163,7 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
             <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
-                <Header
-                    currentUser={currentUser}
-                    onLogout={handleLogout}
-                    currentDate={currentDate}
-                    activeUserCount={activeUserCount}
-                />
+                <Header currentUser={currentUser} onLogout={handleLogout} />
                 <div className="mt-4">
                     <SyncStatus
                         isOffline={isOffline}
