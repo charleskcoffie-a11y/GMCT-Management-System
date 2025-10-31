@@ -806,7 +806,17 @@ const App: React.FC = () => {
     };
 
     const handleRecordImportClick = () => {
-        recordFileInputRef.current?.click();
+        setIsImportConfirmOpen(true);
+    };
+
+    const confirmRecordImport = () => {
+        setIsImportConfirmOpen(false);
+        if (typeof window === 'undefined') {
+            return;
+        }
+        window.setTimeout(() => {
+            recordFileInputRef.current?.click();
+        }, 120);
     };
 
     const handleRecordFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -977,41 +987,51 @@ const App: React.FC = () => {
                     : 'border border-amber-200 bg-amber-50 text-amber-700';
                 return (
                     <div className="space-y-6">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
+                            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm"
                                 >
                                     Add New Entry
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleExport('csv')}
-                                    className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                >
-                                    Export CSV
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleExport('json')}
-                                    className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
-                                >
-                                    Export JSON
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleRecordImportClick}
-                                    className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                >
-                                    Import
-                                </button>
+                                <div className="flex flex-wrap gap-2 sm:justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('csv')}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                    >
+                                        Export CSV
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('json')}
+                                        className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
+                                    >
+                                        Export JSON
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleRecordImportClick}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                    >
+                                        Import
+                                    </button>
+                                </div>
                             </div>
+                        </div>
+                        <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${dataSourceTone}`} role="status">
+                            <div>{dataSourceText}</div>
+                            {!isSharePointLive && (
+                                <p className="text-xs font-medium text-slate-500 mt-1">
+                                    Updates will sync to SharePoint once a connection is restored.
+                                </p>
+                            )}
                         </div>
                         <input ref={recordFileInputRef} type="file" accept=".csv,.json" className="hidden" onChange={handleRecordFileChange} />
 
@@ -1134,7 +1154,7 @@ const App: React.FC = () => {
         { id: 'home', label: 'HOME', roles: ['admin', 'finance'] },
         { id: 'tasks', label: 'TASKS', roles: ['admin', 'finance'] },
         { id: 'records', label: 'FINANCIAL RECORDS', roles: ['admin', 'finance'] },
-        { id: 'members', label: 'MEMBER DIRECTORY', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
+        { id: 'members', label: 'MEMBERS', roles: ['admin', 'finance', 'class-leader', 'statistician'] },
         { id: 'insights', label: 'INSIGHTS', roles: ['admin', 'finance'] },
         { id: 'attendance', label: 'MARK ATTENDANCE', roles: ['admin', 'class-leader'] },
         { id: 'admin-attendance', label: 'ATTENDANCE REPORT', roles: ['admin', 'finance'] },
@@ -1163,7 +1183,12 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-indigo-50 to-rose-50">
             <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
-                <Header currentUser={currentUser} onLogout={handleLogout} />
+                <Header
+                    currentUser={currentUser}
+                    onLogout={handleLogout}
+                    currentDate={currentDate}
+                    activeUserCount={activeUserCount}
+                />
                 <div className="mt-4">
                     <SyncStatus
                         isOffline={isOffline}
