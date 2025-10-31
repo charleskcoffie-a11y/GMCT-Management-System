@@ -14,7 +14,7 @@ interface SettingsProps {
 const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport }) => {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [shareEmail, setShareEmail] = useState('');
-    const [authMessage, setAuthMessage] = useState<string | null>(null);
+    const [authToast, setAuthToast] = useState<{ tone: 'success' | 'error' | 'info'; message: string } | null>(null);
 
     const handleChange = <K extends keyof Settings>(key: K, value: Settings[K]) => {
         setSettings(prev => ({ ...prev, [key]: value }));
@@ -28,7 +28,8 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
     };
 
     const handleManualSignIn = async () => {
-        setAuthMessage('Preparing secure sign-in. Complete the Microsoft prompt in the pop-up window.');
+        const preparingMessage = 'Preparing secure sign-in. Complete the Microsoft prompt in the pop-up window.';
+        setAuthToast({ tone: 'info', message: preparingMessage });
         setCloud(prev => ({ ...prev, ready: true, message: 'Awaiting authentication response…' }));
         try {
             const session = await msalInteractiveSignIn();
@@ -42,9 +43,10 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                 accessToken: session.accessToken,
                 message: successMessage,
             }));
-            setAuthMessage(successMessage);
+            setAuthToast({ tone: 'success', message: successMessage });
         } catch (error) {
-            const failureMessage = error instanceof Error ? error.message : 'Sign in failed. Please check your credentials or network connection.';
+            console.error('Microsoft sign-in failed', error);
+            const failureMessage = 'Sign in failed. Please check your credentials or network connection.';
             setCloud(prev => ({
                 ...prev,
                 ready: true,
@@ -53,17 +55,17 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                 accessToken: undefined,
                 message: failureMessage,
             }));
-            setAuthMessage(failureMessage);
+            setAuthToast({ tone: 'error', message: failureMessage });
         }
     };
 
     const handleShareAccess = () => {
         const email = shareEmail.trim();
         if (!email) {
-            setAuthMessage('Enter an email address to send an access invite.');
+            setAuthToast({ tone: 'info', message: 'Enter an email address to send an access invite.' });
             return;
         }
-        setAuthMessage(`Invitation sent to ${email}. They will receive setup instructions shortly.`);
+        setAuthToast({ tone: 'success', message: `Invitation sent to ${email}. They will receive setup instructions shortly.` });
         setShareEmail('');
     };
 
@@ -125,7 +127,20 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                         <button type="button" onClick={handleShareAccess} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white w-full sm:w-auto">Send Invite</button>
                     </div>
                 </div>
-                {authMessage && <p className="text-xs text-slate-500">{authMessage}</p>}
+                {authToast && (
+                    <div
+                        role="status"
+                        className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+                            authToast.tone === 'success'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : authToast.tone === 'error'
+                                ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                : 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                        }`}
+                    >
+                        {authToast.message}
+                    </div>
+                )}
             </section>
         </div>
     );
