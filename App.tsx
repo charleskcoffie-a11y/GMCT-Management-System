@@ -140,6 +140,25 @@ const App: React.FC = () => {
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
     const recordFileInputRef = useRef<HTMLInputElement | null>(null);
+    const presenceIntervalRef = useRef<number | null>(null);
+
+    const getStoredPresenceId = useCallback((): string | null => {
+        if (typeof window === 'undefined') {
+            return null;
+        }
+        return window.sessionStorage.getItem('gmct-presence-id');
+    }, []);
+
+    const setStoredPresenceId = useCallback((id: string | null) => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+        if (id) {
+            window.sessionStorage.setItem('gmct-presence-id', id);
+        } else {
+            window.sessionStorage.removeItem('gmct-presence-id');
+        }
+    }, []);
     const presenceIdRef = useRef<string | null>(null);
     const presenceIntervalRef = useRef<number | null>(null);
 
@@ -358,6 +377,7 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!currentUser) {
             if (typeof window !== 'undefined') {
+                const existingId = getStoredPresenceId();
                 const existingId = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
                 if (existingId) {
                     removePresenceRecord(existingId);
@@ -366,7 +386,7 @@ const App: React.FC = () => {
                     window.clearInterval(presenceIntervalRef.current);
                     presenceIntervalRef.current = null;
                 }
-                window.sessionStorage.removeItem('gmct-presence-id');
+                setStoredPresenceId(null);
             }
             presenceStateRef.current.id = null;
             setActiveUserCount(null);
@@ -378,6 +398,10 @@ const App: React.FC = () => {
         }
 
         const ensurePresence = () => {
+            let presenceId = getStoredPresenceId();
+            if (!presenceId) {
+                presenceId = generateId('presence');
+                setStoredPresenceId(presenceId);
             let presenceId = presenceStateRef.current.id;
             if (!presenceId) {
                 const stored = window.sessionStorage.getItem('gmct-presence-id');
@@ -407,6 +431,7 @@ const App: React.FC = () => {
         };
 
         const handleBeforeUnload = () => {
+            const id = getStoredPresenceId();
             const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
             if (id) {
                 removePresenceRecord(id);
@@ -425,13 +450,18 @@ const App: React.FC = () => {
                 window.clearInterval(presenceIntervalRef.current);
                 presenceIntervalRef.current = null;
             }
+            const id = getStoredPresenceId();
+            if (id) {
+                removePresenceRecord(id);
+            }
+            setStoredPresenceId(null);
             const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
             if (id) {
                 removePresenceRecord(id);
             }
             presenceStateRef.current.id = null;
         };
-    }, [currentUser, removePresenceRecord, touchPresence, updatePresenceCount]);
+    }, [currentUser, getStoredPresenceId, removePresenceRecord, setStoredPresenceId, touchPresence, updatePresenceCount]);
 
     useEffect(() => {
         if (!cloud.signedIn || !cloud.accessToken) {
@@ -753,11 +783,12 @@ const App: React.FC = () => {
 
     const handleLogout = () => {
         if (typeof window !== 'undefined') {
+            const id = getStoredPresenceId();
             const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
             if (id) {
                 removePresenceRecord(id);
             }
-            window.sessionStorage.removeItem('gmct-presence-id');
+            setStoredPresenceId(null);
             if (presenceIntervalRef.current !== null) {
                 window.clearInterval(presenceIntervalRef.current);
                 presenceIntervalRef.current = null;
@@ -990,11 +1021,13 @@ const App: React.FC = () => {
                     : 'border border-amber-200 bg-amber-50 text-amber-700';
                 return (
                     <div className="space-y-6">
+                        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
+                            <div className="flex flex-col items-stretch gap-4 sm:self-end">
                             <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                                 <button
                                     type="button"
@@ -1003,6 +1036,7 @@ const App: React.FC = () => {
                                 >
                                     Add New Entry
                                 </button>
+                                <div className="flex flex-wrap gap-2 sm:justify-end pt-2 border-t border-indigo-100">
                                 <div className="flex flex-wrap gap-2 sm:justify-end">
                                     <button
                                         type="button"
