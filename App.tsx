@@ -140,7 +140,7 @@ const App: React.FC = () => {
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
     const recordFileInputRef = useRef<HTMLInputElement | null>(null);
-    const presenceStateRef = useRef<{ id: string | null }>({ id: null });
+    const presenceIdRef = useRef<string | null>(null);
     const presenceIntervalRef = useRef<number | null>(null);
 
     const beginSync = useCallback(() => {
@@ -990,12 +990,12 @@ const App: React.FC = () => {
                     : 'border border-amber-200 bg-amber-50 text-amber-700';
                 return (
                     <div className="space-y-6">
-                        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-col items-stretch gap-4 sm:self-end">
+                            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
@@ -1003,7 +1003,7 @@ const App: React.FC = () => {
                                 >
                                     Add New Entry
                                 </button>
-                                <div className="flex flex-wrap gap-2 sm:justify-end pt-2 border-t border-indigo-100">
+                                <div className="flex flex-wrap gap-2 sm:justify-end">
                                     <button
                                         type="button"
                                         onClick={() => handleExport('csv')}
