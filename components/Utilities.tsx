@@ -48,7 +48,8 @@ const Utilities: React.FC<UtilitiesProps> = ({
         try {
             const url = new URL(siteUrl);
             const trimmedPath = url.pathname.replace(/\/$/, '');
-            url.pathname = `${trimmedPath}/Lists/${encodeURIComponent(listName)}/AllItems.aspx`;
+            url.pathname = `${trimmedPath}/_layouts/15/start.aspx`;
+            url.hash = `#/Lists/${encodeURIComponent(listName)}/AllItems.aspx`;
             return url.toString();
         } catch (error) {
             console.error('Invalid SharePoint configuration for list shortcuts', error);
@@ -64,6 +65,54 @@ const Utilities: React.FC<UtilitiesProps> = ({
     const sharePointMembersUrl = useMemo(
         () => buildSharePointListUrl(settings.sharePointSiteUrl, settings.sharePointMembersListName ?? SHAREPOINT_MEMBERS_LIST_NAME),
         [buildSharePointListUrl, settings.sharePointMembersListName, settings.sharePointSiteUrl],
+    );
+
+    const openSharePointList = useCallback(
+        async (targetUrl: string | null, listLabel: 'finance' | 'members') => {
+            if (!targetUrl) {
+                setConnectionMessage({
+                    tone: 'error',
+                    text: `SharePoint ${listLabel} list URL is not configured. Update the settings and try again.`,
+                });
+                return;
+            }
+
+            if (!cloud.signedIn) {
+                setConnectionMessage({ tone: 'info', text: 'Sign in with Microsoft to open SharePoint lists.' });
+                return;
+            }
+
+            try {
+                const response = await fetch(targetUrl, {
+                    method: 'HEAD',
+                    mode: 'cors',
+                    credentials: 'include',
+                    headers: cloud.accessToken ? { Authorization: `Bearer ${cloud.accessToken}` } : undefined,
+                });
+                if (!response.ok) {
+                    setConnectionMessage({
+                        tone: 'error',
+                        text:
+                            response.status === 403
+                                ? 'Access denied opening the SharePoint list. Confirm that your account has permission.'
+                                : 'The SharePoint list returned an unexpected response. Check the list name or your permissions.',
+                    });
+                    return;
+                }
+            } catch (error) {
+                console.warn('Unable to verify SharePoint list access', error);
+                setConnectionMessage({
+                    tone: 'info',
+                    text: 'Opening SharePoint in a new tab. If the page reports a 404, confirm the site URL and list name.',
+                });
+            }
+
+            const opened = window.open(targetUrl, '_blank', 'noopener');
+            if (!opened) {
+                setConnectionMessage({ tone: 'info', text: 'Please allow pop-ups to open the SharePoint list.' });
+            }
+        },
+        [cloud.accessToken, cloud.signedIn],
     );
 
     const membersMap = useMemo(() => new Map(members.map(member => [member.id, member])), [members]);
@@ -308,16 +357,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     {sharePointEntriesUrl && (
                         <button
                             type="button"
-                            onClick={() => {
-                                if (!sharePointEntriesUrl) {
-                                    setConnectionMessage({ tone: 'error', text: 'SharePoint finance list URL is not configured. Update the settings and try again.' });
-                                    return;
-                                }
-                                const opened = window.open(sharePointEntriesUrl, '_blank', 'noopener');
-                                if (!opened) {
-                                    setConnectionMessage({ tone: 'info', text: 'Please allow pop-ups to open the SharePoint finance list.' });
-                                }
-                            }}
+                            onClick={() => void openSharePointList(sharePointEntriesUrl, 'finance')}
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Finance List
@@ -326,16 +366,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     {sharePointMembersUrl && (
                         <button
                             type="button"
-                            onClick={() => {
-                                if (!sharePointMembersUrl) {
-                                    setConnectionMessage({ tone: 'error', text: 'SharePoint members list URL is not configured. Update the settings and try again.' });
-                                    return;
-                                }
-                                const opened = window.open(sharePointMembersUrl, '_blank', 'noopener');
-                                if (!opened) {
-                                    setConnectionMessage({ tone: 'info', text: 'Please allow pop-ups to open the SharePoint members list.' });
-                                }
-                            }}
+                            onClick={() => void openSharePointList(sharePointMembersUrl, 'members')}
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Members List
