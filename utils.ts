@@ -424,36 +424,84 @@ export function serviceTypeLabel(type: ServiceType): string {
 // --- CSV Handling ---
 
 export function fromCsv(csvText: string): any[] {
-    const lines = csvText.trim().split(/\r\n|\n/);
-    if (lines.length < 2) return [];
-    
-    const headers = lines[0].split(',').map(h => h.trim());
-    const rows = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',');
-        const obj: { [key: string]: any } = {};
-        for (let j = 0; j < headers.length; j++) {
-            obj[headers[j]] = values[j] ? values[j].trim() : '';
+    const text = csvText.replace(/^\uFEFF/, '');
+    const rows: string[][] = [];
+    let current = '';
+    let currentRow: string[] = [];
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') {
+            if (inQuotes && text[i + 1] === '"') {
+                current += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === ',' && !inQuotes) {
+            currentRow.push(current);
+            current = '';
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+            currentRow.push(current);
+            current = '';
+            if (!(currentRow.length === 1 && currentRow[0] === '') || rows.length > 0) {
+                rows.push(currentRow);
+            }
+            currentRow = [];
+            if (char === '\r' && text[i + 1] === '\n') {
+                i++;
+            }
+        } else {
+            current += char;
         }
-        rows.push(obj);
     }
-    return rows;
+
+    if (current.length > 0 || currentRow.length > 0) {
+        currentRow.push(current);
+    }
+    if (currentRow.length > 0) {
+        rows.push(currentRow);
+    }
+
+    if (rows.length === 0) {
+        return [];
+    }
+
+    const headers = rows[0].map(header => header.replace(/\r/g, '').trim());
+    const records: Array<Record<string, string>> = [];
+
+    for (let i = 1; i < rows.length; i++) {
+        const values = rows[i];
+        if (values.every(value => value.replace(/\r/g, '').trim() === '')) {
+            continue;
+        }
+        const record: Record<string, string> = {};
+        headers.forEach((header, index) => {
+            const rawValue = values[index] ?? '';
+            record[header] = rawValue.replace(/\r/g, '');
+        });
+        records.push(record);
+    }
+
+    return records;
 }
 
 export function toCsv(data: any[]): string {
     if (data.length === 0) return '';
     const headers = Object.keys(data[0]);
+    const serialize = (value: any): string => {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        const strValue = String(value);
+        const needsQuotes = /[",\n\r]/.test(strValue);
+        const escaped = strValue.replace(/"/g, '""');
+        return needsQuotes ? `"${escaped}"` : escaped;
+    };
     const csvRows = [
         headers.join(','),
-        ...data.map(row => 
-            headers.map(header => {
-                const value = row[header];
-                const strValue = (value === null || value === undefined) ? '' : String(value);
-                // Handle commas within values by wrapping in quotes
-                return strValue.includes(',') ? `"${strValue}"` : strValue;
-            }).join(',')
-        )
+        ...data.map(row => headers.map(header => serialize(row[header])).join(',')),
     ];
     return csvRows.join('\n');
 }

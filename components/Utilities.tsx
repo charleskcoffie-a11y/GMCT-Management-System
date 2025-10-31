@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CloudState, Entry, EntryType, Member, Settings } from '../types';
 import { formatCurrency, fromCsv, sanitizeEntry, sanitizeMember, toCsv, ENTRY_TYPE_VALUES, entryTypeLabel } from '../utils';
 import { testSharePointConnection } from '../services/sharepoint';
 import {
     SHAREPOINT_ENTRIES_LIST_NAME,
     SHAREPOINT_MEMBERS_LIST_NAME,
-    SHAREPOINT_SITE_URL,
 } from '../constants';
 
 type UtilitiesProps = {
@@ -42,33 +41,30 @@ const Utilities: React.FC<UtilitiesProps> = ({
     const [totalClassesInput, setTotalClassesInput] = useState<string>(String(settings.maxClasses));
     const [totalClassesStatus, setTotalClassesStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
 
-    const sharePointEntriesUrl = useMemo(() => {
-        if (!SHAREPOINT_SITE_URL) return null;
+    const buildSharePointListUrl = useCallback((siteUrl: string, listName: string) => {
+        if (!siteUrl || !listName) {
+            return null;
+        }
         try {
-            const url = new URL(SHAREPOINT_SITE_URL);
-            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(
-                SHAREPOINT_ENTRIES_LIST_NAME,
-            )}/AllItems.aspx`;
+            const url = new URL(siteUrl);
+            const trimmedPath = url.pathname.replace(/\/$/, '');
+            url.pathname = `${trimmedPath}/Lists/${encodeURIComponent(listName)}/AllItems.aspx`;
             return url.toString();
         } catch (error) {
-            console.error('Invalid SharePoint site URL configuration', error);
+            console.error('Invalid SharePoint configuration for list shortcuts', error);
             return null;
         }
     }, []);
 
-    const sharePointMembersUrl = useMemo(() => {
-        if (!SHAREPOINT_SITE_URL) return null;
-        try {
-            const url = new URL(SHAREPOINT_SITE_URL);
-            url.pathname = `${url.pathname.replace(/\/$/, '')}/Lists/${encodeURIComponent(
-                SHAREPOINT_MEMBERS_LIST_NAME,
-            )}/AllItems.aspx`;
-            return url.toString();
-        } catch (error) {
-            console.error('Invalid SharePoint site URL configuration', error);
-            return null;
-        }
-    }, []);
+    const sharePointEntriesUrl = useMemo(
+        () => buildSharePointListUrl(settings.sharePointSiteUrl, settings.sharePointEntriesListName ?? SHAREPOINT_ENTRIES_LIST_NAME),
+        [buildSharePointListUrl, settings.sharePointEntriesListName, settings.sharePointSiteUrl],
+    );
+
+    const sharePointMembersUrl = useMemo(
+        () => buildSharePointListUrl(settings.sharePointSiteUrl, settings.sharePointMembersListName ?? SHAREPOINT_MEMBERS_LIST_NAME),
+        [buildSharePointListUrl, settings.sharePointMembersListName, settings.sharePointSiteUrl],
+    );
 
     const membersMap = useMemo(() => new Map(members.map(member => [member.id, member])), [members]);
 
@@ -312,7 +308,16 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     {sharePointEntriesUrl && (
                         <button
                             type="button"
-                            onClick={() => window.open(sharePointEntriesUrl, '_blank', 'noopener')}
+                            onClick={() => {
+                                if (!sharePointEntriesUrl) {
+                                    setConnectionMessage({ tone: 'error', text: 'SharePoint finance list URL is not configured. Update the settings and try again.' });
+                                    return;
+                                }
+                                const opened = window.open(sharePointEntriesUrl, '_blank', 'noopener');
+                                if (!opened) {
+                                    setConnectionMessage({ tone: 'info', text: 'Please allow pop-ups to open the SharePoint finance list.' });
+                                }
+                            }}
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Finance List
@@ -321,7 +326,16 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     {sharePointMembersUrl && (
                         <button
                             type="button"
-                            onClick={() => window.open(sharePointMembersUrl, '_blank', 'noopener')}
+                            onClick={() => {
+                                if (!sharePointMembersUrl) {
+                                    setConnectionMessage({ tone: 'error', text: 'SharePoint members list URL is not configured. Update the settings and try again.' });
+                                    return;
+                                }
+                                const opened = window.open(sharePointMembersUrl, '_blank', 'noopener');
+                                if (!opened) {
+                                    setConnectionMessage({ tone: 'info', text: 'Please allow pop-ups to open the SharePoint members list.' });
+                                }
+                            }}
                             className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
                         >
                             Open SharePoint Members List

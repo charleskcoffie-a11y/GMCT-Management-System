@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CloudState, Task, TaskPriority, TaskStatus, User } from '../types';
 import {
     clearQueuedTaskDeletion,
@@ -18,10 +18,25 @@ import {
     loadTasksFromSharePoint,
     upsertTaskToSharePoint,
 } from '../services/taskSync';
-import { generateId, sanitizeTask } from '../utils';
+import { fromCsv, generateId, sanitizeTask, toCsv } from '../utils';
 
 const statusOptions: TaskStatus[] = ['Pending', 'In Progress', 'Completed'];
 const priorityOptions: TaskPriority[] = ['Low', 'Medium', 'High'];
+
+const TASK_CSV_HEADERS = [
+    'Task ID',
+    'Task Title',
+    'Notes',
+    'Assigned To',
+    'Due Date',
+    'Status',
+    'Priority',
+    'Created By',
+    'Created At',
+    'Updated At',
+    'SP ID',
+    'Last Synced At',
+];
 
 type ToastState = { message: string; tone: 'success' | 'error' | 'info' } | null;
 
@@ -384,11 +399,123 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
     const [toast, setToast] = useState<ToastState>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+    const taskFileInputRef = useRef<HTMLInputElement | null>(null);
 
     const refreshTasks = useCallback(async () => {
         const allTasks = await getAllTasks();
         setTasks(allTasks);
     }, []);
+
+    const handleExportTasks = useCallback(() => {
+        if (tasks.length === 0) {
+            setToast({ message: 'No tasks available to export yet.', tone: 'info' });
+            return;
+        }
+        const rows = tasks.map(task => {
+            const row: Record<string, string> = {};
+            row['Task ID'] = task.id;
+            row['Task Title'] = task.title;
+            row['Notes'] = task.notes ?? '';
+            row['Assigned To'] = task.assignedTo ?? '';
+            row['Due Date'] = task.dueDate ?? '';
+            row['Status'] = task.status;
+            row['Priority'] = task.priority;
+            row['Created By'] = task.createdBy;
+            row['Created At'] = task.createdAt;
+            row['Updated At'] = task.updatedAt;
+            row['SP ID'] = task.spId ?? '';
+            row['Last Synced At'] = task._sync.lastSyncedAt ?? '';
+            return row;
+        });
+        const csv = toCsv(rows);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `tasks-${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+        setToast({ message: `Exported ${rows.length} task${rows.length === 1 ? '' : 's'}.`, tone: 'success' });
+    }, [tasks]);
+
+    const handleImportTasks = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const rows = fromCsv(text);
+            if (!rows || rows.length === 0) {
+                setToast({ message: 'The selected CSV file did not contain any tasks to import.', tone: 'error' });
+                return;
+            }
+            const firstRow = rows[0] as Record<string, string>;
+            const missing = TASK_CSV_HEADERS.filter(header => !(header in firstRow));
+            if (missing.length > 0) {
+                setToast({ message: `CSV is missing columns: ${missing.join(', ')}.`, tone: 'error' });
+                return;
+            }
+            const existingIds = new Set(tasks.map(task => task.id));
+            const imported: Task[] = [];
+            let skipped = 0;
+            for (const raw of rows) {
+                const row = raw as Record<string, string>;
+                const title = (row['Task Title'] ?? '').trim();
+                const status = (row['Status'] ?? '').trim();
+                if (!title || !status) {
+                    skipped += 1;
+                    continue;
+                }
+                const shaped = {
+                    id: row['Task ID'],
+                    title,
+                    notes: row['Notes'],
+                    assignedTo: row['Assigned To'],
+                    dueDate: row['Due Date'],
+                    status,
+                    priority: row['Priority'],
+                    createdBy: row['Created By'] ?? currentUser.username,
+                    createdAt: row['Created At'],
+                    updatedAt: row['Updated At'],
+                    spId: row['SP ID'],
+                    _sync: { dirty: true, lastSyncedAt: row['Last Synced At'] },
+                };
+                const sanitized = sanitizeTask(shaped);
+                sanitized.spId = shaped.spId && shaped.spId.trim() ? shaped.spId.trim() : sanitized.spId;
+                sanitized._sync = {
+                    dirty: true,
+                    lastSyncedAt: sanitized._sync.lastSyncedAt,
+                };
+                imported.push(sanitized);
+            }
+            if (imported.length === 0) {
+                setToast({
+                    message: skipped > 0
+                        ? 'No tasks were imported because each row was incomplete or invalid.'
+                        : 'No tasks were imported. The CSV did not contain any valid rows.',
+                    tone: 'error',
+                });
+                return;
+            }
+            let added = 0;
+            let updated = 0;
+            imported.forEach(task => {
+                if (existingIds.has(task.id)) {
+                    updated += 1;
+                } else {
+                    added += 1;
+                }
+            });
+            await upsertManyTasks(imported);
+            await refreshTasks();
+            setToast({
+                message: `Imported ${imported.length} tasks (${added} added, ${updated} updated${skipped ? `, ${skipped} skipped` : ''}).`,
+                tone: 'success',
+            });
+        } catch (error) {
+            console.error('Failed to import tasks CSV', error);
+            setToast({ message: 'Unable to import tasks. Ensure the CSV matches the exported format.', tone: 'error' });
+        } finally {
+            event.target.value = '';
+        }
+    }, [currentUser.username, refreshTasks, tasks]);
 
     useEffect(() => {
         let mounted = true;
@@ -718,16 +845,33 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
                         {isSyncing ? 'Syncing…' : 'Sync Now'}
                     </button>
                     {canEdit && (
-                        <button
-                            type="button"
-                            onClick={handleOpenCreateModal}
-                            className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
-                        >
-                            Add Task
-                        </button>
+                        <>
+                            <button
+                                type="button"
+                                onClick={handleExportTasks}
+                                className="rounded-xl border border-indigo-200 bg-white/80 px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm hover:bg-white"
+                            >
+                                Export CSV
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => taskFileInputRef.current?.click()}
+                                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-950"
+                            >
+                                Import CSV
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleOpenCreateModal}
+                                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                            >
+                                Add Task
+                            </button>
+                        </>
                     )}
                 </div>
             </header>
+            <input ref={taskFileInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportTasks} />
 
             <section className="rounded-3xl border border-white/60 bg-white/70 p-4 shadow-lg">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -90,6 +90,9 @@ const INITIAL_SETTINGS: Settings = {
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
+const PRESENCE_STORAGE_KEY = 'gmct-presence';
+const PRESENCE_TIMEOUT_MS = 60_000;
+
 const App: React.FC = () => {
     // --- State Management ---
     const [entries, setEntries] = useLocalStorage<Entry[]>('gmct-entries', [], (data) => Array.isArray(data) ? data.map(sanitizeEntry) : []);
@@ -116,6 +119,10 @@ const App: React.FC = () => {
     });
     const [shouldResync, setShouldResync] = useState(0);
     const [activeSyncTasks, setActiveSyncTasks] = useState(0);
+    const [recordsDataSource, setRecordsDataSource] = useState<'sharepoint' | 'local'>('local');
+    const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false);
+    const [currentDate, setCurrentDate] = useState(() => new Date());
+    const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -223,6 +230,79 @@ const App: React.FC = () => {
         return merged;
     }, [computeMemberSignature]);
 
+    const readPresenceMap = useCallback((): Record<string, number> => {
+        if (typeof window === 'undefined') {
+            return {};
+        }
+        try {
+            const raw = window.localStorage.getItem(PRESENCE_STORAGE_KEY);
+            if (!raw) {
+                return {};
+            }
+            const parsed = JSON.parse(raw) as Record<string, number>;
+            if (!parsed || typeof parsed !== 'object') {
+                return {};
+            }
+            const now = Date.now();
+            const fresh: Record<string, number> = {};
+            let mutated = false;
+            for (const [key, value] of Object.entries(parsed)) {
+                if (typeof value === 'number' && now - value < PRESENCE_TIMEOUT_MS) {
+                    fresh[key] = value;
+                } else {
+                    mutated = true;
+                }
+            }
+            if (mutated) {
+                window.localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify(fresh));
+            }
+            return fresh;
+        } catch (error) {
+            console.warn('Unable to read presence map.', error);
+            return {};
+        }
+    }, []);
+
+    const updatePresenceCount = useCallback(() => {
+        if (typeof window === 'undefined') {
+            setActiveUserCount(null);
+            return;
+        }
+        const map = readPresenceMap();
+        setActiveUserCount(Object.keys(map).length);
+    }, [readPresenceMap]);
+
+    const touchPresence = useCallback((id: string) => {
+        if (!id || typeof window === 'undefined') {
+            return;
+        }
+        try {
+            const map = readPresenceMap();
+            map[id] = Date.now();
+            window.localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify(map));
+            setActiveUserCount(Object.keys(map).length);
+        } catch (error) {
+            console.error('Failed to update presence heartbeat', error);
+            setActiveUserCount(null);
+        }
+    }, [readPresenceMap]);
+
+    const removePresenceRecord = useCallback((id: string | null) => {
+        if (!id || typeof window === 'undefined') {
+            return;
+        }
+        try {
+            const map = readPresenceMap();
+            if (map[id]) {
+                delete map[id];
+                window.localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify(map));
+                setActiveUserCount(Object.keys(map).length);
+            }
+        } catch (error) {
+            console.error('Failed to clear presence record', error);
+        }
+    }, [readPresenceMap]);
+
     useEffect(() => {
         const attemptSilentSignin = async () => {
             const session = await msalSilentSignIn();
@@ -245,6 +325,7 @@ const App: React.FC = () => {
             setIsOffline(true);
             setSyncMessage('Offline: changes will sync when connection returns.');
             setActiveSyncTasks(0);
+            setRecordsDataSource('local');
         };
         const handleOnline = () => {
             setIsOffline(false);
@@ -260,9 +341,94 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const tick = () => setCurrentDate(new Date());
+        const interval = window.setInterval(tick, 60_000);
+        return () => window.clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
         if (attendance.length === 0) return;
         setLastAttendanceSavedAt(prev => (prev === null ? Date.now() : prev));
     }, [attendance]);
+
+    useEffect(() => {
+        if (!currentUser) {
+            if (typeof window !== 'undefined') {
+                const existingId = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+                if (existingId) {
+                    removePresenceRecord(existingId);
+                }
+                if (presenceIntervalRef.current !== null) {
+                    window.clearInterval(presenceIntervalRef.current);
+                    presenceIntervalRef.current = null;
+                }
+                window.sessionStorage.removeItem('gmct-presence-id');
+            }
+            presenceIdRef.current = null;
+            setActiveUserCount(null);
+            return;
+        }
+
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const ensurePresence = () => {
+            let presenceId = presenceIdRef.current;
+            if (!presenceId) {
+                const stored = window.sessionStorage.getItem('gmct-presence-id');
+                presenceId = stored || generateId('presence');
+                presenceIdRef.current = presenceId;
+                window.sessionStorage.setItem('gmct-presence-id', presenceId);
+            }
+            touchPresence(presenceId);
+        };
+
+        ensurePresence();
+        updatePresenceCount();
+
+        const interval = window.setInterval(ensurePresence, 30_000);
+        presenceIntervalRef.current = interval;
+
+        const handleVisibility = () => {
+            if (!document.hidden) {
+                ensurePresence();
+            }
+        };
+
+        const handleStorage = (event: StorageEvent) => {
+            if (event.key === PRESENCE_STORAGE_KEY) {
+                updatePresenceCount();
+            }
+        };
+
+        const handleBeforeUnload = () => {
+            const id = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+            if (id) {
+                removePresenceRecord(id);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('storage', handleStorage);
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibility);
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            if (presenceIntervalRef.current !== null) {
+                window.clearInterval(presenceIntervalRef.current);
+                presenceIntervalRef.current = null;
+            }
+            const id = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+            if (id) {
+                removePresenceRecord(id);
+            }
+            presenceIdRef.current = null;
+        };
+    }, [currentUser, removePresenceRecord, touchPresence, updatePresenceCount]);
 
     useEffect(() => {
         if (!cloud.signedIn || !cloud.accessToken) {
@@ -272,11 +438,13 @@ const App: React.FC = () => {
             setSyncMessage(null);
             setLastSyncedAt(null);
             setActiveSyncTasks(0);
+            setRecordsDataSource('local');
             return;
         }
 
         if (isOffline) {
             setSyncMessage('Offline: changes will sync when connection returns.');
+            setRecordsDataSource('local');
             return;
         }
 
@@ -294,10 +462,12 @@ const App: React.FC = () => {
                 setMembers(prev => mergeMembersFromCloud(prev, remoteMembers));
                 setSyncMessage(null);
                 setLastSyncedAt(Date.now());
+                setRecordsDataSource('sharepoint');
             } catch (error) {
                 if (!active) return;
                 console.error('Initial SharePoint sync failed', error);
                 setSyncMessage(error instanceof Error ? error.message : 'Unable to sync with SharePoint right now.');
+                setRecordsDataSource('local');
             } finally {
                 if (active) {
                     endSync();
@@ -579,6 +749,19 @@ const App: React.FC = () => {
     };
 
     const handleLogout = () => {
+        if (typeof window !== 'undefined') {
+            const id = presenceIdRef.current ?? window.sessionStorage.getItem('gmct-presence-id');
+            if (id) {
+                removePresenceRecord(id);
+            }
+            window.sessionStorage.removeItem('gmct-presence-id');
+            if (presenceIntervalRef.current !== null) {
+                window.clearInterval(presenceIntervalRef.current);
+                presenceIntervalRef.current = null;
+            }
+        }
+        presenceIdRef.current = null;
+        setActiveUserCount(null);
         setCurrentUser(null);
         setIsNavOpen(false);
         setCloud(prev => ({ ...prev, signedIn: false, accessToken: undefined, account: undefined, message: 'Ready for manual sign-in.' }));
@@ -784,7 +967,14 @@ const App: React.FC = () => {
     const renderTabContent = () => {
         switch (activeTab) {
             case 'home': return currentUser.role === 'admin' || currentUser.role === 'finance' ? <AdminLandingPage onNavigate={setActiveTab} currentUser={currentUser} /> : <Dashboard entries={filteredAndSortedEntries} settings={settings} />;
-            case 'records':
+            case 'records': {
+                const isSharePointLive = recordsDataSource === 'sharepoint';
+                const dataSourceText = isSharePointLive
+                    ? 'Data source: SharePoint (live)'
+                    : 'Data source: Local records (not synced)';
+                const dataSourceTone = isSharePointLive
+                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border border-amber-200 bg-amber-50 text-amber-700';
                 return (
                     <div className="space-y-6">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -890,6 +1080,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 );
+            }
             case 'members': return <Members members={members} setMembers={setMembers} settings={settings} />;
             case 'insights': return <Insights entries={filteredAndSortedEntries} settings={settings} />;
             case 'history':
@@ -1006,6 +1197,15 @@ const App: React.FC = () => {
                     onConfirm={confirmDeleteEntry}
                     title="Confirm Deletion"
                     message="Are you sure you want to delete this financial entry? This action cannot be undone."
+                />
+                <ConfirmationModal
+                    isOpen={isImportConfirmOpen}
+                    onClose={() => setIsImportConfirmOpen(false)}
+                    onConfirm={confirmRecordImport}
+                    title="Confirm Import"
+                    message="Importing may overwrite or merge existing records. Do you want to continue?"
+                    confirmLabel="Import"
+                    confirmTone="primary"
                 />
             </div>
         </div>
