@@ -91,42 +91,21 @@ function ensureJsExtension(spec) {
 }
 
 async function ensureVitestShim(rootDir, compiledDir) {
-  const vitestShimDir = path.join(rootDir, 'test-support', 'vitest');
-  const vitestShimFiles = ['index.js', 'bin.js', 'package.json'];
-  const vitestTargetDir = path.join(compiledDir, 'node_modules', 'vitest');
+  const shimDir = path.join(rootDir, 'test-support', 'vitest');
+  const shimFiles = ['index.js', 'bin.js', 'package.json'];
+  const targetDir = path.join(compiledDir, 'node_modules', 'vitest');
 
-  await fs.mkdir(vitestTargetDir, { recursive: true });
+  await fs.mkdir(targetDir, { recursive: true });
 
   await Promise.all(
-    vitestShimFiles.map(async file => {
-      const source = path.join(vitestShimDir, file);
-      const destination = path.join(vitestTargetDir, file);
+    shimFiles.map(async file => {
+      const source = path.join(shimDir, file);
+      const destination = path.join(targetDir, file);
       try {
         await fs.copyFile(source, destination);
       } catch (error) {
         if (error && error.code === 'ENOENT') {
           throw new Error(`Unable to locate Vitest shim file at ${source}`);
-        }
-        throw error;
-      }
-    }),
-  );
-
-  const vitestDomDir = path.join(rootDir, 'test-support', 'vitest-dom');
-  const vitestDomFiles = ['package.json', 'matchers.js'];
-  const vitestDomTargetDir = path.join(compiledDir, 'node_modules', '@vitest', 'dom');
-
-  await fs.mkdir(vitestDomTargetDir, { recursive: true });
-
-  await Promise.all(
-    vitestDomFiles.map(async file => {
-      const source = path.join(vitestDomDir, file);
-      const destination = path.join(vitestDomTargetDir, file);
-      try {
-        await fs.copyFile(source, destination);
-      } catch (error) {
-        if (error && error.code === 'ENOENT') {
-          throw new Error(`Unable to locate @vitest/dom shim file at ${source}`);
         }
         throw error;
       }

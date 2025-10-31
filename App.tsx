@@ -15,7 +15,6 @@ import EntryModal from './components/EntryModal';
 import WeeklyHistory from './components/WeeklyHistory';
 import ConfirmationModal from './components/ConfirmationModal';
 import MemberContributionReport from './components/MemberContributionReport';
-import TasksTab from './components/Tasks';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useTasks } from './hooks/useTasks';
@@ -106,7 +105,6 @@ const App: React.FC = () => {
     const [, setIsNavOpen] = useState(false);
     const [isContributionReportOpen, setContributionReportOpen] = useState(false);
     const [reportMemberId, setReportMemberId] = useState<string | null>(null);
-    const taskManager = useTasks();
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
