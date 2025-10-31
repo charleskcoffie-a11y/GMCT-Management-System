@@ -1077,14 +1077,14 @@ const App: React.FC = () => {
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-4">
-                                <p className="text-sm uppercase tracking-wide text-amber-600 font-semibold">Stored Entries</p>
-                                <p className="text-3xl font-extrabold text-slate-800 mt-1">{entries.length.toLocaleString()}</p>
-                                <p className="text-xs text-slate-500 mt-2">Total financial entries captured in this workspace.</p>
+                                <p className="text-sm uppercase tracking-wide text-amber-600 font-semibold">Entries Displayed</p>
+                                <p className="text-3xl font-extrabold text-slate-800 mt-1">{filteredAndSortedEntries.length.toLocaleString()}</p>
+                                <p className="text-xs text-slate-500 mt-2">Entries that match the current filters.</p>
                             </div>
                             <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-4">
                                 <p className="text-sm uppercase tracking-wide text-emerald-600 font-semibold">Total Received</p>
                                 <p className="text-3xl font-extrabold text-slate-800 mt-1">{formatCurrency(filteredTotalAmount, settings.currency)}</p>
-                                <p className="text-xs text-slate-500 mt-2 leading-relaxed">{filtersSummary}</p>
+                                <p className="text-xs text-slate-500 mt-2 leading-relaxed">Active filters: {filtersSummary}</p>
                             </div>
                         </div>
 
