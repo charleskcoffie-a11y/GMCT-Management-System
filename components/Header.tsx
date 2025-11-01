@@ -37,14 +37,9 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, activeUsers }) =
                 <div className="flex flex-col items-center gap-1 text-center text-slate-600">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Today</p>
                     <p className="text-lg font-semibold text-slate-800">{todayLabel}</p>
-                    <p
-                        className={`text-xs font-medium ${
-                            hasActiveUsers ? 'text-slate-500' : 'text-slate-400 italic'
-                        }`}
-                        aria-live="polite"
-                    >
-                        Active users: {activeUsersLabel}
-                    </p>
+                    {hasActiveUsers && (
+                        <p className="text-xs font-medium text-slate-500">Active users: {activeUsersLabel}</p>
+                    )}
                 </div>
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-end sm:gap-6">
                     <div className="text-left sm:text-right">
