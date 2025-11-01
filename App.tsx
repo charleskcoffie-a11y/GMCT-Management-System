@@ -804,7 +804,9 @@ const App: React.FC = () => {
         return <Login onLogin={handleLogin} error={loginError} />;
     }
 
-    const activeUsersCount = cloud.activeUsers ?? (cloud.signedIn ? 1 : (currentUser ? 1 : null));
+    const activeUsersCount = typeof cloud.activeUsers === 'number' && !Number.isNaN(cloud.activeUsers)
+        ? cloud.activeUsers
+        : null;
 
     const renderTabContent = () => {
         switch (activeTab) {
