@@ -12,26 +12,52 @@ type MicrosoftAccount = {
 export type SilentSignInResult = {
     account: MicrosoftAccount;
     accessToken: string;
-    authority?: 'organizations' | 'consumers' | 'common';
+    authority?: AuthorityHint;
 };
 
-const PERSONAL_EMAIL_DOMAINS = ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'];
+export class MicrosoftSignInError extends Error {
+    retryable: boolean;
 
-/**
- * Placeholder silent sign-in flow. In production you would wire this to MSAL.
- * For local development we simply resolve to null so the UI knows manual sign-in is required.
- */
-export async function msalSilentSignIn(): Promise<SilentSignInResult | null> {
-    if (!MSAL_CLIENT_ID || !MSAL_TENANT_ID) {
-        console.warn('MSAL configuration missing client or tenant id.');
-        return null;
+    constructor(message: string, retryable = false) {
+        super(message);
+        this.name = 'MicrosoftSignInError';
+        this.retryable = retryable;
     }
-    try {
-        return JSON.parse(payload) as Record<string, unknown>;
-    } catch (error) {
-        console.warn('Unable to parse JWT payload.', error);
-        return null;
-    }
+}
+
+type PendingSession = {
+    tenant: string;
+    nonce: string;
+    origin: string;
+    createdAt: number;
+    scopes: string[];
+};
+
+type StoredSession = SilentSignInResult & {
+    expiresAt: number;
+    scopes: string[];
+};
+
+type AuthorizePayload = {
+    type?: string;
+    state?: string | null;
+    accessToken?: string | null;
+    idToken?: string | null;
+    expiresIn?: string | null;
+    scope?: string | null;
+    error?: string | null;
+    errorDescription?: string | null;
+    tenant?: string | null;
+};
+
+const SESSION_PREFIX = 'gmct-msal:';
+const STORAGE_KEY = 'gmct-msal-session';
+const PENDING_SESSION_MAX_AGE = 5 * 60 * 1000;
+const CONSUMER_TENANT_ID = '9188040d-6c67-4c5b-b112-36a304b66dad';
+const DEFAULT_SCOPES = Array.from(new Set([...GRAPH_SCOPES, 'openid', 'profile', 'email']));
+
+function isBrowser(): boolean {
+    return typeof window !== 'undefined' && typeof window.document !== 'undefined';
 }
 
 function createRandomString(length: number): string {
@@ -51,7 +77,10 @@ function createRandomString(length: number): string {
 }
 
 function normalizeTenant(tenant?: string | null): string | null {
-    const trimmed = tenant?.trim();
+    if (!tenant) {
+        return null;
+    }
+    const trimmed = tenant.trim();
     if (!trimmed) {
         return null;
     }
@@ -61,52 +90,34 @@ function normalizeTenant(tenant?: string | null): string | null {
     return `https://login.microsoftonline.com/${trimmed}`;
 }
 
-function extractAuthorityHint(tenantId?: string | null): AuthorityHint | undefined {
-    if (!tenantId) {
-        return undefined;
-    }
-    const lower = tenantId.toLowerCase();
-    if (tenantId === CONSUMER_TENANT_ID || lower === 'consumers' || lower.endsWith('/consumers')) {
-        return 'consumers';
-    }
-    if (lower === 'common' || lower.endsWith('/common')) {
-        return 'common';
-    }
-    if (lower === 'organizations' || lower.endsWith('/organizations')) {
-        return 'organizations';
-    }
-    return 'organizations';
-}
-
 function determineAuthorityList(): string[] {
-    const primary = normalizeTenant(MSAL_TENANT_ID);
-    const fallbacks = ['organizations', 'common', 'consumers']
-        .map(item => normalizeTenant(item) ?? '')
-        .filter(Boolean);
-    const candidates = [primary, ...fallbacks].filter((value): value is string => Boolean(value));
-    return Array.from(new Set(candidates));
+    const values = [MSAL_TENANT_ID, 'organizations', 'common', 'consumers']
+        .map(value => normalizeTenant(value) ?? null)
+        .filter((value): value is string => Boolean(value));
+    return Array.from(new Set(values));
 }
 
-function buildAuthorizeUrl(tenantAuthority: string, state: string, nonce: string, scopes: string[]): string {
-    const authority = normalizeTenant(tenantAuthority) ?? normalizeTenant('common');
-    if (!authority) {
+function buildAuthorizeUrl(authority: string, state: string, nonce: string, scopes: string[]): string {
+    const normalizedAuthority = normalizeTenant(authority);
+    if (!normalizedAuthority) {
         throw new MicrosoftSignInError('Unable to determine Microsoft login authority.');
     }
-    const authorizeUrl = new URL(`${authority}/oauth2/v2.0/authorize`);
-    const scopeValue = scopes.join(' ');
+    const authorizeUrl = new URL(`${normalizedAuthority}/oauth2/v2.0/authorize`);
     authorizeUrl.searchParams.set('client_id', MSAL_CLIENT_ID ?? '');
     authorizeUrl.searchParams.set('response_type', 'token id_token');
     authorizeUrl.searchParams.set('redirect_uri', `${window.location.origin}/auth-complete.html`);
     authorizeUrl.searchParams.set('response_mode', 'fragment');
-    authorizeUrl.searchParams.set('scope', scopeValue);
+    authorizeUrl.searchParams.set('scope', scopes.join(' '));
     authorizeUrl.searchParams.set('state', state);
     authorizeUrl.searchParams.set('nonce', nonce);
     authorizeUrl.searchParams.set('prompt', 'select_account');
-    authorizeUrl.searchParams.set('login_hint', '');
     return authorizeUrl.toString();
 }
 
 function storePendingSession(state: string, session: PendingSession): void {
+    if (!isBrowser()) {
+        return;
+    }
     try {
         window.sessionStorage.setItem(`${SESSION_PREFIX}${state}`, JSON.stringify(session));
     } catch (error) {
@@ -115,15 +126,51 @@ function storePendingSession(state: string, session: PendingSession): void {
 }
 
 function readPendingSession(state: string): PendingSession | null {
+    if (!isBrowser()) {
+        return null;
+    }
     try {
         const raw = window.sessionStorage.getItem(`${SESSION_PREFIX}${state}`);
         if (!raw) {
             return null;
         }
-        const parsed = JSON.parse(cached) as SilentSignInResult & { scopes?: string[] };
-        if (parsed.scopes && GRAPH_SCOPES.every(scope => parsed.scopes?.includes(scope))) {
-            return { account: parsed.account, accessToken: parsed.accessToken, authority: parsed.authority };
+        const parsed = JSON.parse(raw) as PendingSession;
+        if (!parsed || typeof parsed.createdAt !== 'number') {
+            window.sessionStorage.removeItem(`${SESSION_PREFIX}${state}`);
+            return null;
         }
+        if (Date.now() - parsed.createdAt > PENDING_SESSION_MAX_AGE) {
+            window.sessionStorage.removeItem(`${SESSION_PREFIX}${state}`);
+            return null;
+        }
+        return parsed;
+    } catch (error) {
+        console.warn('Unable to parse pending Microsoft sign-in session.', error);
+        window.sessionStorage.removeItem(`${SESSION_PREFIX}${state}`);
+        return null;
+    }
+}
+
+function clearPendingSession(state: string): void {
+    if (!isBrowser()) {
+        return;
+    }
+    window.sessionStorage.removeItem(`${SESSION_PREFIX}${state}`);
+}
+
+function persistSession(session: StoredSession): void {
+    if (!isBrowser()) {
+        return;
+    }
+    try {
+        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    } catch (error) {
+        console.warn('Unable to store Microsoft session.', error);
+    }
+}
+
+function readStoredSession(): StoredSession | null {
+    if (!isBrowser()) {
         return null;
     }
     try {
@@ -131,7 +178,12 @@ function readPendingSession(state: string): PendingSession | null {
         if (!raw) {
             return null;
         }
-        return JSON.parse(raw) as StoredSession;
+        const parsed = JSON.parse(raw) as StoredSession;
+        if (!parsed || typeof parsed.expiresAt !== 'number' || typeof parsed.accessToken !== 'string') {
+            window.sessionStorage.removeItem(STORAGE_KEY);
+            return null;
+        }
+        return parsed;
     } catch (error) {
         console.warn('Failed to parse stored Microsoft session.', error);
         window.sessionStorage.removeItem(STORAGE_KEY);
@@ -146,13 +198,81 @@ function removeStoredSession(): void {
     window.sessionStorage.removeItem(STORAGE_KEY);
 }
 
+function safeBase64Decode(input: string): string {
+    const normalized = input.replace(/-/g, '+').replace(/_/g, '/');
+    if (typeof globalThis.atob === 'function') {
+        return globalThis.atob(normalized);
+    }
+    throw new Error('Base64 decoding is not supported in this environment.');
+}
+
+function decodeJwt(token?: string | null): Record<string, unknown> | null {
+    if (!token) {
+        return null;
+    }
+    const parts = token.split('.');
+    if (parts.length < 2) {
+        return null;
+    }
+    try {
+        const decoded = safeBase64Decode(parts[1]);
+        const json = decodeURIComponent(
+            Array.from(decoded)
+                .map(char => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`)
+                .join(''),
+        );
+        return JSON.parse(json) as Record<string, unknown>;
+    } catch (error) {
+        console.warn('Unable to parse JWT payload.', error);
+        return null;
+    }
+}
+
+function extractAuthorityHint(tenant?: string | null): AuthorityHint | undefined {
+    if (!tenant) {
+        return undefined;
+    }
+    const normalized = tenant.toLowerCase();
+    if (normalized === 'consumers' || normalized.endsWith('/consumers') || normalized === CONSUMER_TENANT_ID) {
+        return 'consumers';
+    }
+    if (normalized === 'common' || normalized.endsWith('/common')) {
+        return 'common';
+    }
+    if (normalized === 'organizations' || normalized.endsWith('/organizations')) {
+        return 'organizations';
+    }
+    if (normalized.endsWith('.onmicrosoft.com') || /^[0-9a-f-]{36}$/.test(normalized)) {
+        return 'organizations';
+    }
+    return undefined;
+}
+
+function buildAccountFromClaims(claims: Record<string, unknown> | null): MicrosoftAccount {
+    const preferred =
+        (claims?.['preferred_username'] as string | undefined) ??
+        (claims?.['upn'] as string | undefined) ??
+        (claims?.['email'] as string | undefined) ??
+        (claims?.['unique_name'] as string | undefined);
+    const name = (claims?.['name'] as string | undefined) ?? undefined;
+    const tenantId = (claims?.['tid'] as string | undefined) ?? undefined;
+    const objectId = (claims?.['oid'] as string | undefined) ?? (claims?.['sub'] as string | undefined);
+    const homeAccountId = objectId && tenantId ? `${objectId}.${tenantId}` : objectId || preferred || createRandomString(12);
+    return {
+        homeAccountId,
+        username: preferred,
+        name,
+        tenantId,
+    };
+}
+
 function mapAuthorizeError(error?: string | null, description?: string | null): MicrosoftSignInError {
     const details = description ?? '';
     if (error === 'access_denied') {
         if (/AADSTS50020/.test(details) || /AADSTS51004/.test(details)) {
             return new MicrosoftSignInError(
                 'Your Microsoft account is not a member of the configured organisation. Sign in with an authorised work or school account.',
-                true,
+                false,
             );
         }
         if (/AADSTS65004/.test(details)) {
@@ -177,27 +297,13 @@ function mapAuthorizeError(error?: string | null, description?: string | null): 
     }
     if (details) {
         if (/AADSTS50076/.test(details) || /AADSTS50079/.test(details)) {
-            return new MicrosoftSignInError('Microsoft requires additional verification (MFA). Complete the prompt and try again.', false);
+            return new MicrosoftSignInError('Microsoft requires additional verification (MFA). Complete the prompt and try again.', true);
         }
         if (/AADSTS700016/.test(details)) {
             return new MicrosoftSignInError('The Microsoft application (client ID) could not be found. Confirm the Azure registration details.', false);
         }
     }
     return new MicrosoftSignInError('Sign in failed. Please check your credentials or network connection.', false);
-}
-
-function buildAccountFromClaims(claims: Record<string, unknown> | null, fallbackUsername?: string): MicrosoftAccount {
-    const preferred =
-        (claims?.['preferred_username'] as string | undefined) ??
-        (claims?.['email'] as string | undefined) ??
-        (claims?.['upn'] as string | undefined) ??
-        (claims?.['unique_name'] as string | undefined);
-    const username = preferred || fallbackUsername;
-    const name = (claims?.['name'] as string | undefined) ?? undefined;
-    const tenantId = (claims?.['tid'] as string | undefined) ?? undefined;
-    const objectId = (claims?.['oid'] as string | undefined) ?? (claims?.['sub'] as string | undefined);
-    const homeAccountId = objectId && tenantId ? `${objectId}.${tenantId}` : objectId || username || createRandomString(12);
-    return { homeAccountId, username, name, tenantId };
 }
 
 async function performInteractiveLogin(authority: string, scopes: string[]): Promise<SilentSignInResult> {
@@ -215,6 +321,7 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
         nonce,
         origin: window.location.origin,
         createdAt: Date.now(),
+        scopes,
     };
     storePendingSession(state, pending);
 
@@ -235,10 +342,11 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
     }
 
     return await new Promise<SilentSignInResult>((resolve, reject) => {
-        let resolved = false;
+        let settled = false;
+
         const cleanup = () => {
-            resolved = true;
-            window.removeEventListener('message', handleMessage);
+            settled = true;
+            window.removeEventListener('message', handleMessage as EventListener);
             window.clearInterval(timer);
             try {
                 if (!popup.closed) {
@@ -251,7 +359,7 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
         };
 
         const fail = (error: MicrosoftSignInError) => {
-            if (!resolved) {
+            if (!settled) {
                 cleanup();
                 reject(error);
             }
@@ -265,15 +373,17 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
             if (!data || data.type !== 'gmct-ms-login' || data.state !== state) {
                 return;
             }
+
             const pendingSession = readPendingSession(state);
+            cleanup();
+
             if (!pendingSession) {
                 fail(new MicrosoftSignInError('The Microsoft sign-in session expired. Please try again.', true));
                 return;
             }
-            cleanup();
 
-            const data = event.data as { type?: string; status?: string; email?: string; message?: string; authority?: SilentSignInResult['authority'] } | null;
-            if (!data || data.type !== 'gmct-msal-signin') {
+            if (data.error) {
+                fail(mapAuthorizeError(data.error, data.errorDescription));
                 return;
             }
 
@@ -288,25 +398,26 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
                 return;
             }
 
-            const fallbackUsername = (claims?.['email'] as string | undefined) ?? undefined;
-            const account = buildAccountFromClaims(claims, fallbackUsername);
-            const tenantId = account.tenantId ?? pendingSession.tenant;
-            const authorityHint = extractAuthorityHint(tenantId);
-            const expiresInSeconds = Number.parseInt(data.expiresIn ?? '0', 10) || 3600;
-            const expiresAt = Date.now() + Math.max(expiresInSeconds - 60, 0) * 1000;
-            const scopesFromToken = (data.scope ?? '').split(' ').filter(Boolean);
+            const account = buildAccountFromClaims(claims);
+            const tenantId = account.tenantId ?? pendingSession.tenant ?? data.tenant ?? undefined;
+            const authorityHint = extractAuthorityHint(typeof tenantId === 'string' ? tenantId : undefined);
+            const expiresInSeconds = Number.parseInt(data.expiresIn ?? '0', 10);
+            const expiresIn = Number.isFinite(expiresInSeconds) && expiresInSeconds > 0 ? expiresInSeconds : 3600;
+            const expiresAt = Date.now() + Math.max(expiresIn - 60, 300) * 1000;
+            const scopesFromToken = typeof data.scope === 'string' ? data.scope.split(' ').filter(Boolean) : [];
 
-            const accessToken = btoa(`${data.email}:${Date.now()}`);
-            const result: SilentSignInResult = {
-                account: { homeAccountId: createAccountId(), username: data.email },
-                accessToken,
-                authority: data.authority,
+            const stored: StoredSession = {
+                account,
+                accessToken: data.accessToken,
+                authority: authorityHint,
+                expiresAt,
+                scopes: scopesFromToken.length > 0 ? scopesFromToken : pendingSession.scopes,
             };
             persistSession(stored);
             resolve({ account, accessToken: data.accessToken, authority: authorityHint });
         };
 
-        window.addEventListener('message', handleMessage);
+        window.addEventListener('message', handleMessage as EventListener);
 
         const timer = window.setInterval(() => {
             if (popup.closed) {
@@ -317,64 +428,7 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
     });
 }
 
-        const popupHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8" />
-    <title>Microsoft Sign-In</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f1f5f9; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
-        .card { background: #ffffff; border-radius: 16px; box-shadow: 0 20px 45px -20px rgba(15, 23, 42, 0.45); padding: 32px; width: 100%; max-width: 360px; }
-        h1 { font-size: 1.35rem; margin-bottom: 1rem; color: #1e293b; }
-        label { display: block; margin-bottom: 1rem; font-size: 0.85rem; color: #475569; }
-        input { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid #cbd5f5; font-size: 0.95rem; box-sizing: border-box; }
-        .actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
-        button { flex: 1; padding: 0.7rem 0; border: none; border-radius: 9999px; font-weight: 600; cursor: pointer; }
-        .primary { background: linear-gradient(135deg, #2563eb, #7c3aed); color: white; }
-        .secondary { background: #e2e8f0; color: #0f172a; }
-        .message { margin-top: 1rem; font-size: 0.85rem; color: #475569; min-height: 1.2em; }
-        .message.error { color: #dc2626; }
-        .message.info { color: #2563eb; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h1>Sign in to Microsoft</h1>
-        <form id="gmct-msal-form">
-            <label>
-                Email address
-                <input id="gmct-email" type="email" autocomplete="username" required autofocus />
-            </label>
-            <label>
-                Password
-                <input id="gmct-password" type="password" autocomplete="current-password" required />
-            </label>
-            <div class="actions">
-                <button type="submit" class="primary">Sign in</button>
-                <button type="button" id="gmct-cancel" class="secondary">Cancel</button>
-            </div>
-            <p id="gmct-message" class="message" role="status" aria-live="polite"></p>
-        </form>
-    </div>
-    <script>
-        (function() {
-            const form = document.getElementById('gmct-msal-form');
-            const emailInput = document.getElementById('gmct-email');
-            const passwordInput = document.getElementById('gmct-password');
-            const messageEl = document.getElementById('gmct-message');
-            const cancelBtn = document.getElementById('gmct-cancel');
-            const personalDomains = ${JSON.stringify(PERSONAL_EMAIL_DOMAINS)};
-            const tenantAuthority = {
-                corporate: 'https://login.microsoftonline.com/organizations',
-                personal: 'https://login.microsoftonline.com/consumers'
-            };
-
-            function send(status, payload) {
-                if (window.opener && !window.opener.closed) {
-                    window.opener.postMessage(Object.assign({ type: 'gmct-msal-signin', status }, payload || {}), '*');
-                }
-            }
-
+export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
     const scopes = DEFAULT_SCOPES;
     const authorities = determineAuthorityList();
     let lastError: MicrosoftSignInError | null = null;
@@ -394,38 +448,7 @@ async function performInteractiveLogin(authority: string, scopes: string[]): Pro
         }
     }
 
-                const domain = email.split('@')[1]?.toLowerCase() || '';
-                const isPersonal = personalDomains.includes(domain);
-                messageEl.textContent = isPersonal
-                    ? 'Redirecting to Microsoft personal account login… (' + tenantAuthority.personal + ')'
-                    : 'Redirecting to your organization\'s Microsoft login… (' + tenantAuthority.corporate + ')';
-                messageEl.className = 'message info';
-
-                setTimeout(function() {
-                    if (password.length < 6) {
-                        messageEl.textContent = 'Microsoft rejected the credentials. Passwords must be at least 6 characters.';
-                        messageEl.className = 'message error';
-                        send('error', {
-                            message: 'Microsoft rejected the credentials. Confirm your password and try again.',
-                            authority: isPersonal ? 'consumers' : 'organizations'
-                        });
-                        return;
-                    }
-
-                    send('success', { email: email, authority: isPersonal ? 'consumers' : 'organizations' });
-                    window.close();
-                }, 600);
-            });
-        })();
-    </script>
-</body>
-</html>`;
-
-        popup.document.open();
-        popup.document.write(popupHtml);
-        popup.document.close();
-        popup.focus();
-    });
+    throw lastError ?? new MicrosoftSignInError('Microsoft sign-in could not be completed.');
 }
 
 export async function msalSilentSignIn(): Promise<SilentSignInResult | null> {
@@ -434,6 +457,10 @@ export async function msalSilentSignIn(): Promise<SilentSignInResult | null> {
         return null;
     }
     if (Date.now() >= stored.expiresAt) {
+        removeStoredSession();
+        return null;
+    }
+    if (GRAPH_SCOPES.some(scope => !stored.scopes.includes(scope))) {
         removeStoredSession();
         return null;
     }
@@ -447,4 +474,3 @@ export async function msalSilentSignIn(): Promise<SilentSignInResult | null> {
 export function clearStoredMicrosoftSession(): void {
     removeStoredSession();
 }
-

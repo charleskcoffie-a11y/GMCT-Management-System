@@ -58,7 +58,10 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             setAuthMessage(successMessage);
             setToast({ message: successMessage, tone: 'success' });
         } catch (error) {
-            const failureMessage = 'Sign in failed. Please check your credentials or network connection.';
+            const failureMessage =
+                error instanceof Error
+                    ? error.message
+                    : 'Sign in failed. Please check your credentials or network connection.';
             setCloud(prev => ({
                 ...prev,
                 ready: true,
