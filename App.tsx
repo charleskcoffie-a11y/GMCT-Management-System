@@ -635,7 +635,45 @@ const App: React.FC = () => {
     };
 
     const handleImport = (newEntries: Entry[]) => {
-        setEntries(prev => [...prev, ...newEntries]);
+        const stats = { created: 0, updated: 0, skipped: 0 };
+
+        setEntries(prev => {
+            if (newEntries.length === 0) {
+                return prev;
+            }
+
+            const next = [...prev];
+            const indexById = new Map<string, number>();
+            next.forEach((entry, index) => {
+                const normalizedId = sanitizeString(entry.id);
+                if (normalizedId && !indexById.has(normalizedId)) {
+                    indexById.set(normalizedId, index);
+                }
+            });
+
+            newEntries.forEach(rawEntry => {
+                const entry = sanitizeEntry(rawEntry);
+                const normalizedId = sanitizeString(entry.id);
+                if (!normalizedId) {
+                    stats.skipped += 1;
+                    return;
+                }
+
+                const existingIndex = indexById.get(normalizedId);
+                if (existingIndex !== undefined) {
+                    next[existingIndex] = { ...next[existingIndex], ...entry };
+                    stats.updated += 1;
+                } else {
+                    next.push(entry);
+                    indexById.set(normalizedId, next.length - 1);
+                    stats.created += 1;
+                }
+            });
+
+            return next;
+        });
+
+        return stats;
     };
 
     const handleRecordImportClick = () => {
@@ -668,8 +706,13 @@ const App: React.FC = () => {
                     const array = Array.isArray(raw) ? raw : [];
                     imported = array.map(item => sanitizeEntry(item));
                 }
-                handleImport(imported);
-                alert(`Imported ${imported.length} financial record${imported.length === 1 ? '' : 's'}.`);
+                const { created, updated, skipped } = handleImport(imported);
+                const summaryParts: string[] = [];
+                if (created > 0) summaryParts.push(`${created} new`);
+                if (updated > 0) summaryParts.push(`${updated} updated`);
+                if (skipped > 0) summaryParts.push(`${skipped} skipped`);
+                const summary = summaryParts.length > 0 ? summaryParts.join(', ') : 'no changes detected';
+                alert(`Import completed — ${summary}.`);
             } catch (error) {
                 console.error('Failed to import financial records', error);
                 alert('Unable to import the selected file. Ensure it is a valid CSV or JSON export.');
