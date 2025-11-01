@@ -820,12 +820,12 @@ const App: React.FC = () => {
 
                 return (
                     <div className="space-y-6">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-col gap-3 items-stretch sm:flex-row sm:items-center sm:justify-end">
+                            <div className="flex w-full flex-col items-stretch gap-4 sm:w-auto lg:items-end">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
@@ -869,7 +869,12 @@ const App: React.FC = () => {
                             confirmTone="primary"
                         />
 
-                        <div className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${dataSourceStyles}`} role="status">
+                        <div
+                            className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${dataSourceStyles}`}
+                            role="status"
+                            aria-live="polite"
+                            aria-atomic="true"
+                        >
                             {dataSourceMessage}
                         </div>
 
