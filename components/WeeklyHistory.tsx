@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ServiceType, WeeklyHistoryRecord } from '../types';
-import { generateId, serviceTypeLabel, fromCsv, toCsv, sanitizeWeeklyHistoryRecord } from '../utils';
+import { generateId, serviceTypeLabel, toCsv, fromCsv, sanitizeWeeklyHistoryRecord } from '../utils';
 
 interface WeeklyHistoryProps {
     history: WeeklyHistoryRecord[];
@@ -16,41 +16,211 @@ const SERVICE_TYPES: Array<{ value: ServiceType; label: string }> = [
     { value: 'other', label: 'Other' },
 ];
 
-const WEEKLY_HISTORY_HEADERS = [
-    'Record ID',
-    'Date Of Service',
-    'Society Name',
-    'Preacher',
-    'Guest Preacher',
-    'Preacher Society',
-    'Liturgist',
-    'Service Type',
-    'Service Type Other',
-    'Sermon Topic',
-    'Memory Text',
-    'Sermon Summary',
-    'Worship Highlights',
-    'Announcements By',
-    'Announcements Key Points',
-    'Attendance Adults Male',
-    'Attendance Adults Female',
-    'Attendance Children',
-    'Attendance Adherents',
-    'Attendance Catechumens',
-    'Attendance Visitors Total',
-    'Visitor Names',
-    'Special Visitor Name',
-    'Special Visitor Position',
-    'Special Visitor Summary',
-    'New Members Details',
-    'New Members Contact',
-    'Donations Description',
-    'Donations Quantity',
-    'Donations Donated By',
-    'Events',
-    'Observations',
-    'Prepared By',
+const WEEKLY_HISTORY_CSV_HEADERS = [
+    'id',
+    'dateOfService',
+    'societyName',
+    'preacher',
+    'guestPreacher',
+    'preacherSociety',
+    'liturgist',
+    'serviceType',
+    'serviceTypeOther',
+    'sermonTopic',
+    'memoryText',
+    'sermonSummary',
+    'worshipHighlights',
+    'announcementsBy',
+    'announcementsKeyPoints',
+    'attendanceAdultsMale',
+    'attendanceAdultsFemale',
+    'attendanceChildren',
+    'attendanceAdherents',
+    'attendanceCatechumens',
+    'attendanceVisitorsTotal',
+    'attendanceVisitorsNames',
+    'attendanceVisitorsSpecialName',
+    'attendanceVisitorsSpecialPosition',
+    'attendanceVisitorsSpecialSummary',
+    'newMembersDetails',
+    'newMembersContact',
+    'donationsDescription',
+    'donationsQuantity',
+    'donationsDonatedBy',
+    'events',
+    'observations',
+    'preparedBy',
 ];
+
+function flattenWeeklyHistoryRecord(record: WeeklyHistoryRecord): Record<string, string | number> {
+    const flattened: Record<string, string | number> = {};
+    for (const header of WEEKLY_HISTORY_CSV_HEADERS) {
+        switch (header) {
+            case 'id':
+                flattened[header] = record.id;
+                break;
+            case 'dateOfService':
+                flattened[header] = record.dateOfService;
+                break;
+            case 'societyName':
+                flattened[header] = record.societyName;
+                break;
+            case 'preacher':
+                flattened[header] = record.preacher;
+                break;
+            case 'guestPreacher':
+                flattened[header] = record.guestPreacher ? 'true' : 'false';
+                break;
+            case 'preacherSociety':
+                flattened[header] = record.preacherSociety;
+                break;
+            case 'liturgist':
+                flattened[header] = record.liturgist;
+                break;
+            case 'serviceType':
+                flattened[header] = record.serviceType;
+                break;
+            case 'serviceTypeOther':
+                flattened[header] = record.serviceTypeOther;
+                break;
+            case 'sermonTopic':
+                flattened[header] = record.sermonTopic;
+                break;
+            case 'memoryText':
+                flattened[header] = record.memoryText;
+                break;
+            case 'sermonSummary':
+                flattened[header] = record.sermonSummary;
+                break;
+            case 'worshipHighlights':
+                flattened[header] = record.worshipHighlights;
+                break;
+            case 'announcementsBy':
+                flattened[header] = record.announcementsBy;
+                break;
+            case 'announcementsKeyPoints':
+                flattened[header] = record.announcementsKeyPoints;
+                break;
+            case 'attendanceAdultsMale':
+                flattened[header] = record.attendance.adultsMale;
+                break;
+            case 'attendanceAdultsFemale':
+                flattened[header] = record.attendance.adultsFemale;
+                break;
+            case 'attendanceChildren':
+                flattened[header] = record.attendance.children;
+                break;
+            case 'attendanceAdherents':
+                flattened[header] = record.attendance.adherents;
+                break;
+            case 'attendanceCatechumens':
+                flattened[header] = record.attendance.catechumens;
+                break;
+            case 'attendanceVisitorsTotal':
+                flattened[header] = record.attendance.visitors.total;
+                break;
+            case 'attendanceVisitorsNames':
+                flattened[header] = record.attendance.visitors.names;
+                break;
+            case 'attendanceVisitorsSpecialName':
+                flattened[header] = record.attendance.visitors.specialVisitorName;
+                break;
+            case 'attendanceVisitorsSpecialPosition':
+                flattened[header] = record.attendance.visitors.specialVisitorPosition;
+                break;
+            case 'attendanceVisitorsSpecialSummary':
+                flattened[header] = record.attendance.visitors.specialVisitorSummary;
+                break;
+            case 'newMembersDetails':
+                flattened[header] = record.newMembersDetails;
+                break;
+            case 'newMembersContact':
+                flattened[header] = record.newMembersContact;
+                break;
+            case 'donationsDescription':
+                flattened[header] = record.donations.description;
+                break;
+            case 'donationsQuantity':
+                flattened[header] = record.donations.quantity;
+                break;
+            case 'donationsDonatedBy':
+                flattened[header] = record.donations.donatedBy;
+                break;
+            case 'events':
+                flattened[header] = record.events;
+                break;
+            case 'observations':
+                flattened[header] = record.observations;
+                break;
+            case 'preparedBy':
+                flattened[header] = record.preparedBy;
+                break;
+            default:
+                flattened[header] = '';
+                break;
+        }
+    }
+    return flattened;
+}
+
+function parseWeeklyHistoryRow(row: Record<string, unknown>): WeeklyHistoryRecord | null {
+    const entries = Object.entries(row);
+    const hasContent = entries.some(([_, value]) => String(value ?? '').trim() !== '');
+    if (!hasContent) {
+        return null;
+    }
+    const getValue = (key: string) => {
+        const value = row[key];
+        if (value === undefined || value === null) return '';
+        return String(value).trim();
+    };
+    const dateOfService = getValue('dateOfService');
+    if (!dateOfService) {
+        return null;
+    }
+    const raw = {
+        id: getValue('id'),
+        dateOfService,
+        societyName: getValue('societyName'),
+        preacher: getValue('preacher'),
+        guestPreacher: getValue('guestPreacher'),
+        preacherSociety: getValue('preacherSociety'),
+        liturgist: getValue('liturgist'),
+        serviceType: getValue('serviceType'),
+        serviceTypeOther: getValue('serviceTypeOther'),
+        sermonTopic: getValue('sermonTopic'),
+        memoryText: getValue('memoryText'),
+        sermonSummary: getValue('sermonSummary'),
+        worshipHighlights: getValue('worshipHighlights'),
+        announcementsBy: getValue('announcementsBy'),
+        announcementsKeyPoints: getValue('announcementsKeyPoints'),
+        attendance: {
+            adultsMale: getValue('attendanceAdultsMale'),
+            adultsFemale: getValue('attendanceAdultsFemale'),
+            children: getValue('attendanceChildren'),
+            adherents: getValue('attendanceAdherents'),
+            catechumens: getValue('attendanceCatechumens'),
+            visitors: {
+                total: getValue('attendanceVisitorsTotal'),
+                names: getValue('attendanceVisitorsNames'),
+                specialVisitorName: getValue('attendanceVisitorsSpecialName'),
+                specialVisitorPosition: getValue('attendanceVisitorsSpecialPosition'),
+                specialVisitorSummary: getValue('attendanceVisitorsSpecialSummary'),
+            },
+        },
+        newMembersDetails: getValue('newMembersDetails'),
+        newMembersContact: getValue('newMembersContact'),
+        donations: {
+            description: getValue('donationsDescription'),
+            quantity: getValue('donationsQuantity'),
+            donatedBy: getValue('donationsDonatedBy'),
+        },
+        events: getValue('events'),
+        observations: getValue('observations'),
+        preparedBy: getValue('preparedBy'),
+    };
+    return sanitizeWeeklyHistoryRecord(raw);
+}
 
 const emptyRecord = (): WeeklyHistoryRecord => ({
     id: generateId('history'),
@@ -179,11 +349,12 @@ const weeklyHistoryFromCsvRow = (row: Record<string, string>): WeeklyHistoryReco
 };
 
 const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canEdit = true }) => {
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [form, setForm] = useState<WeeklyHistoryRecord>(() => emptyRecord());
     const [editingId, setEditingId] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [flash, setFlash] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
+    const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
     const readOnly = !canEdit;
     const inputClass = 'border border-slate-300 rounded-lg px-3 py-2 disabled:bg-slate-100 disabled:cursor-not-allowed';
     const textareaClass = 'border border-slate-300 rounded-lg px-3 py-2 disabled:bg-slate-100 disabled:cursor-not-allowed';
@@ -384,12 +555,102 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
         [history],
     );
 
+    const handleExportCsv = () => {
+        try {
+            if (typeof window === 'undefined') {
+                return;
+            }
+            if (history.length === 0) {
+                setToast({ tone: 'error', message: 'No weekly history records to export.' });
+                return;
+            }
+            const rows = history.map(flattenWeeklyHistoryRecord);
+            const csv = toCsv(rows);
+            if (!csv) {
+                setToast({ tone: 'error', message: 'No weekly history records to export.' });
+                return;
+            }
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `weekly-history-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            setToast({ tone: 'success', message: 'Weekly attendance exported.' });
+        } catch (error) {
+            console.error('Failed to export weekly history CSV', error);
+            setToast({ tone: 'error', message: 'Unable to export weekly attendance.' });
+        }
+    };
+
+    const handleImportCsv = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const text = reader.result as string;
+                const rows = fromCsv(text);
+                if (!Array.isArray(rows) || rows.length === 0) {
+                    setToast({ tone: 'error', message: 'No rows found in the CSV file.' });
+                    return;
+                }
+                const stats = { created: 0, updated: 0, skipped: 0 };
+                setHistory(prev => {
+                    const next = [...prev];
+                    const indexById = new Map<string, number>();
+                    const indexByDate = new Map<string, number>();
+                    next.forEach((record, index) => {
+                        indexById.set(record.id, index);
+                        indexByDate.set(record.dateOfService, index);
+                    });
+                    rows.forEach(row => {
+                        const parsed = parseWeeklyHistoryRow(row);
+                        if (!parsed) {
+                            stats.skipped += 1;
+                            return;
+                        }
+                        let targetIndex = indexById.get(parsed.id);
+                        if (targetIndex === undefined) {
+                            targetIndex = indexByDate.get(parsed.dateOfService);
+                        }
+                        if (targetIndex !== undefined) {
+                            next[targetIndex] = parsed;
+                            indexById.set(parsed.id, targetIndex);
+                            indexByDate.set(parsed.dateOfService, targetIndex);
+                            stats.updated += 1;
+                        } else {
+                            next.push(parsed);
+                            const newIndex = next.length - 1;
+                            indexById.set(parsed.id, newIndex);
+                            indexByDate.set(parsed.dateOfService, newIndex);
+                            stats.created += 1;
+                        }
+                    });
+                    return next;
+                });
+                setToast({
+                    tone: 'success',
+                    message: `Imported weekly attendance: ${stats.created} created, ${stats.updated} updated, ${stats.skipped} skipped (empty rows or missing date).`,
+                });
+            } catch (error) {
+                console.error('Failed to import weekly history CSV', error);
+                setToast({ tone: 'error', message: 'Unable to import weekly attendance. Check the CSV format.' });
+            } finally {
+                event.target.value = '';
+            }
+        };
+        reader.readAsText(file);
+    };
+
     useEffect(() => {
-        if (!flash) return;
-        if (typeof window === 'undefined') return;
-        const timeout = window.setTimeout(() => setFlash(null), 4000);
+        if (!toast) return;
+        const timeout = window.setTimeout(() => setToast(null), 4000);
         return () => window.clearTimeout(timeout);
-    }, [flash]);
+    }, [toast]);
 
     return (
         <div className="space-y-6">
@@ -423,6 +684,25 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
             )}
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-6">
                 <h2 className="text-2xl font-bold text-slate-800 mb-4">Record Weekly History</h2>
+                {!readOnly && (
+                    <div className="mb-4 flex flex-wrap gap-3">
+                        <button
+                            type="button"
+                            onClick={handleExportCsv}
+                            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                        >
+                            Export CSV
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="rounded-lg border border-indigo-200 bg-white/80 px-4 py-2 text-sm font-semibold text-indigo-700 shadow-sm hover:bg-white"
+                        >
+                            Import CSV
+                        </button>
+                        <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleImportCsv} />
+                    </div>
+                )}
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {!canEdit && (
                         <div className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 px-4 py-3 text-sm">
@@ -988,6 +1268,16 @@ const WeeklyHistory: React.FC<WeeklyHistoryProps> = ({ history, setHistory, canE
                     {orderedHistory.length === 0 && <p className="text-slate-500">No reports submitted yet.</p>}
                 </div>
             </section>
+            {toast && (
+                <div
+                    className={`fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full px-5 py-3 text-sm font-semibold shadow-lg ${
+                        toast.tone === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                    }`}
+                    role="status"
+                >
+                    {toast.message}
+                </div>
+            )}
         </div>
     );
 };

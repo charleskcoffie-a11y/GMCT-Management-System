@@ -7,7 +7,6 @@ type ConfirmationModalProps = {
     title: string;
     message: string;
     confirmLabel?: string;
-    cancelLabel?: string;
     confirmTone?: 'danger' | 'primary';
 };
 
@@ -18,14 +17,13 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     title,
     message,
     confirmLabel = 'Confirm',
-    cancelLabel = 'Cancel',
     confirmTone = 'danger',
 }) => {
     if (!isOpen) return null;
 
-    const confirmClasses = confirmTone === 'primary'
-        ? 'bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg'
-        : 'bg-red-500 hover:bg-red-600 text-white font-semibold px-4 py-2 rounded-lg';
+    const confirmClasses = confirmTone === 'danger'
+        ? 'bg-red-500 hover:bg-red-600 text-white'
+        : 'bg-indigo-600 hover:bg-indigo-700 text-white';
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -36,8 +34,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                 <div className="p-6 space-y-4">
                     <p className="text-slate-600">{message}</p>
                     <div className="flex justify-end gap-3">
-                        <button onClick={onClose} className="bg-white/80 border border-pink-200 text-pink-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">{cancelLabel}</button>
-                        <button onClick={onConfirm} className={confirmClasses}>{confirmLabel}</button>
+                        <button onClick={onClose} className="bg-white/80 border border-pink-200 text-pink-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Cancel</button>
+                        <button onClick={onConfirm} className={`${confirmClasses} font-semibold px-4 py-2 rounded-lg`}>{confirmLabel}</button>
                     </div>
                 </div>
             </div>

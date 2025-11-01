@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { CloudState, Settings } from '../types';
 import { msalInteractiveSignIn } from '../services/oneDrive';
 
@@ -14,7 +14,14 @@ interface SettingsProps {
 const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport }) => {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [shareEmail, setShareEmail] = useState('');
-    const [authToast, setAuthToast] = useState<{ tone: 'success' | 'error' | 'info'; message: string } | null>(null);
+    const [authMessage, setAuthMessage] = useState<string | null>(null);
+    const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
+
+    useEffect(() => {
+        if (!toast) return;
+        const timeout = window.setTimeout(() => setToast(null), 4000);
+        return () => window.clearTimeout(timeout);
+    }, [toast]);
 
     const handleChange = <K extends keyof Settings>(key: K, value: Settings[K]) => {
         setSettings(prev => ({ ...prev, [key]: value }));
@@ -34,28 +41,39 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
         try {
             const session = await msalInteractiveSignIn();
             const username = session.account.username ?? 'connected account';
-            const successMessage = `You are now signed in as ${username}.`;
+            const authorityHint = session.authority === 'organizations'
+                ? ' (work account)'
+                : session.authority === 'consumers'
+                ? ' (personal account)'
+                : '';
+            const successMessage = `You are now signed in as ${username}${authorityHint}.`;
             setCloud(prev => ({
                 ...prev,
                 ready: true,
                 signedIn: true,
                 account: session.account,
                 accessToken: session.accessToken,
+                activeUsers: typeof prev.activeUsers === 'number' ? Math.max(prev.activeUsers, 1) : 1,
                 message: successMessage,
             }));
-            setAuthToast({ tone: 'success', message: successMessage });
+            setAuthMessage(successMessage);
+            setToast({ message: successMessage, tone: 'success' });
         } catch (error) {
-            console.error('Microsoft sign-in failed', error);
-            const failureMessage = 'Sign in failed. Please check your credentials or network connection.';
+            const failureMessage =
+                error instanceof Error
+                    ? error.message
+                    : 'Sign in failed. Please check your credentials or network connection.';
             setCloud(prev => ({
                 ...prev,
                 ready: true,
                 signedIn: false,
                 account: undefined,
                 accessToken: undefined,
+                activeUsers: prev.activeUsers ?? null,
                 message: failureMessage,
             }));
-            setAuthToast({ tone: 'error', message: failureMessage });
+            setAuthMessage(failureMessage);
+            setToast({ message: failureMessage, tone: 'error' });
         }
     };
 
@@ -142,6 +160,16 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                     </div>
                 )}
             </section>
+            {toast && (
+                <div
+                    className={`fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-5 py-3 text-sm font-semibold shadow-lg ${
+                        toast.tone === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+                    }`}
+                    role="status"
+                >
+                    {toast.message}
+                </div>
+            )}
         </div>
     );
 };
