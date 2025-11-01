@@ -635,7 +635,45 @@ const App: React.FC = () => {
     };
 
     const handleImport = (newEntries: Entry[]) => {
-        setEntries(prev => [...prev, ...newEntries]);
+        const stats = { created: 0, updated: 0, skipped: 0 };
+
+        setEntries(prev => {
+            if (newEntries.length === 0) {
+                return prev;
+            }
+
+            const next = [...prev];
+            const indexById = new Map<string, number>();
+            next.forEach((entry, index) => {
+                const normalizedId = sanitizeString(entry.id);
+                if (normalizedId && !indexById.has(normalizedId)) {
+                    indexById.set(normalizedId, index);
+                }
+            });
+
+            newEntries.forEach(rawEntry => {
+                const entry = sanitizeEntry(rawEntry);
+                const normalizedId = sanitizeString(entry.id);
+                if (!normalizedId) {
+                    stats.skipped += 1;
+                    return;
+                }
+
+                const existingIndex = indexById.get(normalizedId);
+                if (existingIndex !== undefined) {
+                    next[existingIndex] = { ...next[existingIndex], ...entry };
+                    stats.updated += 1;
+                } else {
+                    next.push(entry);
+                    indexById.set(normalizedId, next.length - 1);
+                    stats.created += 1;
+                }
+            });
+
+            return next;
+        });
+
+        return stats;
     };
 
     const handleRecordImportClick = () => {
@@ -668,8 +706,13 @@ const App: React.FC = () => {
                     const array = Array.isArray(raw) ? raw : [];
                     imported = array.map(item => sanitizeEntry(item));
                 }
-                handleImport(imported);
-                alert(`Imported ${imported.length} financial record${imported.length === 1 ? '' : 's'}.`);
+                const { created, updated, skipped } = handleImport(imported);
+                const summaryParts: string[] = [];
+                if (created > 0) summaryParts.push(`${created} new`);
+                if (updated > 0) summaryParts.push(`${updated} updated`);
+                if (skipped > 0) summaryParts.push(`${skipped} skipped`);
+                const summary = summaryParts.length > 0 ? summaryParts.join(', ') : 'no changes detected';
+                alert(`Import completed — ${summary}.`);
             } catch (error) {
                 console.error('Failed to import financial records', error);
                 alert('Unable to import the selected file. Ensure it is a valid CSV or JSON export.');
@@ -804,7 +847,9 @@ const App: React.FC = () => {
         return <Login onLogin={handleLogin} error={loginError} />;
     }
 
-    const activeUsersCount = cloud.activeUsers ?? (cloud.signedIn ? 1 : (currentUser ? 1 : null));
+    const activeUsersCount = typeof cloud.activeUsers === 'number' && !Number.isNaN(cloud.activeUsers)
+        ? cloud.activeUsers
+        : null;
 
     const renderTabContent = () => {
         switch (activeTab) {
@@ -820,12 +865,12 @@ const App: React.FC = () => {
 
                 return (
                     <div className="space-y-6">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-col gap-3 items-stretch sm:flex-row sm:items-center sm:justify-end">
+                            <div className="flex w-full flex-col items-stretch gap-4 sm:w-auto lg:items-end">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
@@ -869,7 +914,12 @@ const App: React.FC = () => {
                             confirmTone="primary"
                         />
 
-                        <div className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${dataSourceStyles}`} role="status">
+                        <div
+                            className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${dataSourceStyles}`}
+                            role="status"
+                            aria-live="polite"
+                            aria-atomic="true"
+                        >
                             {dataSourceMessage}
                         </div>
 
