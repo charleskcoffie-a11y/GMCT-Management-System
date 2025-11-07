@@ -804,7 +804,9 @@ const App: React.FC = () => {
         return <Login onLogin={handleLogin} error={loginError} />;
     }
 
-    const activeUsersCount = cloud.activeUsers ?? (cloud.signedIn ? 1 : (currentUser ? 1 : null));
+    const activeUsersCount = typeof cloud.activeUsers === 'number'
+        ? cloud.activeUsers
+        : (cloud.signedIn ? 1 : null);
 
     const renderTabContent = () => {
         switch (activeTab) {
@@ -820,12 +822,12 @@ const App: React.FC = () => {
 
                 return (
                     <div className="space-y-6">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-col gap-3 items-stretch sm:flex-row sm:items-center sm:justify-end">
+                            <div className="flex flex-col gap-4 items-stretch sm:items-end w-full lg:w-auto">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
@@ -833,28 +835,31 @@ const App: React.FC = () => {
                                 >
                                     Add New Entry
                                 </button>
-                                <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleExport('csv')}
-                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white w-full sm:w-auto"
-                                    >
-                                        Export CSV
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleExport('json')}
-                                        className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg w-full sm:w-auto"
-                                    >
-                                        Export JSON
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleRecordImportClick}
-                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white w-full sm:w-auto"
-                                    >
-                                        Import
-                                    </button>
+                                <div className="w-full sm:w-auto space-y-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 text-left sm:text-right">Data tools</p>
+                                    <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleExport('csv')}
+                                            className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white w-full sm:w-auto"
+                                        >
+                                            Export CSV
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleExport('json')}
+                                            className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg w-full sm:w-auto"
+                                        >
+                                            Export JSON
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleRecordImportClick}
+                                            className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white w-full sm:w-auto"
+                                        >
+                                            Import
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -3,6 +3,11 @@ import type { Entry, Member } from '../types';
 
 type ConnectionResult = { success: true; message: string } | { success: false; message: string };
 
+type SharePointConnectionOptions = {
+    siteUrl?: string | null;
+    listNames?: Array<string | null | undefined>;
+};
+
 type GraphError = 'not-signed-in' | 'missing-config' | 'site-missing' | 'list-missing' | 'network-error' | 'unknown';
 
 function parseSiteResource(url: string): string | null {
@@ -19,15 +24,15 @@ function parseSiteResource(url: string): string | null {
 function mapErrorToMessage(error: GraphError, context?: { listName?: string }): string {
     switch (error) {
         case 'not-signed-in':
-            return "You're not signed in / no permission.";
+            return 'Access denied. Sign in with a Microsoft account that has permission.';
         case 'missing-config':
-            return 'A required field is missing.';
+            return 'SharePoint connection is missing required settings.';
         case 'list-missing':
             return context?.listName ? `The list "${context.listName}" is missing.` : 'The list is missing.';
         case 'site-missing':
             return 'The SharePoint site could not be found.';
         case 'network-error':
-            return 'The internet is down.';
+            return 'Network unavailable. Check your connection and try again.';
         default:
             return 'Unable to confirm the SharePoint connection right now.';
     }
@@ -99,16 +104,22 @@ export async function deleteMemberFromSharePoint(_member: Member, _accessToken: 
     console.info('SharePoint member deletion is not implemented. No remote changes were made.');
 }
 
-export async function testSharePointConnection(accessToken?: string | null): Promise<ConnectionResult> {
+export async function testSharePointConnection(accessToken?: string | null, options?: SharePointConnectionOptions): Promise<ConnectionResult> {
     if (!accessToken) {
         return { success: false, message: mapErrorToMessage('not-signed-in') };
     }
 
-    if (!SHAREPOINT_SITE_URL || !SHAREPOINT_ENTRIES_LIST_NAME || !SHAREPOINT_MEMBERS_LIST_NAME) {
+    const siteUrl = options?.siteUrl?.trim() || SHAREPOINT_SITE_URL;
+    const configuredListNames = options?.listNames?.map(name => name?.trim()).filter((name): name is string => Boolean(name));
+    const listNames = configuredListNames && configuredListNames.length > 0
+        ? configuredListNames
+        : [SHAREPOINT_ENTRIES_LIST_NAME, SHAREPOINT_MEMBERS_LIST_NAME].filter((name): name is string => Boolean(name));
+
+    if (!siteUrl || listNames.length === 0) {
         return { success: false, message: mapErrorToMessage('missing-config') };
     }
 
-    const siteResource = parseSiteResource(SHAREPOINT_SITE_URL);
+    const siteResource = parseSiteResource(siteUrl);
     if (!siteResource) {
         return { success: false, message: mapErrorToMessage('missing-config') };
     }
@@ -139,7 +150,6 @@ export async function testSharePointConnection(accessToken?: string | null): Pro
             return { success: false, message: mapErrorToMessage('unknown') };
         }
 
-        const listNames = [SHAREPOINT_ENTRIES_LIST_NAME, SHAREPOINT_MEMBERS_LIST_NAME];
         for (const listName of listNames) {
             const listResponse = await fetch(`${SHAREPOINT_GRAPH_URL}/sites/${siteId}/lists/${encodeURIComponent(listName)}`, {
                 headers: {
