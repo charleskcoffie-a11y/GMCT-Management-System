@@ -151,37 +151,26 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
             const cancelBtn = document.getElementById('gmct-cancel');
             const allowedDomains = ${JSON.stringify(MICROSOFT_ALLOWED_EMAIL_DOMAINS)};
             const allowedDomainsLower = Array.isArray(allowedDomains)
-                ? allowedDomains
-                    .map(function(entry) { return String(entry || '').toLowerCase().trim(); })
-                    .filter(function(entry) { return entry.length > 0; })
+                ? allowedDomains.map(function(entry) { return String(entry || '').toLowerCase(); })
                 : [];
 
             function normaliseEmail(value) {
                 return String(value || '').trim();
             }
 
-            function getDomain(value) {
-                if (!value) {
-                    return false;
-                }
-                const atIndex = value.lastIndexOf('@');
-                if (atIndex < 1 || atIndex === value.length - 1) {
-                    return false;
-                }
-                return value.slice(atIndex + 1).toLowerCase();
-            }
-
             function isEmailAllowed(email) {
-                const domain = getDomain(email);
-                if (!domain) {
+                if (!email) {
                     return false;
                 }
-                if (!allowedDomainsLower.length || allowedDomainsLower.includes('*')) {
+                const atIndex = email.lastIndexOf('@');
+                if (atIndex < 1 || atIndex === email.length - 1) {
+                    return false;
+                }
+                if (!allowedDomainsLower.length) {
                     return true;
                 }
-                return allowedDomainsLower.some(function(allowed) {
-                    return domain === allowed || domain.endsWith('.' + allowed);
-                });
+                const domain = email.slice(atIndex + 1).toLowerCase();
+                return allowedDomainsLower.includes(domain);
             }
 
             function send(status, payload) {
@@ -200,9 +189,7 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
                 const sanitisedEmail = normaliseEmail(emailInput.value);
                 const email = sanitisedEmail.toLowerCase();
                 const password = String(passwordInput.value || '');
-                const humanAllowed = allowedDomainsLower.length && !allowedDomainsLower.includes('*')
-                    ? allowedDomainsLower.map(function(entry) { return '@' + entry; }).join(', ')
-                    : '';
+                const humanAllowed = allowedDomainsLower.length ? allowedDomainsLower.map(function(entry) { return '@' + entry; }).join(', ') : '';
 
                 if (!isEmailAllowed(email)) {
                     const domainHint = humanAllowed ? ' Use a work or school account such as ' + humanAllowed + '.' : '';
