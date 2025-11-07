@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CloudState, Entry, EntryType, Member, Settings } from '../types';
-import { formatCurrency, fromCsv, sanitizeEntry, sanitizeMember, toCsv, ENTRY_TYPE_VALUES, entryTypeLabel } from '../utils';
+import { formatCurrency, fromCsv, sanitizeMember, toCsv, ENTRY_TYPE_VALUES, entryTypeLabel } from '../utils';
 import { testSharePointConnection } from '../services/sharepoint';
 import {
     SHAREPOINT_ENTRIES_LIST_NAME,
@@ -12,7 +12,6 @@ type UtilitiesProps = {
     members: Member[];
     settings: Settings;
     cloud: CloudState;
-    onImportEntries: (entries: Entry[]) => void;
     onImportMembers: (members: Member[]) => void;
     onResetData: () => void;
     onSaveTotalClasses: (total: number) => void;
@@ -23,12 +22,10 @@ const Utilities: React.FC<UtilitiesProps> = ({
     members,
     settings,
     cloud,
-    onImportEntries,
     onImportMembers,
     onResetData,
     onSaveTotalClasses,
 }) => {
-    const entryFileRef = useRef<HTMLInputElement | null>(null);
     const memberFileRef = useRef<HTMLInputElement | null>(null);
 
     const [startDate, setStartDate] = useState('');
@@ -202,42 +199,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
         }
     };
 
-    const handleEntryFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        if (
-            sharePointEntriesUrl &&
-            !window.confirm('Manual imports bypass SharePoint safeguards. Continue with a local file import?')
-        ) {
-            event.target.value = '';
-            window.open(sharePointEntriesUrl, '_blank', 'noopener');
-            return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const text = reader.result as string;
-                if (file.name.endsWith('.csv')) {
-                    const rows = fromCsv(text);
-                    const sanitized = rows.map(row => sanitizeEntry(row));
-                    onImportEntries(sanitized);
-                    alert(`Imported ${sanitized.length} financial records.`);
-                } else {
-                    const raw = JSON.parse(text) as unknown;
-                    const array = Array.isArray(raw) ? raw : [];
-                    const sanitized = array.map(item => sanitizeEntry(item));
-                    onImportEntries(sanitized);
-                    alert(`Imported ${sanitized.length} financial records.`);
-                }
-            } catch (error) {
-                console.error('Failed to import entries', error);
-                alert('Import failed. Please provide a valid CSV or JSON export.');
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = '';
-    };
-
     const handleMemberFile = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -349,10 +310,9 @@ const Utilities: React.FC<UtilitiesProps> = ({
             </section>
 
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-indigo-50 to-purple-100/70 p-6 space-y-4">
-                <h2 className="text-2xl font-bold text-slate-800">Data Import &amp; Snapshot</h2>
-                <p className="text-slate-500 text-sm">Bulk load data from CSV exports or grab a quick snapshot of your offline database.</p>
+                <h2 className="text-2xl font-bold text-slate-800">Directory Import &amp; Snapshot</h2>
+                <p className="text-slate-500 text-sm">Maintain your member directory and capture lightweight backups of the local dataset.</p>
                 <div className="flex flex-wrap gap-3">
-                    <button onClick={() => entryFileRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg">Import Financial Records</button>
                     <button onClick={() => memberFileRef.current?.click()} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Import Members</button>
                     {sharePointEntriesUrl && (
                         <button
@@ -387,13 +347,12 @@ const Utilities: React.FC<UtilitiesProps> = ({
                         Copy Data Snapshot
                     </button>
                 </div>
-                <p className="text-xs text-slate-500">CSV headers supported for entries: date, memberID, memberName, type, method, amount, note.</p>
+                <p className="text-xs text-slate-500">CSV headers supported for members: <code>name</code>, <code>classNumber</code>, <code>spId</code>, <code>id</code>.</p>
                 {(sharePointEntriesUrl || sharePointMembersUrl) && (
                     <p className="text-xs text-emerald-700 font-medium">
-                        Tip: Use the SharePoint shortcuts above to jump straight to the official lists before importing so the correct export is always selected.
+                        Tip: Use the SharePoint shortcuts above to jump straight to the official lists before exporting or importing data.
                     </p>
                 )}
-                <input ref={entryFileRef} type="file" accept=".csv,.json" className="hidden" onChange={handleEntryFile} />
                 <input ref={memberFileRef} type="file" accept=".csv" className="hidden" onChange={handleMemberFile} />
             </section>
 

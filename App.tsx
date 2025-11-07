@@ -19,8 +19,6 @@ import TasksTab from './components/TasksTab';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
-    toCsv,
-    fromCsv,
     sanitizeEntry,
     sanitizeMember,
     sanitizeUser,
@@ -36,6 +34,8 @@ import {
     ENTRY_TYPE_VALUES,
     entryTypeLabel,
     generateId,
+    fromCsv,
+    toCsv,
 } from './utils';
 import type {
     Entry,
@@ -110,6 +110,8 @@ const App: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
+    const [isFinanceImportConfirmOpen, setIsFinanceImportConfirmOpen] = useState(false);
+    const [financeToast, setFinanceToast] = useState<{ tone: 'success' | 'error' | 'info'; message: string } | null>(null);
     const [syncMessage, setSyncMessage] = useState<string | null>(null);
     const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
     const [, setIsNavOpen] = useState(false);
@@ -121,7 +123,6 @@ const App: React.FC = () => {
     const [shouldResync, setShouldResync] = useState(0);
     const [activeSyncTasks, setActiveSyncTasks] = useState(0);
     const [recordsDataSource, setRecordsDataSource] = useState<'sharepoint' | 'local'>('local');
-    const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false);
     const [currentDate, setCurrentDate] = useState(() => new Date());
     const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
     
@@ -139,7 +140,6 @@ const App: React.FC = () => {
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
-    const recordFileInputRef = useRef<HTMLInputElement | null>(null);
     const presenceIntervalRef = useRef<number | null>(null);
     const presenceStateRef = useRef<{ id: string | null }>({ id: null });
 
@@ -339,6 +339,13 @@ const App: React.FC = () => {
     useEffect(() => {
         setIsNavOpen(false);
     }, [activeTab]);
+
+    useEffect(() => {
+        if (!financeToast) return;
+        if (typeof window === 'undefined') return;
+        const timer = window.setTimeout(() => setFinanceToast(null), 6000);
+        return () => window.clearTimeout(timer);
+    }, [financeToast]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -822,52 +829,113 @@ const App: React.FC = () => {
         setEntryToDeleteId(null);
     };
 
-    const handleImport = (newEntries: Entry[]) => {
-        setEntries(prev => [...prev, ...newEntries]);
-    };
+    const handleFinanceExport = (format: 'csv' | 'json') => {
+        const dataset = filteredAndSortedEntries.map(entry => ({
+            id: entry.id,
+            date: entry.date,
+            memberID: entry.memberID,
+            memberName: entry.memberName,
+            type: entry.type,
+            fund: entry.fund ?? '',
+            method: entry.method,
+            amount: entry.amount,
+            note: entry.note ?? '',
+        }));
 
-    const handleRecordImportClick = () => {
-        setIsImportConfirmOpen(true);
-    };
-
-    const confirmRecordImport = () => {
-        setIsImportConfirmOpen(false);
-        if (typeof window === 'undefined') {
+        if (dataset.length === 0) {
+            setFinanceToast({ tone: 'info', message: 'No financial records match the current filters to export.' });
             return;
         }
-        window.setTimeout(() => {
-            recordFileInputRef.current?.click();
-        }, 120);
+
+        const timestamp = new Date().toISOString().slice(0, 10);
+        if (format === 'csv') {
+            const csv = toCsv(dataset);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `gmct-financial-records-${timestamp}.csv`;
+            link.click();
+        } else {
+            const json = JSON.stringify(dataset, null, 2);
+            const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `gmct-financial-records-${timestamp}.json`;
+            link.click();
+        }
+
+        setFinanceToast({
+            tone: 'success',
+            message: `Exported ${dataset.length} record${dataset.length === 1 ? '' : 's'} using current filters.`,
+        });
     };
 
-    const handleRecordFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFinanceImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-        if (!file) {
-            return;
-        }
+        if (!file) return;
 
         const reader = new FileReader();
         reader.onload = () => {
             try {
                 const text = typeof reader.result === 'string' ? reader.result : '';
-                let imported: Entry[] = [];
+                let rawRows: unknown[] = [];
                 if (file.name.toLowerCase().endsWith('.csv')) {
-                    const rows = fromCsv(text);
-                    imported = rows.map(row => sanitizeEntry(row));
+                    rawRows = fromCsv(text);
                 } else {
-                    const raw = JSON.parse(text) as unknown;
-                    const array = Array.isArray(raw) ? raw : [];
-                    imported = array.map(item => sanitizeEntry(item));
+                    const parsed = JSON.parse(text) as unknown;
+                    if (Array.isArray(parsed)) {
+                        rawRows = parsed;
+                    } else {
+                        throw new Error('Invalid JSON shape');
+                    }
                 }
-                handleImport(imported);
-                alert(`Imported ${imported.length} financial record${imported.length === 1 ? '' : 's'}.`);
+
+                const sanitizedEntries = rawRows.map(item => sanitizeEntry(item));
+                if (sanitizedEntries.length === 0) {
+                    setFinanceToast({ tone: 'info', message: 'No financial records were found in the selected file.' });
+                    return;
+                }
+
+                let added = 0;
+                let updated = 0;
+                setEntries(prev => {
+                    const map = new Map(prev.map(entry => [entry.id, entry]));
+                    const next = [...prev];
+                    sanitizedEntries.forEach(entry => {
+                        if (map.has(entry.id)) {
+                            const index = next.findIndex(item => item.id === entry.id);
+                            if (index >= 0) {
+                                next[index] = entry;
+                                updated += 1;
+                            }
+                        } else {
+                            next.push(entry);
+                            map.set(entry.id, entry);
+                            added += 1;
+                        }
+                    });
+                    return next;
+                });
+
+                setFinanceToast({
+                    tone: 'success',
+                    message: `Import complete: ${sanitizedEntries.length} processed, ${added} added, ${updated} updated.`,
+                });
             } catch (error) {
                 console.error('Failed to import financial records', error);
-                alert('Unable to import the selected file. Ensure it is a valid CSV or JSON export.');
+                setFinanceToast({
+                    tone: 'error',
+                    message: 'Import failed. Ensure the file is a valid CSV or JSON export.',
+                });
             }
         };
         reader.readAsText(file);
         event.target.value = '';
+    };
+
+    const confirmFinanceImport = () => {
+        setIsFinanceImportConfirmOpen(false);
+        financeImportInputRef.current?.click();
     };
 
     const handleBulkAddMembers = (importedMembers: Member[]) => {
@@ -901,25 +969,6 @@ const App: React.FC = () => {
         setWeeklyHistory([]);
         setCurrentUser(null);
         setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.' });
-    };
-    
-    const handleExport = (format: 'csv' | 'json') => {
-        const filename = `gmct-export-${new Date().toISOString().slice(0, 10)}`;
-        if (format === 'csv') {
-            const csv = toCsv(entries);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `${filename}.csv`;
-            link.click();
-        } else {
-             const json = JSON.stringify(entries, null, 2);
-             const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
-             const link = document.createElement('a');
-             link.href = URL.createObjectURL(blob);
-             link.download = `${filename}.json`;
-             link.click();
-        }
     };
     
     const handleFullExport = () => {
@@ -1046,6 +1095,13 @@ const App: React.FC = () => {
                                 </div>
                             </div>
                         </div>
+                        <input
+                            ref={financeImportInputRef}
+                            type="file"
+                            accept=".csv,.json"
+                            className="hidden"
+                            onChange={handleFinanceImportFileChange}
+                        />
                         <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${dataSourceTone}`} role="status">
                             <div>{dataSourceText}</div>
                             {!isSharePointLive && (
@@ -1054,8 +1110,6 @@ const App: React.FC = () => {
                                 </p>
                             )}
                         </div>
-                        <input ref={recordFileInputRef} type="file" accept=".csv,.json" className="hidden" onChange={handleRecordFileChange} />
-
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-4">
                                 <p className="text-sm uppercase tracking-wide text-amber-600 font-semibold">Entries Displayed</p>
@@ -1168,7 +1222,6 @@ const App: React.FC = () => {
                         members={members}
                         settings={settings}
                         cloud={cloud}
-                        onImportEntries={handleImport}
                         onImportMembers={handleBulkAddMembers}
                         onResetData={handleResetAllData}
                         onSaveTotalClasses={handleSaveTotalClasses}
@@ -1204,7 +1257,7 @@ const App: React.FC = () => {
         <button
             key={item.id}
             onClick={() => setActiveTab(item.id as Tab)}
-            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
+            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide uppercase ${
                 activeTab === item.id
                     ? 'bg-white/25 text-white shadow-lg'
                     : 'text-indigo-100 hover:bg-white/15 hover:text-white'
@@ -1248,6 +1301,16 @@ const App: React.FC = () => {
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} members={members} settings={settings} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal
+                    isOpen={isFinanceImportConfirmOpen}
+                    onClose={() => setIsFinanceImportConfirmOpen(false)}
+                    onConfirm={confirmFinanceImport}
+                    title="Confirm Import"
+                    message="Importing may overwrite or merge existing records. Do you want to continue?"
+                    confirmLabel="Import"
+                    cancelLabel="Cancel"
+                    confirmTone="primary"
+                />
+                <ConfirmationModal
                     isOpen={isConfirmModalOpen}
                     onClose={() => {
                         setIsConfirmModalOpen(false);
@@ -1256,15 +1319,6 @@ const App: React.FC = () => {
                     onConfirm={confirmDeleteEntry}
                     title="Confirm Deletion"
                     message="Are you sure you want to delete this financial entry? This action cannot be undone."
-                />
-                <ConfirmationModal
-                    isOpen={isImportConfirmOpen}
-                    onClose={() => setIsImportConfirmOpen(false)}
-                    onConfirm={confirmRecordImport}
-                    title="Confirm Import"
-                    message="Importing may overwrite or merge existing records. Do you want to continue?"
-                    confirmLabel="Import"
-                    confirmTone="primary"
                 />
             </div>
         </div>
