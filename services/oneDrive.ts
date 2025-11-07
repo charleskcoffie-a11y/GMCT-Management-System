@@ -1,4 +1,4 @@
-import { MSAL_CLIENT_ID, MSAL_TENANT_ID, GRAPH_SCOPES } from '../constants';
+import { MSAL_CLIENT_ID, MSAL_TENANT_ID, GRAPH_SCOPES, MICROSOFT_ALLOWED_EMAIL_DOMAINS } from '../constants';
 
 type SilentSignInResult = {
     account: { homeAccountId: string; username?: string };
@@ -149,6 +149,29 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
             const passwordInput = document.getElementById('gmct-password');
             const messageEl = document.getElementById('gmct-message');
             const cancelBtn = document.getElementById('gmct-cancel');
+            const allowedDomains = ${JSON.stringify(MICROSOFT_ALLOWED_EMAIL_DOMAINS)};
+            const allowedDomainsLower = Array.isArray(allowedDomains)
+                ? allowedDomains.map(function(entry) { return String(entry || '').toLowerCase(); })
+                : [];
+
+            function normaliseEmail(value) {
+                return String(value || '').trim();
+            }
+
+            function isEmailAllowed(email) {
+                if (!email) {
+                    return false;
+                }
+                const atIndex = email.lastIndexOf('@');
+                if (atIndex < 1 || atIndex === email.length - 1) {
+                    return false;
+                }
+                if (!allowedDomainsLower.length) {
+                    return true;
+                }
+                const domain = email.slice(atIndex + 1).toLowerCase();
+                return allowedDomainsLower.includes(domain);
+            }
 
             function send(status, payload) {
                 if (window.opener && !window.opener.closed) {
@@ -163,12 +186,14 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
 
             form.addEventListener('submit', function(event) {
                 event.preventDefault();
-                const email = String(emailInput.value || '').trim();
+                const sanitisedEmail = normaliseEmail(emailInput.value);
+                const email = sanitisedEmail.toLowerCase();
                 const password = String(passwordInput.value || '');
-                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                const humanAllowed = allowedDomainsLower.length ? allowedDomainsLower.map(function(entry) { return '@' + entry; }).join(', ') : '';
 
-                if (!emailPattern.test(email)) {
-                    messageEl.textContent = 'Enter a valid Microsoft email address.';
+                if (!isEmailAllowed(email)) {
+                    const domainHint = humanAllowed ? ' Use a work or school account such as ' + humanAllowed + '.' : '';
+                    messageEl.textContent = 'Enter a valid Microsoft 365 work or school email address.' + domainHint;
                     messageEl.className = 'message error';
                     return;
                 }
@@ -179,11 +204,11 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
                     return;
                 }
 
-                messageEl.textContent = 'Signing in…';
+                messageEl.textContent = 'Signing in to your Microsoft 365 account…';
                 messageEl.className = 'message info';
 
                 setTimeout(function() {
-                    send('success', { email: email });
+                    send('success', { email: sanitisedEmail });
                     window.close();
                 }, 600);
             });

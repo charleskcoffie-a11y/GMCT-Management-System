@@ -11,6 +11,15 @@ export const MSAL_CLIENT_ID = "c8358699-db35-45ca-997d-dc15c2be9553";
 // e.g., "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" or "yourtenant.onmicrosoft.com"
 export const MSAL_TENANT_ID = "10eb45a8-7562-4898-a5a5-8cc3598fd239";
 export const GRAPH_SCOPES = ["User.Read", "Files.ReadWrite.AppFolder", "Sites.ReadWrite.All"];
+// Corporate domains that are allowed to complete the in-app Microsoft 365 sign-in helper.
+// Update this list to match the work or school accounts for your organisation.
+export const MICROSOFT_ALLOWED_EMAIL_DOMAINS = [
+    'gmct-ca.org',
+    'gmct98.onmicrosoft.com',
+    'outlook.com',
+    'hotmail.com',
+    'live.com',
+];
 
 // --- SharePoint Configuration Defaults ---
 // IMPORTANT: Replace with your SharePoint site URL
