@@ -1013,7 +1013,7 @@ const App: React.FC = () => {
         <button
             key={item.id}
             onClick={() => setActiveTab(item.id as Tab)}
-            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
+            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide uppercase ${
                 activeTab === item.id
                     ? 'bg-white/25 text-white shadow-lg'
                     : 'text-indigo-100 hover:bg-white/15 hover:text-white'
