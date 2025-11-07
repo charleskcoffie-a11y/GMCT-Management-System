@@ -483,8 +483,10 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
                     setToast({ message: 'No rows found in the CSV file.', tone: 'error' });
                     return;
                 }
-                const existingById = new Map(tasks.map(task => [task.id, task]));
-                const existingByKey = new Map(tasks.map(task => [`${task.title.toLowerCase()}|${task.dueDate ?? ''}`, task]));
+                const existingById = new Map<string, Task>(tasks.map(task => [task.id, task]));
+                const existingByKey = new Map<string, Task>(
+                    tasks.map(task => [`${task.title.toLowerCase()}|${task.dueDate ?? ''}`, task]),
+                );
                 const prepared = new Map<string, Task>();
                 let skipped = 0;
                 rows.forEach(row => {
@@ -498,7 +500,7 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
                     let id = extractTaskCsvValue(row, 'Id');
                     if (!id) {
                         const key = `${title.toLowerCase()}|${dueDate}`;
-                        const match = existingByKey.get(key);
+                        const match: Task | undefined = existingByKey.get(key);
                         if (match) {
                             id = match.id;
                         }
@@ -516,7 +518,7 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
                         createdBy: currentUser.username,
                     };
                     const sanitized = sanitizeTask(rawTask);
-                    const existing = existingById.get(sanitized.id);
+                    const existing: Task | undefined = existingById.get(sanitized.id);
                     sanitized.createdBy = existing?.createdBy ?? currentUser.username;
                     sanitized.createdAt = existing?.createdAt ?? sanitized.createdAt;
                     sanitized.updatedAt = new Date().toISOString();
