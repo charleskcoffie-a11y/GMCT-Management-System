@@ -142,7 +142,6 @@ const App: React.FC = () => {
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
     const presenceIntervalRef = useRef<number | null>(null);
     const presenceStateRef = useRef<{ id: string | null }>({ id: null });
-    const financeImportInputRef = useRef<HTMLInputElement | null>(null);
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
@@ -1063,7 +1062,7 @@ const App: React.FC = () => {
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-col gap-4 sm:self-stretch lg:self-end min-w-[260px]">
+                            <div className="flex flex-col items-stretch gap-4 sm:self-end min-w-[220px]">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
@@ -1071,45 +1070,28 @@ const App: React.FC = () => {
                                 >
                                     Add New Entry
                                 </button>
-                                <div className="rounded-2xl border border-white/60 bg-white/80 backdrop-blur p-4 space-y-3 shadow-sm">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Data tools</p>
-                                    <div className="flex flex-col sm:flex-row gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleFinanceExport('csv')}
-                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg"
-                                        >
-                                            Export CSV
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleFinanceExport('json')}
-                                            className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-3 py-2 rounded-lg hover:bg-white"
-                                        >
-                                            Export JSON
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsFinanceImportConfirmOpen(true)}
-                                            className="bg-white border border-slate-200 text-slate-700 font-semibold px-3 py-2 rounded-lg hover:bg-slate-50"
-                                        >
-                                            Import CSV/JSON
-                                        </button>
-                                    </div>
-                                    {financeToast && (
-                                        <div
-                                            role="status"
-                                            className={`text-sm font-medium rounded-xl px-3 py-2 ${
-                                                financeToast.tone === 'success'
-                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                    : financeToast.tone === 'error'
-                                                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                                                    : 'bg-slate-100 text-slate-600 border border-slate-200'
-                                            }`}
-                                        >
-                                            {financeToast.message}
-                                        </div>
-                                    )}
+                                <div className="flex flex-wrap gap-2 sm:justify-end pt-3 border-t border-indigo-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('csv')}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                    >
+                                        Export CSV
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('json')}
+                                        className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
+                                    >
+                                        Export JSON
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleRecordImportClick}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                    >
+                                        Import
+                                    </button>
                                 </div>
                             </div>
                         </div>
