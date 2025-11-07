@@ -19,8 +19,6 @@ import TasksTab from './components/TasksTab';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
-    toCsv,
-    fromCsv,
     sanitizeEntry,
     sanitizeMember,
     sanitizeUser,
@@ -36,6 +34,8 @@ import {
     ENTRY_TYPE_VALUES,
     entryTypeLabel,
     generateId,
+    fromCsv,
+    toCsv,
 } from './utils';
 import type {
     Entry,
@@ -53,10 +53,13 @@ import { msalSilentSignIn } from './services/oneDrive';
 import {
     loadEntriesFromSharePoint,
     loadMembersFromSharePoint,
+    loadWeeklyHistoryFromSharePoint,
     upsertEntryToSharePoint,
     deleteEntryFromSharePoint,
     upsertMemberToSharePoint,
     deleteMemberFromSharePoint,
+    upsertWeeklyHistoryToSharePoint,
+    deleteWeeklyHistoryFromSharePoint,
     resetContextCache,
 } from './services/sharepoint';
 import { clearAllTaskData } from './services/tasksStorage';
@@ -68,6 +71,7 @@ import {
     DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
     DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
     DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
+    MANUAL_SYNC_EVENT,
 } from './constants';
 
 // Initial Data
@@ -110,6 +114,8 @@ const App: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [entryToDeleteId, setEntryToDeleteId] = useState<string | null>(null);
+    const [isFinanceImportConfirmOpen, setIsFinanceImportConfirmOpen] = useState(false);
+    const [financeToast, setFinanceToast] = useState<{ tone: 'success' | 'error' | 'info'; message: string } | null>(null);
     const [syncMessage, setSyncMessage] = useState<string | null>(null);
     const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
     const [, setIsNavOpen] = useState(false);
@@ -121,7 +127,6 @@ const App: React.FC = () => {
     const [shouldResync, setShouldResync] = useState(0);
     const [activeSyncTasks, setActiveSyncTasks] = useState(0);
     const [recordsDataSource, setRecordsDataSource] = useState<'sharepoint' | 'local'>('local');
-    const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false);
     const [currentDate, setCurrentDate] = useState(() => new Date());
     const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
     
@@ -139,8 +144,10 @@ const App: React.FC = () => {
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
-    const recordFileInputRef = useRef<HTMLInputElement | null>(null);
+    const historySyncRef = useRef(new Map<string, { signature: string; record: WeeklyHistoryRecord }>());
     const presenceIntervalRef = useRef<number | null>(null);
+    const presenceStateRef = useRef<{ id: string | null }>({ id: null });
+    const financeImportInputRef = useRef<HTMLInputElement | null>(null);
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
@@ -159,8 +166,6 @@ const App: React.FC = () => {
             window.sessionStorage.removeItem('gmct-presence-id');
         }
     }, []);
-    const presenceIdRef = useRef<string | null>(null);
-    const presenceIntervalRef = useRef<number | null>(null);
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
@@ -196,6 +201,11 @@ const App: React.FC = () => {
             name: sanitized.name,
             classNumber: sanitized.classNumber ?? '',
         });
+    }, []);
+
+    const computeWeeklyHistorySignature = useCallback((record: WeeklyHistoryRecord) => {
+        const sanitized = sanitizeWeeklyHistoryRecord(record);
+        return JSON.stringify(sanitized);
     }, []);
 
     const mergeEntriesFromCloud = useCallback((localEntries: Entry[], remoteEntries: Entry[]) => {
@@ -251,6 +261,33 @@ const App: React.FC = () => {
 
         return merged;
     }, [computeMemberSignature]);
+
+    const mergeWeeklyHistoryFromCloud = useCallback((localHistory: WeeklyHistoryRecord[], remoteHistory: WeeklyHistoryRecord[]) => {
+        const sanitizedRemote = remoteHistory.map(remote => sanitizeWeeklyHistoryRecord(remote));
+        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+
+        const merged = localHistory.map(local => {
+            const remote = remoteMap.get(local.id);
+            if (remote) {
+                remoteMap.delete(local.id);
+                return { ...local, ...remote };
+            }
+            return local;
+        });
+
+        for (const remote of remoteMap.values()) {
+            merged.push(remote);
+        }
+
+        const cache = historySyncRef.current;
+        cache.clear();
+        for (const record of merged) {
+            const sanitized = sanitizeWeeklyHistoryRecord(record);
+            cache.set(sanitized.id, { signature: computeWeeklyHistorySignature(sanitized), record: sanitized });
+        }
+
+        return merged;
+    }, [computeWeeklyHistorySignature]);
 
     const readPresenceMap = useCallback((): Record<string, number> => {
         if (typeof window === 'undefined') {
@@ -342,6 +379,13 @@ const App: React.FC = () => {
     }, [activeTab]);
 
     useEffect(() => {
+        if (!financeToast) return;
+        if (typeof window === 'undefined') return;
+        const timer = window.setTimeout(() => setFinanceToast(null), 6000);
+        return () => window.clearTimeout(timer);
+    }, [financeToast]);
+
+    useEffect(() => {
         if (typeof window === 'undefined') return;
         const handleOffline = () => {
             setIsOffline(true);
@@ -377,10 +421,9 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!currentUser) {
             if (typeof window !== 'undefined') {
-                const existingId = getStoredPresenceId();
-                const existingId = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
-                if (existingId) {
-                    removePresenceRecord(existingId);
+                const id = presenceStateRef.current.id ?? getStoredPresenceId();
+                if (id) {
+                    removePresenceRecord(id);
                 }
                 if (presenceIntervalRef.current !== null) {
                     window.clearInterval(presenceIntervalRef.current);
@@ -398,20 +441,12 @@ const App: React.FC = () => {
         }
 
         const ensurePresence = () => {
-            let presenceId = getStoredPresenceId();
+            let presenceId = presenceStateRef.current.id ?? getStoredPresenceId();
             if (!presenceId) {
                 presenceId = generateId('presence');
-                setStoredPresenceId(presenceId);
-            if (!presenceId) {
-                presenceId = generateId('presence');
-                setStoredPresenceId(presenceId);
-            let presenceId = presenceStateRef.current.id;
-            if (!presenceId) {
-                const stored = window.sessionStorage.getItem('gmct-presence-id');
-                presenceId = stored || generateId('presence');
-                presenceStateRef.current.id = presenceId;
-                window.sessionStorage.setItem('gmct-presence-id', presenceId);
             }
+            presenceStateRef.current.id = presenceId;
+            setStoredPresenceId(presenceId);
             touchPresence(presenceId);
         };
 
@@ -434,8 +469,7 @@ const App: React.FC = () => {
         };
 
         const handleBeforeUnload = () => {
-            const id = getStoredPresenceId();
-            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
+            const id = presenceStateRef.current.id ?? getStoredPresenceId();
             if (id) {
                 removePresenceRecord(id);
             }
@@ -453,15 +487,11 @@ const App: React.FC = () => {
                 window.clearInterval(presenceIntervalRef.current);
                 presenceIntervalRef.current = null;
             }
-            const id = getStoredPresenceId();
+            const id = presenceStateRef.current.id ?? getStoredPresenceId();
             if (id) {
                 removePresenceRecord(id);
             }
             setStoredPresenceId(null);
-            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
-            if (id) {
-                removePresenceRecord(id);
-            }
             presenceStateRef.current.id = null;
         };
     }, [currentUser, getStoredPresenceId, removePresenceRecord, setStoredPresenceId, touchPresence, updatePresenceCount]);
@@ -470,6 +500,7 @@ const App: React.FC = () => {
         if (!cloud.signedIn || !cloud.accessToken) {
             entrySyncRef.current.clear();
             memberSyncRef.current.clear();
+            historySyncRef.current.clear();
             resetContextCache();
             setSyncMessage(null);
             setLastSyncedAt(null);
@@ -489,13 +520,16 @@ const App: React.FC = () => {
         const hydrateFromSharePoint = async () => {
             beginSync();
             try {
-                const [remoteEntries, remoteMembers] = await Promise.all([
+                const historyListName = settings.sharePointHistoryListName || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME;
+                const [remoteEntries, remoteMembers, remoteHistory] = await Promise.all([
                     loadEntriesFromSharePoint(cloud.accessToken!),
                     loadMembersFromSharePoint(cloud.accessToken!),
+                    loadWeeklyHistoryFromSharePoint(cloud.accessToken!, historyListName),
                 ]);
                 if (!active) return;
                 setEntries(prev => mergeEntriesFromCloud(prev, remoteEntries));
                 setMembers(prev => mergeMembersFromCloud(prev, remoteMembers));
+                setWeeklyHistory(prev => mergeWeeklyHistoryFromCloud(prev, remoteHistory));
                 setSyncMessage(null);
                 setLastSyncedAt(Date.now());
                 setRecordsDataSource('sharepoint');
@@ -516,7 +550,7 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud, isOffline, shouldResync]);
+    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud, mergeWeeklyHistoryFromCloud, isOffline, shouldResync, settings.sharePointHistoryListName]);
 
     useEffect(() => {
         if (!cloud.signedIn || !cloud.accessToken || isOffline) {
@@ -645,6 +679,71 @@ const App: React.FC = () => {
             active = false;
         };
     }, [members, cloud.signedIn, cloud.accessToken, computeMemberSignature, setMembers, isOffline, shouldResync]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
+            return;
+        }
+
+        let active = true;
+        const listName = settings.sharePointHistoryListName || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME;
+
+        const pushHistoryChanges = async () => {
+            beginSync();
+            const known = historySyncRef.current;
+            const currentMap = new Map(weeklyHistory.map(record => [record.id, record]));
+            const snapshot: Array<[string, { signature: string; record: WeeklyHistoryRecord }]> = Array.from(known.entries());
+
+            for (const [id, stored] of snapshot) {
+                if (!currentMap.has(id)) {
+                    if (stored.record.spId) {
+                        try {
+                            await deleteWeeklyHistoryFromSharePoint(stored.record, cloud.accessToken!, listName);
+                        } catch (error) {
+                            console.error('Failed to remove SharePoint weekly history record', error);
+                        }
+                    }
+                    known.delete(id);
+                }
+            }
+
+            try {
+                for (const record of weeklyHistory) {
+                    const sanitized = sanitizeWeeklyHistoryRecord(record);
+                    sanitized.spId = record.spId;
+                    const signature = computeWeeklyHistorySignature(sanitized);
+                    const cached = known.get(sanitized.id);
+                    if (!cached || cached.signature !== signature) {
+                        try {
+                            const spId = await upsertWeeklyHistoryToSharePoint(sanitized, cloud.accessToken!, listName);
+                            if (!active) return;
+                            const updated = { ...sanitized, spId: spId ?? sanitized.spId };
+                            known.set(updated.id, { signature: computeWeeklyHistorySignature(updated), record: updated });
+                            if (spId && sanitized.spId !== spId) {
+                                setWeeklyHistory(prev => prev.map(existing => existing.id === updated.id ? { ...existing, spId } : existing));
+                            }
+                            setSyncMessage(null);
+                            setLastSyncedAt(Date.now());
+                        } catch (error) {
+                            if (!active) return;
+                            console.error('Failed to sync weekly history to SharePoint', error);
+                            setSyncMessage('Unable to sync some weekly history records to SharePoint. They remain saved locally.');
+                        }
+                    }
+                }
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        pushHistoryChanges();
+
+        return () => {
+            active = false;
+        };
+    }, [weeklyHistory, cloud.signedIn, cloud.accessToken, computeWeeklyHistorySignature, isOffline, shouldResync, settings.sharePointHistoryListName]);
 
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -786,8 +885,7 @@ const App: React.FC = () => {
 
     const handleLogout = () => {
         if (typeof window !== 'undefined') {
-            const id = getStoredPresenceId();
-            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
+            const id = presenceStateRef.current.id ?? getStoredPresenceId();
             if (id) {
                 removePresenceRecord(id);
             }
@@ -838,52 +936,113 @@ const App: React.FC = () => {
         setEntryToDeleteId(null);
     };
 
-    const handleImport = (newEntries: Entry[]) => {
-        setEntries(prev => [...prev, ...newEntries]);
-    };
+    const handleFinanceExport = (format: 'csv' | 'json') => {
+        const dataset = filteredAndSortedEntries.map(entry => ({
+            id: entry.id,
+            date: entry.date,
+            memberID: entry.memberID,
+            memberName: entry.memberName,
+            type: entry.type,
+            fund: entry.fund ?? '',
+            method: entry.method,
+            amount: entry.amount,
+            note: entry.note ?? '',
+        }));
 
-    const handleRecordImportClick = () => {
-        setIsImportConfirmOpen(true);
-    };
-
-    const confirmRecordImport = () => {
-        setIsImportConfirmOpen(false);
-        if (typeof window === 'undefined') {
+        if (dataset.length === 0) {
+            setFinanceToast({ tone: 'info', message: 'No financial records match the current filters to export.' });
             return;
         }
-        window.setTimeout(() => {
-            recordFileInputRef.current?.click();
-        }, 120);
+
+        const timestamp = new Date().toISOString().slice(0, 10);
+        if (format === 'csv') {
+            const csv = toCsv(dataset);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `gmct-financial-records-${timestamp}.csv`;
+            link.click();
+        } else {
+            const json = JSON.stringify(dataset, null, 2);
+            const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `gmct-financial-records-${timestamp}.json`;
+            link.click();
+        }
+
+        setFinanceToast({
+            tone: 'success',
+            message: `Exported ${dataset.length} record${dataset.length === 1 ? '' : 's'} using current filters.`,
+        });
     };
 
-    const handleRecordFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFinanceImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-        if (!file) {
-            return;
-        }
+        if (!file) return;
 
         const reader = new FileReader();
         reader.onload = () => {
             try {
                 const text = typeof reader.result === 'string' ? reader.result : '';
-                let imported: Entry[] = [];
+                let rawRows: unknown[] = [];
                 if (file.name.toLowerCase().endsWith('.csv')) {
-                    const rows = fromCsv(text);
-                    imported = rows.map(row => sanitizeEntry(row));
+                    rawRows = fromCsv(text);
                 } else {
-                    const raw = JSON.parse(text) as unknown;
-                    const array = Array.isArray(raw) ? raw : [];
-                    imported = array.map(item => sanitizeEntry(item));
+                    const parsed = JSON.parse(text) as unknown;
+                    if (Array.isArray(parsed)) {
+                        rawRows = parsed;
+                    } else {
+                        throw new Error('Invalid JSON shape');
+                    }
                 }
-                handleImport(imported);
-                alert(`Imported ${imported.length} financial record${imported.length === 1 ? '' : 's'}.`);
+
+                const sanitizedEntries = rawRows.map(item => sanitizeEntry(item));
+                if (sanitizedEntries.length === 0) {
+                    setFinanceToast({ tone: 'info', message: 'No financial records were found in the selected file.' });
+                    return;
+                }
+
+                let added = 0;
+                let updated = 0;
+                setEntries(prev => {
+                    const map = new Map(prev.map(entry => [entry.id, entry]));
+                    const next = [...prev];
+                    sanitizedEntries.forEach(entry => {
+                        if (map.has(entry.id)) {
+                            const index = next.findIndex(item => item.id === entry.id);
+                            if (index >= 0) {
+                                next[index] = entry;
+                                updated += 1;
+                            }
+                        } else {
+                            next.push(entry);
+                            map.set(entry.id, entry);
+                            added += 1;
+                        }
+                    });
+                    return next;
+                });
+
+                setFinanceToast({
+                    tone: 'success',
+                    message: `Import complete: ${sanitizedEntries.length} processed, ${added} added, ${updated} updated.`,
+                });
             } catch (error) {
                 console.error('Failed to import financial records', error);
-                alert('Unable to import the selected file. Ensure it is a valid CSV or JSON export.');
+                setFinanceToast({
+                    tone: 'error',
+                    message: 'Import failed. Ensure the file is a valid CSV or JSON export.',
+                });
             }
         };
         reader.readAsText(file);
         event.target.value = '';
+    };
+
+    const confirmFinanceImport = () => {
+        setIsFinanceImportConfirmOpen(false);
+        financeImportInputRef.current?.click();
     };
 
     const handleBulkAddMembers = (importedMembers: Member[]) => {
@@ -918,25 +1077,22 @@ const App: React.FC = () => {
         setCurrentUser(null);
         setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.' });
     };
-    
-    const handleExport = (format: 'csv' | 'json') => {
-        const filename = `gmct-export-${new Date().toISOString().slice(0, 10)}`;
-        if (format === 'csv') {
-            const csv = toCsv(entries);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `${filename}.csv`;
-            link.click();
-        } else {
-             const json = JSON.stringify(entries, null, 2);
-             const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
-             const link = document.createElement('a');
-             link.href = URL.createObjectURL(blob);
-             link.download = `${filename}.json`;
-             link.click();
+
+    const handleManualSync = useCallback(() => {
+        if (isOffline) {
+            setSyncMessage('Offline: reconnect to sync SharePoint lists.');
+            return;
         }
-    };
+        if (!cloud.signedIn || !cloud.accessToken) {
+            setSyncMessage('Sign in with Microsoft to sync SharePoint lists.');
+            return;
+        }
+        setSyncMessage('Syncing latest updates…');
+        setShouldResync(prev => prev + 1);
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent(MANUAL_SYNC_EVENT));
+        }
+    }, [isOffline, cloud.signedIn, cloud.accessToken]);
     
     const handleFullExport = () => {
         const data = { entries, members, users, settings, attendance, weeklyHistory };
@@ -1025,13 +1181,11 @@ const App: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-col items-stretch gap-4 sm:self-end">
-                            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                            <div className="flex flex-col gap-4 sm:self-stretch lg:self-end min-w-[260px]">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
@@ -1039,32 +1193,55 @@ const App: React.FC = () => {
                                 >
                                     Add New Entry
                                 </button>
-                                <div className="flex flex-wrap gap-2 sm:justify-end pt-2 border-t border-indigo-100">
-                                <div className="flex flex-wrap gap-2 sm:justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleExport('csv')}
-                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                    >
-                                        Export CSV
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleExport('json')}
-                                        className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
-                                    >
-                                        Export JSON
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleRecordImportClick}
-                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                    >
-                                        Import
-                                    </button>
+                                <div className="rounded-2xl border border-white/60 bg-white/80 backdrop-blur p-4 space-y-3 shadow-sm">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Data tools</p>
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleFinanceExport('csv')}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg"
+                                        >
+                                            Export CSV
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleFinanceExport('json')}
+                                            className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-3 py-2 rounded-lg hover:bg-white"
+                                        >
+                                            Export JSON
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsFinanceImportConfirmOpen(true)}
+                                            className="bg-white border border-slate-200 text-slate-700 font-semibold px-3 py-2 rounded-lg hover:bg-slate-50"
+                                        >
+                                            Import CSV/JSON
+                                        </button>
+                                    </div>
+                                    {financeToast && (
+                                        <div
+                                            role="status"
+                                            className={`text-sm font-medium rounded-xl px-3 py-2 ${
+                                                financeToast.tone === 'success'
+                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                    : financeToast.tone === 'error'
+                                                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                                    : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                            }`}
+                                        >
+                                            {financeToast.message}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
+                        <input
+                            ref={financeImportInputRef}
+                            type="file"
+                            accept=".csv,.json"
+                            className="hidden"
+                            onChange={handleFinanceImportFileChange}
+                        />
                         <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${dataSourceTone}`} role="status">
                             <div>{dataSourceText}</div>
                             {!isSharePointLive && (
@@ -1073,8 +1250,6 @@ const App: React.FC = () => {
                                 </p>
                             )}
                         </div>
-                        <input ref={recordFileInputRef} type="file" accept=".csv,.json" className="hidden" onChange={handleRecordFileChange} />
-
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-4">
                                 <p className="text-sm uppercase tracking-wide text-amber-600 font-semibold">Entries Displayed</p>
@@ -1187,7 +1362,6 @@ const App: React.FC = () => {
                         members={members}
                         settings={settings}
                         cloud={cloud}
-                        onImportEntries={handleImport}
                         onImportMembers={handleBulkAddMembers}
                         onResetData={handleResetAllData}
                         onSaveTotalClasses={handleSaveTotalClasses}
@@ -1223,7 +1397,7 @@ const App: React.FC = () => {
         <button
             key={item.id}
             onClick={() => setActiveTab(item.id as Tab)}
-            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
+            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide uppercase ${
                 activeTab === item.id
                     ? 'bg-white/25 text-white shadow-lg'
                     : 'text-indigo-100 hover:bg-white/15 hover:text-white'
@@ -1251,6 +1425,8 @@ const App: React.FC = () => {
                         activeSyncTasks={activeSyncTasks}
                         cloudReady={cloud.ready}
                         cloudSignedIn={cloud.signedIn}
+                        onManualSync={handleManualSync}
+                        manualSyncBusy={activeSyncTasks > 0}
                     />
                 </div>
                 <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
@@ -1267,6 +1443,16 @@ const App: React.FC = () => {
                 </main>
                 {isModalOpen && <EntryModal entry={selectedEntry} members={members} settings={settings} onSave={handleSaveEntry} onSaveAndNew={handleSaveAndNew} onClose={() => setIsModalOpen(false)} onDelete={handleDeleteEntry} />}
                 <ConfirmationModal
+                    isOpen={isFinanceImportConfirmOpen}
+                    onClose={() => setIsFinanceImportConfirmOpen(false)}
+                    onConfirm={confirmFinanceImport}
+                    title="Confirm Import"
+                    message="Importing may overwrite or merge existing records. Do you want to continue?"
+                    confirmLabel="Import"
+                    cancelLabel="Cancel"
+                    confirmTone="primary"
+                />
+                <ConfirmationModal
                     isOpen={isConfirmModalOpen}
                     onClose={() => {
                         setIsConfirmModalOpen(false);
@@ -1275,15 +1461,6 @@ const App: React.FC = () => {
                     onConfirm={confirmDeleteEntry}
                     title="Confirm Deletion"
                     message="Are you sure you want to delete this financial entry? This action cannot be undone."
-                />
-                <ConfirmationModal
-                    isOpen={isImportConfirmOpen}
-                    onClose={() => setIsImportConfirmOpen(false)}
-                    onConfirm={confirmRecordImport}
-                    title="Confirm Import"
-                    message="Importing may overwrite or merge existing records. Do you want to continue?"
-                    confirmLabel="Import"
-                    confirmTone="primary"
                 />
             </div>
         </div>

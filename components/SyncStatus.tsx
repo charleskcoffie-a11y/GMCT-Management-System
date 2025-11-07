@@ -8,6 +8,8 @@ interface SyncStatusProps {
     activeSyncTasks: number;
     cloudReady: boolean;
     cloudSignedIn: boolean;
+    onManualSync: () => void;
+    manualSyncBusy: boolean;
 }
 
 const formatTimestamp = (timestamp: number | null) => {
@@ -18,7 +20,17 @@ const formatTimestamp = (timestamp: number | null) => {
     }).format(new Date(timestamp));
 };
 
-const SyncStatus: React.FC<SyncStatusProps> = ({ isOffline, syncMessage, lastSyncedAt, lastAttendanceSavedAt, activeSyncTasks, cloudReady, cloudSignedIn }) => {
+const SyncStatus: React.FC<SyncStatusProps> = ({
+    isOffline,
+    syncMessage,
+    lastSyncedAt,
+    lastAttendanceSavedAt,
+    activeSyncTasks,
+    cloudReady,
+    cloudSignedIn,
+    onManualSync,
+    manualSyncBusy,
+}) => {
     const statusTone = useMemo(() => {
         if (isOffline) return 'bg-rose-100 text-rose-700 border-rose-200';
         if (activeSyncTasks > 0) return 'bg-amber-100 text-amber-700 border-amber-200';
@@ -35,9 +47,19 @@ const SyncStatus: React.FC<SyncStatusProps> = ({ isOffline, syncMessage, lastSyn
                         <p>Attendance last saved: <span className="font-semibold text-slate-700">{formatTimestamp(lastAttendanceSavedAt)}</span></p>
                     </div>
                 </div>
-                <div className="text-xs font-medium text-slate-600 space-y-1 text-right">
-                    <p>Status: {cloudReady ? (cloudSignedIn ? 'Connected' : 'Ready to sign in') : 'Initialising'}</p>
-                    <p>{activeSyncTasks > 0 ? `Syncing ${activeSyncTasks} task${activeSyncTasks > 1 ? 's' : ''}…` : 'No background sync running'}</p>
+                <div className="flex flex-col items-stretch sm:items-end gap-2 text-xs font-medium text-slate-600">
+                    <div className="space-y-1 text-right">
+                        <p>Status: {cloudReady ? (cloudSignedIn ? 'Connected' : 'Ready to sign in') : 'Initialising'}</p>
+                        <p>{activeSyncTasks > 0 ? `Syncing ${activeSyncTasks} task${activeSyncTasks > 1 ? 's' : ''}…` : 'No background sync running'}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onManualSync}
+                        disabled={manualSyncBusy}
+                        className="inline-flex items-center justify-center rounded-xl border border-indigo-400/70 bg-white/80 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        {manualSyncBusy ? 'Syncing…' : 'Sync Now'}
+                    </button>
                 </div>
             </div>
         </div>
