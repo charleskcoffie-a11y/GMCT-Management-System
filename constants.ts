@@ -44,3 +44,6 @@ export const SHAREPOINT_GRAPH_URL = "https://graph.microsoft.com/v1.0";
 // --- App Defaults ---
 export const DEFAULT_CURRENCY = 'CAD';
 export const DEFAULT_MAX_CLASSES = 20;
+
+// --- App Events ---
+export const MANUAL_SYNC_EVENT = 'gmct-manual-sync';

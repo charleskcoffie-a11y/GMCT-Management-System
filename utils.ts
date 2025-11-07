@@ -203,6 +203,7 @@ export function sanitizeWeeklyHistoryRecord(raw: any): WeeklyHistoryRecord {
 
     return {
         id: sanitizeString(raw.id) || generateId('history'),
+        spId: sanitizeString(raw.spId),
         dateOfService: dateOfService,
         societyName: sanitizeString(raw.societyName),
         preacher: sanitizeString(raw.preacher) || sanitizeString(raw.officiant),

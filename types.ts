@@ -87,6 +87,7 @@ export interface WeeklyHistoryDonations {
 
 export interface WeeklyHistoryRecord {
     id: string;
+    spId?: string;
     dateOfService: string; // ISO format YYYY-MM-DD
     societyName: string;
     preacher: string;

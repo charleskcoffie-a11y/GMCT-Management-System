@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CloudState, Task, TaskPriority, TaskStatus, User } from '../types';
+import { MANUAL_SYNC_EVENT } from '../constants';
 import {
     clearQueuedTaskDeletion,
     deleteTask as deleteTaskFromStore,
@@ -631,6 +632,17 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
             window.removeEventListener('online', handleOnline);
         };
     }, [isOffline, syncDirtyTasks]);
+
+    useEffect(() => {
+        const handleManualSync = () => {
+            void attemptHydrateFromCloud();
+            void syncDirtyTasks('manual');
+        };
+        window.addEventListener(MANUAL_SYNC_EVENT as any, handleManualSync as EventListener);
+        return () => {
+            window.removeEventListener(MANUAL_SYNC_EVENT as any, handleManualSync as EventListener);
+        };
+    }, [attemptHydrateFromCloud, syncDirtyTasks]);
 
     const handleModalClose = () => {
         setIsModalVisible(false);

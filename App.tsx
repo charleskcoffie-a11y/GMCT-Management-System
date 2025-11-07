@@ -53,10 +53,13 @@ import { msalSilentSignIn } from './services/oneDrive';
 import {
     loadEntriesFromSharePoint,
     loadMembersFromSharePoint,
+    loadWeeklyHistoryFromSharePoint,
     upsertEntryToSharePoint,
     deleteEntryFromSharePoint,
     upsertMemberToSharePoint,
     deleteMemberFromSharePoint,
+    upsertWeeklyHistoryToSharePoint,
+    deleteWeeklyHistoryFromSharePoint,
     resetContextCache,
 } from './services/sharepoint';
 import { clearAllTaskData } from './services/tasksStorage';
@@ -68,6 +71,7 @@ import {
     DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
     DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
     DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
+    MANUAL_SYNC_EVENT,
 } from './constants';
 
 // Initial Data
@@ -197,6 +201,11 @@ const App: React.FC = () => {
         });
     }, []);
 
+    const computeWeeklyHistorySignature = useCallback((record: WeeklyHistoryRecord) => {
+        const sanitized = sanitizeWeeklyHistoryRecord(record);
+        return JSON.stringify(sanitized);
+    }, []);
+
     const mergeEntriesFromCloud = useCallback((localEntries: Entry[], remoteEntries: Entry[]) => {
         const sanitizedRemote = remoteEntries.map(remote => sanitizeEntry(remote));
         const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
@@ -250,6 +259,33 @@ const App: React.FC = () => {
 
         return merged;
     }, [computeMemberSignature]);
+
+    const mergeWeeklyHistoryFromCloud = useCallback((localHistory: WeeklyHistoryRecord[], remoteHistory: WeeklyHistoryRecord[]) => {
+        const sanitizedRemote = remoteHistory.map(remote => sanitizeWeeklyHistoryRecord(remote));
+        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+
+        const merged = localHistory.map(local => {
+            const remote = remoteMap.get(local.id);
+            if (remote) {
+                remoteMap.delete(local.id);
+                return { ...local, ...remote };
+            }
+            return local;
+        });
+
+        for (const remote of remoteMap.values()) {
+            merged.push(remote);
+        }
+
+        const cache = historySyncRef.current;
+        cache.clear();
+        for (const record of merged) {
+            const sanitized = sanitizeWeeklyHistoryRecord(record);
+            cache.set(sanitized.id, { signature: computeWeeklyHistorySignature(sanitized), record: sanitized });
+        }
+
+        return merged;
+    }, [computeWeeklyHistorySignature]);
 
     const readPresenceMap = useCallback((): Record<string, number> => {
         if (typeof window === 'undefined') {
@@ -462,6 +498,7 @@ const App: React.FC = () => {
         if (!cloud.signedIn || !cloud.accessToken) {
             entrySyncRef.current.clear();
             memberSyncRef.current.clear();
+            historySyncRef.current.clear();
             resetContextCache();
             setSyncMessage(null);
             setLastSyncedAt(null);
@@ -481,13 +518,16 @@ const App: React.FC = () => {
         const hydrateFromSharePoint = async () => {
             beginSync();
             try {
-                const [remoteEntries, remoteMembers] = await Promise.all([
+                const historyListName = settings.sharePointHistoryListName || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME;
+                const [remoteEntries, remoteMembers, remoteHistory] = await Promise.all([
                     loadEntriesFromSharePoint(cloud.accessToken!),
                     loadMembersFromSharePoint(cloud.accessToken!),
+                    loadWeeklyHistoryFromSharePoint(cloud.accessToken!, historyListName),
                 ]);
                 if (!active) return;
                 setEntries(prev => mergeEntriesFromCloud(prev, remoteEntries));
                 setMembers(prev => mergeMembersFromCloud(prev, remoteMembers));
+                setWeeklyHistory(prev => mergeWeeklyHistoryFromCloud(prev, remoteHistory));
                 setSyncMessage(null);
                 setLastSyncedAt(Date.now());
                 setRecordsDataSource('sharepoint');
@@ -508,7 +548,7 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud, isOffline, shouldResync]);
+    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud, mergeWeeklyHistoryFromCloud, isOffline, shouldResync, settings.sharePointHistoryListName]);
 
     useEffect(() => {
         if (!cloud.signedIn || !cloud.accessToken || isOffline) {
@@ -637,6 +677,71 @@ const App: React.FC = () => {
             active = false;
         };
     }, [members, cloud.signedIn, cloud.accessToken, computeMemberSignature, setMembers, isOffline, shouldResync]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
+            return;
+        }
+
+        let active = true;
+        const listName = settings.sharePointHistoryListName || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME;
+
+        const pushHistoryChanges = async () => {
+            beginSync();
+            const known = historySyncRef.current;
+            const currentMap = new Map(weeklyHistory.map(record => [record.id, record]));
+            const snapshot: Array<[string, { signature: string; record: WeeklyHistoryRecord }]> = Array.from(known.entries());
+
+            for (const [id, stored] of snapshot) {
+                if (!currentMap.has(id)) {
+                    if (stored.record.spId) {
+                        try {
+                            await deleteWeeklyHistoryFromSharePoint(stored.record, cloud.accessToken!, listName);
+                        } catch (error) {
+                            console.error('Failed to remove SharePoint weekly history record', error);
+                        }
+                    }
+                    known.delete(id);
+                }
+            }
+
+            try {
+                for (const record of weeklyHistory) {
+                    const sanitized = sanitizeWeeklyHistoryRecord(record);
+                    sanitized.spId = record.spId;
+                    const signature = computeWeeklyHistorySignature(sanitized);
+                    const cached = known.get(sanitized.id);
+                    if (!cached || cached.signature !== signature) {
+                        try {
+                            const spId = await upsertWeeklyHistoryToSharePoint(sanitized, cloud.accessToken!, listName);
+                            if (!active) return;
+                            const updated = { ...sanitized, spId: spId ?? sanitized.spId };
+                            known.set(updated.id, { signature: computeWeeklyHistorySignature(updated), record: updated });
+                            if (spId && sanitized.spId !== spId) {
+                                setWeeklyHistory(prev => prev.map(existing => existing.id === updated.id ? { ...existing, spId } : existing));
+                            }
+                            setSyncMessage(null);
+                            setLastSyncedAt(Date.now());
+                        } catch (error) {
+                            if (!active) return;
+                            console.error('Failed to sync weekly history to SharePoint', error);
+                            setSyncMessage('Unable to sync some weekly history records to SharePoint. They remain saved locally.');
+                        }
+                    }
+                }
+            } finally {
+                if (active) {
+                    endSync();
+                }
+            }
+        };
+
+        pushHistoryChanges();
+
+        return () => {
+            active = false;
+        };
+    }, [weeklyHistory, cloud.signedIn, cloud.accessToken, computeWeeklyHistorySignature, isOffline, shouldResync, settings.sharePointHistoryListName]);
 
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -1285,6 +1390,8 @@ const App: React.FC = () => {
                         activeSyncTasks={activeSyncTasks}
                         cloudReady={cloud.ready}
                         cloudSignedIn={cloud.signedIn}
+                        onManualSync={handleManualSync}
+                        manualSyncBusy={activeSyncTasks > 0}
                     />
                 </div>
                 <main className="mt-6 flex flex-col lg:flex-row gap-6 lg:h-[calc(100vh-18rem)] lg:overflow-hidden">
