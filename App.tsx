@@ -141,6 +141,7 @@ const App: React.FC = () => {
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
     const recordFileInputRef = useRef<HTMLInputElement | null>(null);
     const presenceIntervalRef = useRef<number | null>(null);
+    const presenceStateRef = useRef<{ id: string | null }>({ id: null });
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
@@ -159,8 +160,6 @@ const App: React.FC = () => {
             window.sessionStorage.removeItem('gmct-presence-id');
         }
     }, []);
-    const presenceIdRef = useRef<string | null>(null);
-    const presenceIntervalRef = useRef<number | null>(null);
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
@@ -377,10 +376,9 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!currentUser) {
             if (typeof window !== 'undefined') {
-                const existingId = getStoredPresenceId();
-                const existingId = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
-                if (existingId) {
-                    removePresenceRecord(existingId);
+                const id = presenceStateRef.current.id ?? getStoredPresenceId();
+                if (id) {
+                    removePresenceRecord(id);
                 }
                 if (presenceIntervalRef.current !== null) {
                     window.clearInterval(presenceIntervalRef.current);
@@ -398,20 +396,12 @@ const App: React.FC = () => {
         }
 
         const ensurePresence = () => {
-            let presenceId = getStoredPresenceId();
+            let presenceId = presenceStateRef.current.id ?? getStoredPresenceId();
             if (!presenceId) {
                 presenceId = generateId('presence');
-                setStoredPresenceId(presenceId);
-            if (!presenceId) {
-                presenceId = generateId('presence');
-                setStoredPresenceId(presenceId);
-            let presenceId = presenceStateRef.current.id;
-            if (!presenceId) {
-                const stored = window.sessionStorage.getItem('gmct-presence-id');
-                presenceId = stored || generateId('presence');
-                presenceStateRef.current.id = presenceId;
-                window.sessionStorage.setItem('gmct-presence-id', presenceId);
             }
+            presenceStateRef.current.id = presenceId;
+            setStoredPresenceId(presenceId);
             touchPresence(presenceId);
         };
 
@@ -434,8 +424,7 @@ const App: React.FC = () => {
         };
 
         const handleBeforeUnload = () => {
-            const id = getStoredPresenceId();
-            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
+            const id = presenceStateRef.current.id ?? getStoredPresenceId();
             if (id) {
                 removePresenceRecord(id);
             }
@@ -453,15 +442,11 @@ const App: React.FC = () => {
                 window.clearInterval(presenceIntervalRef.current);
                 presenceIntervalRef.current = null;
             }
-            const id = getStoredPresenceId();
+            const id = presenceStateRef.current.id ?? getStoredPresenceId();
             if (id) {
                 removePresenceRecord(id);
             }
             setStoredPresenceId(null);
-            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
-            if (id) {
-                removePresenceRecord(id);
-            }
             presenceStateRef.current.id = null;
         };
     }, [currentUser, getStoredPresenceId, removePresenceRecord, setStoredPresenceId, touchPresence, updatePresenceCount]);
@@ -786,8 +771,7 @@ const App: React.FC = () => {
 
     const handleLogout = () => {
         if (typeof window !== 'undefined') {
-            const id = getStoredPresenceId();
-            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
+            const id = presenceStateRef.current.id ?? getStoredPresenceId();
             if (id) {
                 removePresenceRecord(id);
             }
@@ -1025,13 +1009,11 @@ const App: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-col items-stretch gap-4 sm:self-end">
-                            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                            <div className="flex flex-col items-stretch gap-4 sm:self-end min-w-[220px]">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
@@ -1039,8 +1021,7 @@ const App: React.FC = () => {
                                 >
                                     Add New Entry
                                 </button>
-                                <div className="flex flex-wrap gap-2 sm:justify-end pt-2 border-t border-indigo-100">
-                                <div className="flex flex-wrap gap-2 sm:justify-end">
+                                <div className="flex flex-wrap gap-2 sm:justify-end pt-3 border-t border-indigo-100">
                                     <button
                                         type="button"
                                         onClick={() => handleExport('csv')}
