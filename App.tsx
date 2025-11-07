@@ -954,6 +954,29 @@ const App: React.FC = () => {
                                 >
                                     Add New Entry
                                 </button>
+                                <div className="flex flex-wrap gap-2 sm:justify-end pt-3 border-t border-indigo-100">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('csv')}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                    >
+                                        Export CSV
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleExport('json')}
+                                        className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
+                                    >
+                                        Export JSON
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleRecordImportClick}
+                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
+                                    >
+                                        Import
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${dataSourceTone}`} role="status">
