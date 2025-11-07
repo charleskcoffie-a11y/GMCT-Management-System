@@ -19,8 +19,6 @@ import TasksTab from './components/TasksTab';
 
 import { useLocalStorage } from './hooks/useLocalStorage';
 import {
-    toCsv,
-    fromCsv,
     sanitizeEntry,
     sanitizeMember,
     sanitizeUser,
@@ -121,7 +119,6 @@ const App: React.FC = () => {
     const [shouldResync, setShouldResync] = useState(0);
     const [activeSyncTasks, setActiveSyncTasks] = useState(0);
     const [recordsDataSource, setRecordsDataSource] = useState<'sharepoint' | 'local'>('local');
-    const [isImportConfirmOpen, setIsImportConfirmOpen] = useState(false);
     const [currentDate, setCurrentDate] = useState(() => new Date());
     const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
     
@@ -139,8 +136,8 @@ const App: React.FC = () => {
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
-    const recordFileInputRef = useRef<HTMLInputElement | null>(null);
     const presenceIntervalRef = useRef<number | null>(null);
+    const presenceStateRef = useRef<{ id: string | null }>({ id: null });
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
@@ -159,8 +156,6 @@ const App: React.FC = () => {
             window.sessionStorage.removeItem('gmct-presence-id');
         }
     }, []);
-    const presenceIdRef = useRef<string | null>(null);
-    const presenceIntervalRef = useRef<number | null>(null);
 
     const beginSync = useCallback(() => {
         syncTaskCountRef.current += 1;
@@ -377,10 +372,9 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!currentUser) {
             if (typeof window !== 'undefined') {
-                const existingId = getStoredPresenceId();
-                const existingId = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
-                if (existingId) {
-                    removePresenceRecord(existingId);
+                const id = presenceStateRef.current.id ?? getStoredPresenceId();
+                if (id) {
+                    removePresenceRecord(id);
                 }
                 if (presenceIntervalRef.current !== null) {
                     window.clearInterval(presenceIntervalRef.current);
@@ -398,20 +392,12 @@ const App: React.FC = () => {
         }
 
         const ensurePresence = () => {
-            let presenceId = getStoredPresenceId();
+            let presenceId = presenceStateRef.current.id ?? getStoredPresenceId();
             if (!presenceId) {
                 presenceId = generateId('presence');
-                setStoredPresenceId(presenceId);
-            if (!presenceId) {
-                presenceId = generateId('presence');
-                setStoredPresenceId(presenceId);
-            let presenceId = presenceStateRef.current.id;
-            if (!presenceId) {
-                const stored = window.sessionStorage.getItem('gmct-presence-id');
-                presenceId = stored || generateId('presence');
-                presenceStateRef.current.id = presenceId;
-                window.sessionStorage.setItem('gmct-presence-id', presenceId);
             }
+            presenceStateRef.current.id = presenceId;
+            setStoredPresenceId(presenceId);
             touchPresence(presenceId);
         };
 
@@ -434,8 +420,7 @@ const App: React.FC = () => {
         };
 
         const handleBeforeUnload = () => {
-            const id = getStoredPresenceId();
-            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
+            const id = presenceStateRef.current.id ?? getStoredPresenceId();
             if (id) {
                 removePresenceRecord(id);
             }
@@ -453,15 +438,11 @@ const App: React.FC = () => {
                 window.clearInterval(presenceIntervalRef.current);
                 presenceIntervalRef.current = null;
             }
-            const id = getStoredPresenceId();
+            const id = presenceStateRef.current.id ?? getStoredPresenceId();
             if (id) {
                 removePresenceRecord(id);
             }
             setStoredPresenceId(null);
-            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
-            if (id) {
-                removePresenceRecord(id);
-            }
             presenceStateRef.current.id = null;
         };
     }, [currentUser, getStoredPresenceId, removePresenceRecord, setStoredPresenceId, touchPresence, updatePresenceCount]);
@@ -786,8 +767,7 @@ const App: React.FC = () => {
 
     const handleLogout = () => {
         if (typeof window !== 'undefined') {
-            const id = getStoredPresenceId();
-            const id = presenceStateRef.current.id ?? window.sessionStorage.getItem('gmct-presence-id');
+            const id = presenceStateRef.current.id ?? getStoredPresenceId();
             if (id) {
                 removePresenceRecord(id);
             }
@@ -842,50 +822,6 @@ const App: React.FC = () => {
         setEntries(prev => [...prev, ...newEntries]);
     };
 
-    const handleRecordImportClick = () => {
-        setIsImportConfirmOpen(true);
-    };
-
-    const confirmRecordImport = () => {
-        setIsImportConfirmOpen(false);
-        if (typeof window === 'undefined') {
-            return;
-        }
-        window.setTimeout(() => {
-            recordFileInputRef.current?.click();
-        }, 120);
-    };
-
-    const handleRecordFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) {
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const text = typeof reader.result === 'string' ? reader.result : '';
-                let imported: Entry[] = [];
-                if (file.name.toLowerCase().endsWith('.csv')) {
-                    const rows = fromCsv(text);
-                    imported = rows.map(row => sanitizeEntry(row));
-                } else {
-                    const raw = JSON.parse(text) as unknown;
-                    const array = Array.isArray(raw) ? raw : [];
-                    imported = array.map(item => sanitizeEntry(item));
-                }
-                handleImport(imported);
-                alert(`Imported ${imported.length} financial record${imported.length === 1 ? '' : 's'}.`);
-            } catch (error) {
-                console.error('Failed to import financial records', error);
-                alert('Unable to import the selected file. Ensure it is a valid CSV or JSON export.');
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = '';
-    };
-
     const handleBulkAddMembers = (importedMembers: Member[]) => {
         setMembers(prev => {
             const existingIds = new Set(prev.map(member => sanitizeString(member.id)));
@@ -917,25 +853,6 @@ const App: React.FC = () => {
         setWeeklyHistory([]);
         setCurrentUser(null);
         setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.' });
-    };
-    
-    const handleExport = (format: 'csv' | 'json') => {
-        const filename = `gmct-export-${new Date().toISOString().slice(0, 10)}`;
-        if (format === 'csv') {
-            const csv = toCsv(entries);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `${filename}.csv`;
-            link.click();
-        } else {
-             const json = JSON.stringify(entries, null, 2);
-             const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
-             const link = document.createElement('a');
-             link.href = URL.createObjectURL(blob);
-             link.download = `${filename}.json`;
-             link.click();
-        }
     };
     
     const handleFullExport = () => {
@@ -1025,13 +942,11 @@ const App: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Financial Records</h2>
                                 <p className="text-sm text-slate-500">Manage contributions, secure exports, and quick imports from this view.</p>
                             </div>
-                            <div className="flex flex-col items-stretch gap-4 sm:self-end">
-                            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                            <div className="flex flex-col items-stretch gap-4 sm:self-end min-w-[220px]">
                                 <button
                                     type="button"
                                     onClick={() => { setSelectedEntry(null); setIsModalOpen(true); }}
@@ -1039,30 +954,6 @@ const App: React.FC = () => {
                                 >
                                     Add New Entry
                                 </button>
-                                <div className="flex flex-wrap gap-2 sm:justify-end pt-2 border-t border-indigo-100">
-                                <div className="flex flex-wrap gap-2 sm:justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => handleExport('csv')}
-                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                    >
-                                        Export CSV
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleExport('json')}
-                                        className="bg-slate-900 hover:bg-slate-950 text-white font-semibold py-2 px-4 rounded-lg"
-                                    >
-                                        Export JSON
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleRecordImportClick}
-                                        className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold py-2 px-4 rounded-lg hover:bg-white"
-                                    >
-                                        Import
-                                    </button>
-                                </div>
                             </div>
                         </div>
                         <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${dataSourceTone}`} role="status">
@@ -1073,8 +964,6 @@ const App: React.FC = () => {
                                 </p>
                             )}
                         </div>
-                        <input ref={recordFileInputRef} type="file" accept=".csv,.json" className="hidden" onChange={handleRecordFileChange} />
-
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-amber-50 to-orange-100/70 p-4">
                                 <p className="text-sm uppercase tracking-wide text-amber-600 font-semibold">Entries Displayed</p>
@@ -1223,7 +1112,7 @@ const App: React.FC = () => {
         <button
             key={item.id}
             onClick={() => setActiveTab(item.id as Tab)}
-            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide ${
+            className={`w-full text-left font-semibold px-4 py-3 rounded-xl transition-colors tracking-wide uppercase ${
                 activeTab === item.id
                     ? 'bg-white/25 text-white shadow-lg'
                     : 'text-indigo-100 hover:bg-white/15 hover:text-white'
@@ -1275,15 +1164,6 @@ const App: React.FC = () => {
                     onConfirm={confirmDeleteEntry}
                     title="Confirm Deletion"
                     message="Are you sure you want to delete this financial entry? This action cannot be undone."
-                />
-                <ConfirmationModal
-                    isOpen={isImportConfirmOpen}
-                    onClose={() => setIsImportConfirmOpen(false)}
-                    onConfirm={confirmRecordImport}
-                    title="Confirm Import"
-                    message="Importing may overwrite or merge existing records. Do you want to continue?"
-                    confirmLabel="Import"
-                    confirmTone="primary"
                 />
             </div>
         </div>
