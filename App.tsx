@@ -101,16 +101,7 @@ const PRESENCE_TIMEOUT_MS = 60_000;
 declare global {
     interface Window {
         handleRecordImportClick?: () => void;
-        handleManualSync?: () => void;
     }
-}
-
-const MANUAL_SYNC_PLACEHOLDER = () => {
-    console.warn('Manual sync requested before the GMCT Records app initialized. Ignoring request.');
-};
-
-if (typeof window !== 'undefined' && typeof window.handleManualSync !== 'function') {
-    window.handleManualSync = MANUAL_SYNC_PLACEHOLDER;
 }
 
 const App: React.FC = () => {
@@ -1055,34 +1046,9 @@ const App: React.FC = () => {
         event.target.value = '';
     };
 
-    const handleRecordImportClick = useCallback(() => {
+    const handleRecordImportClick = () => {
         setIsFinanceImportConfirmOpen(true);
-    }, []);
-
-    const handleManualSync = useCallback(() => {
-        if (isOffline) {
-            setSyncMessage('Offline mode: reconnect to sync data.');
-            return;
-        }
-        setShouldResync(prev => prev + 1);
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new Event(MANUAL_SYNC_EVENT));
-        }
-    }, [isOffline]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.handleRecordImportClick = handleRecordImportClick;
-        window.handleManualSync = handleManualSync;
-        return () => {
-            if (window.handleRecordImportClick === handleRecordImportClick) {
-                delete window.handleRecordImportClick;
-            }
-            if (window.handleManualSync === handleManualSync) {
-                window.handleManualSync = MANUAL_SYNC_PLACEHOLDER;
-            }
-        };
-    }, [handleRecordImportClick, handleManualSync]);
+    };
 
     const confirmFinanceImport = () => {
         setIsFinanceImportConfirmOpen(false);
