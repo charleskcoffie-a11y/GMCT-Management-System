@@ -1046,19 +1046,9 @@ const App: React.FC = () => {
         event.target.value = '';
     };
 
-    const handleRecordImportClick = useCallback(() => {
+    const handleRecordImportClick = () => {
         setIsFinanceImportConfirmOpen(true);
-    }, []);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.handleRecordImportClick = handleRecordImportClick;
-        return () => {
-            if (window.handleRecordImportClick === handleRecordImportClick) {
-                delete window.handleRecordImportClick;
-            }
-        };
-    }, [handleRecordImportClick]);
+    };
 
     const confirmFinanceImport = () => {
         setIsFinanceImportConfirmOpen(false);
