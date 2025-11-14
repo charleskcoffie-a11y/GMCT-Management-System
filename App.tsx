@@ -98,6 +98,12 @@ type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
 
+declare global {
+    interface Window {
+        handleRecordImportClick?: () => void;
+    }
+}
+
 const App: React.FC = () => {
     // --- State Management ---
     const [entries, setEntries] = useLocalStorage<Entry[]>('gmct-entries', [], (data) => Array.isArray(data) ? data.map(sanitizeEntry) : []);
@@ -146,6 +152,7 @@ const App: React.FC = () => {
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
     const presenceIntervalRef = useRef<number | null>(null);
     const presenceStateRef = useRef<{ id: string | null }>({ id: null });
+    const financeImportInputRef = useRef<HTMLInputElement | null>(null);
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
@@ -1037,6 +1044,20 @@ const App: React.FC = () => {
         reader.readAsText(file);
         event.target.value = '';
     };
+
+    const handleRecordImportClick = useCallback(() => {
+        setIsFinanceImportConfirmOpen(true);
+    }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.handleRecordImportClick = handleRecordImportClick;
+        return () => {
+            if (window.handleRecordImportClick === handleRecordImportClick) {
+                delete window.handleRecordImportClick;
+            }
+        };
+    }, [handleRecordImportClick]);
 
     const confirmFinanceImport = () => {
         setIsFinanceImportConfirmOpen(false);
