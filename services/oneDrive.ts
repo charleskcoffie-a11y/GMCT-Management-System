@@ -77,55 +77,7 @@ const isBrowserEnvironment = () => typeof window !== 'undefined';
 
 const getAuthority = () => `https://login.microsoftonline.com/${MSAL_TENANT_ID}`;
 
-const MSAL_SCRIPT_URL = 'https://alcdn.msauth.net/browser/2.40.0/js/msal-browser.min.js';
-
-let msalScriptPromise: Promise<void> | null = null;
 let clientPromise: Promise<PublicClientApplication | null> | null = null;
-
-function hasMsalGlobal(): boolean {
-    return typeof window !== 'undefined' && !!window.msal && typeof window.msal.PublicClientApplication === 'function';
-}
-
-async function loadMsalLibrary(): Promise<void> {
-    if (!isBrowserEnvironment()) {
-        throw new Error('Microsoft authentication requires a browser environment.');
-    }
-    if (hasMsalGlobal()) {
-        return;
-    }
-    if (msalScriptPromise) {
-        return msalScriptPromise;
-    }
-    msalScriptPromise = new Promise<void>((resolve, reject) => {
-        const existingScript = document.querySelector<HTMLScriptElement>('script[data-msal-loader="gmct"]');
-        if (existingScript) {
-            existingScript.addEventListener('load', () => resolve(), { once: true });
-            existingScript.addEventListener('error', () => reject(new Error('Failed to load Microsoft authentication library.')), { once: true });
-            return;
-        }
-        const script = document.createElement('script');
-        script.src = MSAL_SCRIPT_URL;
-        script.async = true;
-        script.defer = true;
-        script.crossOrigin = 'anonymous';
-        script.referrerPolicy = 'no-referrer';
-        script.dataset.msalLoader = 'gmct';
-        script.addEventListener('load', () => resolve(), { once: true });
-        script.addEventListener('error', () => reject(new Error('Failed to load Microsoft authentication library.')), { once: true });
-        document.head.appendChild(script);
-    }).catch(error => {
-        msalScriptPromise = null;
-        throw error;
-    });
-    return msalScriptPromise;
-}
-
-function getMsalModule(): MsalModule | null {
-    if (!hasMsalGlobal()) {
-        return null;
-    }
-    return window.msal!;
-}
 
 async function ensureMsalClient(): Promise<PublicClientApplication | null> {
     if (clientPromise) {
@@ -138,14 +90,8 @@ async function ensureMsalClient(): Promise<PublicClientApplication | null> {
         console.warn('MSAL configuration missing client or tenant id.');
         return null;
     }
-    try {
-        await loadMsalLibrary();
-    } catch (error) {
-        console.error('Microsoft authentication library failed to load', error);
-        return null;
-    }
-    const module = getMsalModule();
-    if (!module) {
+    const module = window.msal;
+    if (!module || typeof module.PublicClientApplication !== 'function') {
         console.warn('Microsoft authentication library is not available on window.');
         return null;
     }
