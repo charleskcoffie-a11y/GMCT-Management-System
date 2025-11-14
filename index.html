@@ -11,7 +11,32 @@
     <link rel="icon" type="image/svg+xml" href="./gmct-logo.svg" />
     <meta name="theme-color" content="#4338ca" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <script
+      src="https://alcdn.msauth.net/browser/2.40.0/js/msal-browser.min.js"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+      data-msal-loader="gmct"
+      defer
+    ></script>
     <script src="https://polyfill.io/v3/polyfill.min.js?features=default%2CArray.prototype.includes%2CString.prototype.includes%2CArray.prototype.find%2CArray.prototype.findIndex%2CArray.from%2CObject.assign%2CObject.entries%2CNumber.isFinite%2CPromise%2CMap%2CSet%2CString.prototype.startsWith%2CURL%2CURLSearchParams" crossorigin="anonymous"></script>
+    <script>
+      (function ensureGmctGlobalHandlers() {
+        var globalRef = typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : undefined;
+        if (!globalRef) {
+          return;
+        }
+        if (typeof globalRef.handleManualSync !== 'function') {
+          globalRef.handleManualSync = function () {
+            console.warn('Manual sync requested before the GMCT Records app initialized. Ignoring request.');
+          };
+        }
+        if (typeof globalRef.handleRecordImportClick !== 'function') {
+          globalRef.handleRecordImportClick = function () {
+            console.warn('Finance import requested before the GMCT Records app initialized. Ignoring request.');
+          };
+        }
+      })();
+    </script>
     <script>
       (function applyCompatPolyfills() {
         if (!Array.prototype.includes) {
