@@ -98,6 +98,12 @@ type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
 
+declare global {
+    interface Window {
+        handleRecordImportClick?: () => void;
+    }
+}
+
 const App: React.FC = () => {
     // --- State Management ---
     const [entries, setEntries] = useLocalStorage<Entry[]>('gmct-entries', [], (data) => Array.isArray(data) ? data.map(sanitizeEntry) : []);
