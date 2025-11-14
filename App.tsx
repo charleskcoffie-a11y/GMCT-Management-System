@@ -146,6 +146,7 @@ const App: React.FC = () => {
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
     const presenceIntervalRef = useRef<number | null>(null);
     const presenceStateRef = useRef<{ id: string | null }>({ id: null });
+    const financeImportInputRef = useRef<HTMLInputElement | null>(null);
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
@@ -1036,6 +1037,10 @@ const App: React.FC = () => {
         };
         reader.readAsText(file);
         event.target.value = '';
+    };
+
+    const handleRecordImportClick = () => {
+        setIsFinanceImportConfirmOpen(true);
     };
 
     const confirmFinanceImport = () => {
