@@ -101,7 +101,6 @@ const PRESENCE_TIMEOUT_MS = 60_000;
 declare global {
     interface Window {
         handleRecordImportClick?: () => void;
-        handleManualSync?: () => void;
     }
 }
 
@@ -1047,34 +1046,9 @@ const App: React.FC = () => {
         event.target.value = '';
     };
 
-    const handleRecordImportClick = useCallback(() => {
+    const handleRecordImportClick = () => {
         setIsFinanceImportConfirmOpen(true);
-    }, []);
-
-    const handleManualSync = useCallback(() => {
-        if (isOffline) {
-            setSyncMessage('Offline mode: reconnect to sync data.');
-            return;
-        }
-        setShouldResync(prev => prev + 1);
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new Event(MANUAL_SYNC_EVENT));
-        }
-    }, [isOffline]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.handleRecordImportClick = handleRecordImportClick;
-        window.handleManualSync = handleManualSync;
-        return () => {
-            if (window.handleRecordImportClick === handleRecordImportClick) {
-                delete window.handleRecordImportClick;
-            }
-            if (window.handleManualSync === handleManualSync) {
-                delete window.handleManualSync;
-            }
-        };
-    }, [handleRecordImportClick, handleManualSync]);
+    };
 
     const confirmFinanceImport = () => {
         setIsFinanceImportConfirmOpen(false);
