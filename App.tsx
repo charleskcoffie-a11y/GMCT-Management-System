@@ -1046,30 +1046,9 @@ const App: React.FC = () => {
         event.target.value = '';
     };
 
-    const handleRecordImportClick = useCallback(() => {
+    const handleRecordImportClick = () => {
         setIsFinanceImportConfirmOpen(true);
-    }, []);
-
-    const handleManualSync = useCallback(() => {
-        if (isOffline) {
-            setSyncMessage('Offline mode: reconnect to sync data.');
-            return;
-        }
-        setShouldResync(prev => prev + 1);
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new Event(MANUAL_SYNC_EVENT));
-        }
-    }, [isOffline]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.handleRecordImportClick = handleRecordImportClick;
-        return () => {
-            if (window.handleRecordImportClick === handleRecordImportClick) {
-                delete window.handleRecordImportClick;
-            }
-        };
-    }, [handleRecordImportClick]);
+    };
 
     const confirmFinanceImport = () => {
         setIsFinanceImportConfirmOpen(false);
