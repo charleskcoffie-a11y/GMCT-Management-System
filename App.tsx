@@ -150,6 +150,7 @@ const App: React.FC = () => {
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
+    const historySyncRef = useRef(new Map<string, { signature: string; record: WeeklyHistoryRecord }>());
     const presenceIntervalRef = useRef<number | null>(null);
     const presenceStateRef = useRef<{ id: string | null }>({ id: null });
     const financeImportInputRef = useRef<HTMLInputElement | null>(null);
