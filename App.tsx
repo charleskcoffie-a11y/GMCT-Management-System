@@ -98,6 +98,21 @@ type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
 
+declare global {
+    interface Window {
+        handleRecordImportClick?: () => void;
+        handleManualSync?: () => void;
+    }
+}
+
+const MANUAL_SYNC_PLACEHOLDER = () => {
+    console.warn('Manual sync requested before the GMCT Records app initialized. Ignoring request.');
+};
+
+if (typeof window !== 'undefined' && typeof window.handleManualSync !== 'function') {
+    window.handleManualSync = MANUAL_SYNC_PLACEHOLDER;
+}
+
 const App: React.FC = () => {
     // --- State Management ---
     const [entries, setEntries] = useLocalStorage<Entry[]>('gmct-entries', [], (data) => Array.isArray(data) ? data.map(sanitizeEntry) : []);
@@ -144,8 +159,10 @@ const App: React.FC = () => {
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
     const memberSyncRef = useRef(new Map<string, { signature: string; member: Member }>());
+    const historySyncRef = useRef(new Map<string, { signature: string; record: WeeklyHistoryRecord }>());
     const presenceIntervalRef = useRef<number | null>(null);
     const presenceStateRef = useRef<{ id: string | null }>({ id: null });
+    const financeImportInputRef = useRef<HTMLInputElement | null>(null);
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
@@ -1037,6 +1054,35 @@ const App: React.FC = () => {
         reader.readAsText(file);
         event.target.value = '';
     };
+
+    const handleRecordImportClick = useCallback(() => {
+        setIsFinanceImportConfirmOpen(true);
+    }, []);
+
+    const handleManualSync = useCallback(() => {
+        if (isOffline) {
+            setSyncMessage('Offline mode: reconnect to sync data.');
+            return;
+        }
+        setShouldResync(prev => prev + 1);
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event(MANUAL_SYNC_EVENT));
+        }
+    }, [isOffline]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.handleRecordImportClick = handleRecordImportClick;
+        window.handleManualSync = handleManualSync;
+        return () => {
+            if (window.handleRecordImportClick === handleRecordImportClick) {
+                delete window.handleRecordImportClick;
+            }
+            if (window.handleManualSync === handleManualSync) {
+                window.handleManualSync = MANUAL_SYNC_PLACEHOLDER;
+            }
+        };
+    }, [handleRecordImportClick, handleManualSync]);
 
     const confirmFinanceImport = () => {
         setIsFinanceImportConfirmOpen(false);
