@@ -21,24 +21,51 @@ export const MICROSOFT_ALLOWED_EMAIL_DOMAINS = [
     'live.com',
 ];
 
-// --- SharePoint Configuration Defaults ---
-// IMPORTANT: Replace with your SharePoint site URL
-// e.g., "https://yourtenant.sharepoint.com/sites/YourSiteName"
-export const DEFAULT_SHAREPOINT_SITE_URL = "https://gmct98.sharepoint.com/sites/Finance";
+type EnvRecord = Record<string, string | undefined>;
 
-// IMPORTANT: Replace with the exact names of your SharePoint lists
+const resolveEnvValue = (key: string, fallback = ''): string => {
+    const metaEnv: EnvRecord | undefined = typeof import.meta !== 'undefined'
+        ? (import.meta as { env?: EnvRecord }).env
+        : undefined;
+    if (metaEnv && metaEnv[key] !== undefined) {
+        return metaEnv[key] ?? fallback;
+    }
+    const nodeEnv = typeof process !== 'undefined' && typeof process.env !== 'undefined'
+        ? (process.env as EnvRecord)
+        : undefined;
+    if (nodeEnv && nodeEnv[key] !== undefined) {
+        return nodeEnv[key] ?? fallback;
+    }
+    return fallback;
+};
+
+// --- Supabase Configuration Defaults ---
+export const DEFAULT_SUPABASE_URL = resolveEnvValue('VITE_SUPABASE_URL', '');
+export const DEFAULT_SUPABASE_ANON_KEY = resolveEnvValue('VITE_SUPABASE_ANON_KEY', '');
+export const DEFAULT_SUPABASE_ENTRIES_TABLE = resolveEnvValue('VITE_SUPABASE_ENTRIES_TABLE', 'entries');
+export const DEFAULT_SUPABASE_MEMBERS_TABLE = resolveEnvValue('VITE_SUPABASE_MEMBERS_TABLE', 'members');
+export const DEFAULT_SUPABASE_HISTORY_TABLE = resolveEnvValue('VITE_SUPABASE_HISTORY_TABLE', 'weekly_history');
+export const DEFAULT_SUPABASE_TASKS_TABLE = resolveEnvValue('VITE_SUPABASE_TASKS_TABLE', 'tasks');
+
+export const SUPABASE_URL = DEFAULT_SUPABASE_URL;
+export const SUPABASE_ANON_KEY = DEFAULT_SUPABASE_ANON_KEY;
+export const SUPABASE_ENTRIES_TABLE = DEFAULT_SUPABASE_ENTRIES_TABLE;
+export const SUPABASE_MEMBERS_TABLE = DEFAULT_SUPABASE_MEMBERS_TABLE;
+export const SUPABASE_HISTORY_TABLE = DEFAULT_SUPABASE_HISTORY_TABLE;
+export const SUPABASE_TASKS_TABLE = DEFAULT_SUPABASE_TASKS_TABLE;
+
+// --- SharePoint Configuration Defaults (still used by legacy task sync) ---
+export const DEFAULT_SHAREPOINT_SITE_URL = "https://gmct98.sharepoint.com/sites/Finance";
 export const DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME = "Members_DataBase";
 export const DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME = "Finance_Records";
 export const DEFAULT_SHAREPOINT_HISTORY_LIST_NAME = "Weekly_Service_History";
 export const DEFAULT_SHAREPOINT_TASKS_LIST_NAME = "TASKS";
 
-// Backwards-compatible aliases for existing configuration constants
 export const SHAREPOINT_SITE_URL = DEFAULT_SHAREPOINT_SITE_URL;
 export const SHAREPOINT_MEMBERS_LIST_NAME = DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME;
 export const SHAREPOINT_ENTRIES_LIST_NAME = DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME;
 export const SHAREPOINT_TASKS_LIST_NAME = DEFAULT_SHAREPOINT_TASKS_LIST_NAME;
 
-// The base URL for Microsoft Graph API requests
 export const SHAREPOINT_GRAPH_URL = "https://graph.microsoft.com/v1.0";
 
 // --- App Defaults ---

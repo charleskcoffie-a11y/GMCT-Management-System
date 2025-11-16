@@ -3,7 +3,7 @@ export type Method = "cash" | "check" | "card" | "e-transfer" | "mobile" | "othe
 
 export interface Entry {
     id: string;
-    spId?: string; // SharePoint list item identifier for cloud sync
+    spId?: string; // Cloud record identifier for Supabase sync
     date: string; // ISO format YYYY-MM-DD
     memberID: string;
     memberName: string;
@@ -16,27 +16,20 @@ export interface Entry {
 
 export interface Member {
     id: string; // Our app's UUID
-    spId?: string; // SharePoint's internal list item ID
+    spId?: string; // Cloud record identifier for Supabase sync
     name: string;
     classNumber?: string;
-}
-
-export interface SharePointConfig {
-    siteUrl: string;
-    entriesListName: string;
-    membersListName: string;
-    historyListName: string;
 }
 
 export interface Settings {
     currency: string;
     maxClasses: number;
     enforceDirectory: boolean; // if true, member names must be selected from the directory
-    sharePointSiteUrl: string;
-    sharePointEntriesListName: string;
-    sharePointMembersListName: string;
-    sharePointHistoryListName: string;
-    sharePointTasksListName: string;
+    supabaseUrl: string;
+    supabaseEntriesTable: string;
+    supabaseMembersTable: string;
+    supabaseHistoryTable: string;
+    supabaseTasksTable: string;
 }
 
 export type UserRole = 'admin' | 'finance' | 'class-leader' | 'statistician';
