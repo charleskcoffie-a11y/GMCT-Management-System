@@ -311,7 +311,7 @@ export async function deleteSharePointListItem(accessToken: string, listName: st
     if (!itemId) {
         return;
     }
-    const { siteId, listId } = await getListContext(accessToken, listName);
+    const { siteId, listId } = await ensureSharePointListReady(accessToken, listName);
     const response = await fetch(`${SHAREPOINT_GRAPH_URL}/sites/${siteId}/lists/${listId}/items/${itemId}`, {
         method: 'DELETE',
         headers: buildHeaders(accessToken),
