@@ -1106,12 +1106,6 @@ const App: React.FC = () => {
         }
     }, [isOffline]);
 
-    const handleCloudSignInSuccess = useCallback(() => {
-        setSyncMessage('Sign-in successful. Loading SharePoint records…');
-        setRecordsDataSource('local');
-        setShouldResync(prev => prev + 1);
-    }, []);
-
     const handleBulkAddMembers = (importedMembers: Member[]) => {
         setMembers(prev => {
             const existingIds = new Set(prev.map(member => sanitizeString(member.id)));
