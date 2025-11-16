@@ -29,6 +29,13 @@
             console.warn('Finance import requested before the GMCT Records app initialized. Ignoring request.');
           };
         }
+        if (typeof globalRef.handleCloudSignInSuccess !== 'function') {
+          globalRef.handleCloudSignInSuccess = function () {
+            console.warn(
+              'A Microsoft sign-in callback fired before the GMCT Records app finished booting. Please refresh the page if the app does not load.',
+            );
+          };
+        }
       })();
     </script>
     <script>

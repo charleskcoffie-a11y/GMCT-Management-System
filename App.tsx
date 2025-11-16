@@ -95,12 +95,19 @@ const INITIAL_SETTINGS: Settings = {
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
+type ExternalCloudSignInPayload = {
+    account?: unknown;
+    accessToken?: string;
+    message?: string;
+};
+
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
 
 declare global {
     interface Window {
         handleRecordImportClick?: () => void;
+        handleCloudSignInSuccess?: (payload?: ExternalCloudSignInPayload | string) => void;
     }
 }
 
