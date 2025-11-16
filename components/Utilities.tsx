@@ -169,6 +169,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                         </button>
                         <div className="text-xs text-slate-500 space-y-1">
                             <p><span className="font-semibold text-slate-700">Project URL:</span> {settings.supabaseUrl || 'Not configured'}</p>
+                            <p><span className="font-semibold text-slate-700">Anon key:</span> {settings.supabaseAnonKey ? 'Configured' : 'Missing'}</p>
                             <p><span className="font-semibold text-slate-700">Entries table:</span> {settings.supabaseEntriesTable || 'entries'}</p>
                             <p><span className="font-semibold text-slate-700">Members table:</span> {settings.supabaseMembersTable || 'members'}</p>
                         </div>

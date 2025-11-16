@@ -1,6 +1,6 @@
 # GMCT Management System - Setup & Deployment Guide
 
-This guide provides step-by-step instructions to configure and deploy the GMCT Management System. Following these steps will connect the app to your Microsoft 365 account for live cloud storage (via SharePoint) and host it on a private, shareable website (via GitHub Pages).
+This guide provides step-by-step instructions to configure and deploy the GMCT Management System. Following these steps will connect the app to your Supabase project for live cloud storage and host it on a private, shareable website (via GitHub Pages).
 
 ---
 
@@ -65,90 +65,127 @@ The single-page application exposes dedicated modules through a navigation sideb
 * **Styling** – Tailwind CSS provides responsive, utility-first styling across the interface.
 * **Data Persistence** – Local Storage serves as the offline-first datastore for all records.
 * **Data Integrity** – All persisted or imported data flows through sanitizer utilities to enforce expected shapes and prevent corruption.
-* **Optional Cloud Sync** – Microsoft Authentication Library (MSAL) connects to Microsoft 365; when signed in, the app syncs data with SharePoint Lists through the `sharepoint.ts` service. Configuration lives in `constants.ts`.
+* **Optional Cloud Sync** – A Supabase REST integration keeps financial records, members, weekly reports, and tasks in sync. Configure your Supabase URL, anon key, and table names from the **Settings → Supabase Configuration** panel (environment variables simply provide the initial defaults).
 
 ### 4. Deployment & Setup
 
 * **Hosting** – Designed for GitHub Pages deployment.
 * **Automation** – A GitHub Actions workflow (`.github/workflows/deploy.yml`) builds and publishes the Vite bundle on every push to `main`.
-* **Documentation** – This README walks administrators through Azure AD registration, SharePoint provisioning, credential configuration, and secure deployment.
+* **Documentation** – This README walks administrators through Supabase provisioning, credential configuration, and secure deployment.
 
-## Part 1: Azure & SharePoint Setup (One-Time)
+## Part 1: Supabase Setup (One-Time)
 
-This part creates the necessary cloud infrastructure in your organization's Microsoft 365 account. You only need to do this once.
+This part creates the necessary Supabase project the application uses for cloud synchronization.
 
-### Step 1.1: Register an Application in Azure AD
+### Step 1.1: Create a Supabase Project
 
-First, you need to register the application in Azure Active Directory (AD). This allows the app to securely sign in and access your data with permission.
+1.  Navigate to [supabase.com](https://supabase.com), sign in, and click **New project**.
+2.  Choose an organization, give the project a name (for example `gmct-records`), and set a strong database password.
+3.  Once the project is ready, open **Settings → API** and copy the **Project URL** plus the **anon public key**. You'll need both values later when configuring the app and your GitHub Actions workflow.
 
-1.  Navigate to the [Azure Portal](https://portal.azure.com) and sign in with an administrator account.
-2.  In the search bar, type `App registrations` and select it.
-3.  Click **"+ New registration"**.
-4.  **Name:** Enter a name for the application, such as `GMCT Management System`.
-5.  **Supported account types:** Select **"Accounts in this organizational directory only (Single tenant)"**. This is the most secure option.
-6.  **Redirect URI:** Leave this blank for now. We will add it after deploying the app.
-7.  Click **"Register"**.
+### Step 1.2: Create Database Tables
 
-After the app is created, you will be taken to its overview page. **Copy the following two values** and save them in a temporary text file. You will need them in Part 2.
-*   `Application (client) ID`
-*   `Directory (tenant) ID`
+Open the **SQL Editor** in Supabase and run the following script to provision the tables the app expects. The JSON columns store the nested objects captured by the weekly history forms and the task sync metadata.
 
-### Step 1.2: Configure API Permissions for Microsoft Graph
+```sql
+create table if not exists entries (
+  id text primary key,
+  spId text,
+  date text not null,
+  memberID text not null,
+  memberName text not null,
+  type text not null,
+  fund text not null,
+  method text not null,
+  amount numeric not null,
+  note text
+);
 
-Now, you must grant the application permission to read user profiles and interact with SharePoint.
+create table if not exists members (
+  id text primary key,
+  spId text,
+  name text not null,
+  classNumber text
+);
 
-1.  In your new app registration, go to the **"API permissions"** page from the left-hand menu.
-2.  Click **"+ Add a permission"**, then select **"Microsoft Graph"**.
-3.  Choose **"Delegated permissions"**.
-4.  In the "Select permissions" search box, find and add the following three permissions:
-    *   `User.Read` (Allows users to sign in)
-    *   `Sites.ReadWrite.All` (Allows reading/writing to SharePoint sites and lists)
-    *   `Files.ReadWrite.AppFolder` (Allows file operations if needed in the future)
-5.  Click **"Add permissions"**.
-6.  Finally, click the **"Grant admin consent for [Your Organization Name]"** button, and confirm by clicking **"Yes"**. The status for all permissions should now show a green checkmark.
+create table if not exists weekly_history (
+  id text primary key,
+  spId text,
+  dateOfService text not null,
+  societyName text,
+  preacher text,
+  guestPreacher boolean default false,
+  preacherSociety text,
+  liturgist text,
+  serviceType text,
+  serviceTypeOther text,
+  sermonTopic text,
+  memoryText text,
+  sermonSummary text,
+  worshipHighlights text,
+  announcementsBy text,
+  announcementsKeyPoints text,
+  attendance jsonb,
+  newMembersDetails text,
+  newMembersContact text,
+  donations jsonb,
+  events text,
+  observations text,
+  preparedBy text
+);
 
-### Step 1.3: Create SharePoint Lists for Storage
+create table if not exists tasks (
+  id text primary key,
+  spId text,
+  title text not null,
+  notes text,
+  createdBy text,
+  assignedTo text,
+  dueDate text,
+  status text not null,
+  priority text not null,
+  createdAt text not null,
+  updatedAt text not null,
+  _sync jsonb
+);
+```
 
-The application will store its data in lists on a SharePoint site.
+### Step 1.3: Configure Row-Level Security
 
-1.  Navigate to the SharePoint site you want to use for storage. **Copy the URL of this site's homepage** and save it for Part 2.
-2.  From your SharePoint site, click **"+ New"** and select **"List"**.
-3.  Choose **"Blank list"**.
-4.  **Name:** `Members_DataBase`. Click **"Create"**.
-5.  In the new list, the `Title` column already exists. Click the gear icon > **"List settings"** > click on the **"Title"** column and rename it to `Name`. Click **OK**.
-6.  Back in the list view, click **"+ Add column"** > **"Single line of text"**. Name it `ID` and click **Save**.
-7.  Click **"+ Add column"** > **"Single line of text"**. Name it `ClassNumber` and click **Save**.
-8.  Create a second list named `Finance_Records` using the same process. Its columns will be configured automatically by the app in future updates.
+Supabase enables Row-Level Security (RLS) by default. Grant the `anon` role permission to read and write the tables (or disable RLS if you are hosting the project in a locked-down environment):
 
-> **Why SharePoint and not OneDrive?** The live multi-user sync relies on SharePoint list items so every contributor writes to the same structured dataset. You do not need OneDrive for cloud storage—the bundled OneDrive service remains a stub for future file features, but all real-time collaboration happens through SharePoint.
+```sql
+alter table entries enable row level security;
+create policy "gmct_entries_rw" on entries for all to anon using (true) with check (true);
+
+alter table members enable row level security;
+create policy "gmct_members_rw" on members for all to anon using (true) with check (true);
+
+alter table weekly_history enable row level security;
+create policy "gmct_history_rw" on weekly_history for all to anon using (true) with check (true);
+
+alter table tasks enable row level security;
+create policy "gmct_tasks_rw" on tasks for all to anon using (true) with check (true);
+```
+
+If you prefer to restrict access further, create policies that only allow requests from specific API keys or IP addresses.
 
 ---
 
 ## Part 2: Application Code Configuration
 
-Now, you'll update the app's code with the values you just gathered.
+The app reads Supabase credentials and default table names from Vite environment variables to pre-populate the values shown in **Settings → Supabase Configuration**. Define them in a local `.env` file for development and as GitHub secrets for deployment:
 
-1.  Open the `constants.ts` file in a text editor.
-2.  Find the following lines and replace the placeholder text with your actual credentials:
+```bash
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_SUPABASE_ENTRIES_TABLE=entries
+VITE_SUPABASE_MEMBERS_TABLE=members
+VITE_SUPABASE_HISTORY_TABLE=weekly_history
+VITE_SUPABASE_TASKS_TABLE=tasks
+```
 
-    ```javascript
-    // Paste the 'Application (client) ID' from Step 1.1
-    export const MSAL_CLIENT_ID = "YOUR_CLIENT_ID_HERE";
-    
-    // Paste the 'Directory (tenant) ID' from Step 1.1
-    export const MSAL_TENANT_ID = "YOUR_TENANT_ID_HERE";
-    
-    // Paste the SharePoint Site homepage URL from Step 1.3 (used as the initial default)
-    export const DEFAULT_SHAREPOINT_SITE_URL = "https://yourtenant.sharepoint.com/sites/YourSite";
-
-    // These should match the names from Step 1.3 exactly
-    export const DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME = "Members_DataBase";
-    export const DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME = "Finance_Records";
-    export const DEFAULT_SHAREPOINT_HISTORY_LIST_NAME = "Weekly_Service_History";
-    ```
-3.  Save the `constants.ts` file.
-
-> **Tip:** After the app boots, you can fine-tune these SharePoint values without editing code by opening **Settings → SharePoint Storage** (or **Utilities → SharePoint Tools**) and saving the site URL plus list names you want to use long term.
+Only the URL and anon key are strictly required—the table variables let you point the app at differently named tables if needed. Once the app loads, administrators can adjust the URL, anon key, and table names inside **Settings → Supabase Configuration** without rebuilding the code. Any edits are persisted locally in the browser and take effect immediately.
 
 ---
 
@@ -187,24 +224,20 @@ You can either upload through the GitHub web UI, work through a pull request, or
 3.  Open a pull request targeting `main` and review the diffs as usual.
 4.  Once the pull request is merged, the merge commit lands on `main` and automatically triggers the GitHub Actions deployment workflow—no extra manual steps required.
 
-### Step 3.3: Enable GitHub Pages
+### Step 3.3: Add Supabase Secrets to GitHub
+
+1.  In your repository, go to **Settings → Secrets and variables → Actions**.
+2.  Create two **Repository secrets** named `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` that match the values from Part 1. (Add the optional table variables here as well if you overrode them locally.)
+3.  The included GitHub Actions workflow automatically exposes these secrets to the build step so the compiled bundle can talk to Supabase.
+
+### Step 3.4: Enable GitHub Pages
 
 1.  In your repository, go to the **"Settings"** tab.
 2.  On the left menu, click **"Pages"**.
 3.  Under **"Build and deployment"**, choose **Source → GitHub Actions** and click **"Save"**. _Do not_ select the old "Deploy from a branch" option—if you do, GitHub Pages will serve the raw TypeScript files and the site will stay on the "Loading Application…" screen.
 4.  After each push to `main`, open the **Actions** tab and wait for the **Deploy to GitHub Pages** workflow to finish. You should also see a successful deployment listed under **Deployments → github-pages** on the right side of your repository home page. Once it succeeds, reload the **Settings → Pages** screen. A green box will appear with your live website URL. **Copy this URL.** It will look like `https://<your-username>.github.io/<repository-name>/`.
 
-### Step 3.4: Update Azure AD Redirect URI (Final Step)
-
-Finally, tell Azure that your new website URL is allowed to handle sign-ins.
-
-1.  Go back to your **App Registration** in the [Azure Portal](https://portal.azure.com).
-2.  Go to the **"Authentication"** page.
-3.  Click **"+ Add a platform"**, then select **"Single-page application (SPA)"**.
-4.  In the **"Redirect URIs"** box, paste the GitHub Pages URL you copied in the previous step.
-5.  Click **"Configure"** at the bottom.
-
----
+----
 
 ## Part 4: Share Your App!
 
@@ -212,7 +245,7 @@ Your application is now live and fully configured.
 
 *   You can now share the GitHub Pages URL with your team members.
 *   They can open the link, sign in with their assigned user accounts, and start using the application immediately with no setup required.
-*   When a user signs in with their Microsoft account, the app will connect to your SharePoint lists to sync member data.
+*   As long as the Supabase environment variables are configured, their changes will sync to your Supabase project whenever they are online.
 
 ---
 

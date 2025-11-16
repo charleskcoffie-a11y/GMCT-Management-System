@@ -26,6 +26,7 @@ export interface Settings {
     maxClasses: number;
     enforceDirectory: boolean; // if true, member names must be selected from the directory
     supabaseUrl: string;
+    supabaseAnonKey: string;
     supabaseEntriesTable: string;
     supabaseMembersTable: string;
     supabaseHistoryTable: string;
@@ -128,9 +129,7 @@ export interface Task {
 export type Tab = 'home' | 'records' | 'members' | 'insights' | 'users' | 'settings' | 'attendance' | 'admin-attendance' | 'utilities' | 'history' | 'tasks';
 
 export interface CloudState {
-  ready: boolean;
-  signedIn: boolean;
-  account?: any;
-  accessToken?: string;
-  message: string;
+    ready: boolean;
+    signedIn: boolean;
+    message: string;
 }

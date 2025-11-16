@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CloudState, Task, TaskPriority, TaskStatus, User } from '../types';
-import { MANUAL_SYNC_EVENT } from '../constants';
+import type { CloudState, Settings, Task, TaskPriority, TaskStatus, User } from '../types';
+import { DEFAULT_SUPABASE_TASKS_TABLE, MANUAL_SYNC_EVENT } from '../constants';
 import {
     clearQueuedTaskDeletion,
     deleteTask as deleteTaskFromStore,
@@ -15,10 +15,11 @@ import {
     upsertManyTasks,
 } from '../services/tasksStorage';
 import {
-    deleteTaskFromSharePoint,
-    loadTasksFromSharePoint,
-    upsertTaskToSharePoint,
-} from '../services/taskSync';
+    deleteTaskFromSupabase,
+    isSupabaseConfigured,
+    loadTasksFromSupabase,
+    upsertTaskToSupabase,
+} from '../services/supabase';
 import { fromCsv, generateId, sanitizeTask, toCsv } from '../utils';
 
 const statusOptions: TaskStatus[] = ['Pending', 'In Progress', 'Completed'];
@@ -62,6 +63,7 @@ type TasksTabProps = {
     currentUser: User;
     users: User[];
     cloud: CloudState;
+    settings: Settings;
     isOffline: boolean;
 };
 
@@ -389,7 +391,7 @@ const TaskList: React.FC<{ tasks: Task[]; onOpenTask: (task: Task) => void }> = 
     );
 };
 
-const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOffline }) => {
+const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, settings, isOffline }) => {
     const canEdit = ['admin', 'finance'].includes(currentUser.role);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [filters, setFilters] = useState<TaskFilters>(defaultFilters);
@@ -401,6 +403,8 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
     const [isSyncing, setIsSyncing] = useState(false);
     const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
     const taskFileInputRef = useRef<HTMLInputElement | null>(null);
+    const supabaseConfigured = isSupabaseConfigured();
+    const tasksTableName = settings.supabaseTasksTable || DEFAULT_SUPABASE_TASKS_TABLE;
 
     const refreshTasks = useCallback(async () => {
         const allTasks = await getAllTasks();
@@ -539,11 +543,11 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
     }, [toast]);
 
     const attemptHydrateFromCloud = useCallback(async () => {
-        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
+        if (!cloud.signedIn || !supabaseConfigured || isOffline) {
             return;
         }
         try {
-            const remoteTasks = await loadTasksFromSharePoint(cloud.accessToken);
+            const remoteTasks = await loadTasksFromSupabase(tasksTableName);
             if (remoteTasks.length === 0) {
                 return;
             }
@@ -557,7 +561,7 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
             console.error('Failed to load tasks from cloud', error);
             setToast({ message: 'Unable to refresh tasks from cloud.', tone: 'error' });
         }
-    }, [cloud.accessToken, cloud.signedIn, isOffline, refreshTasks]);
+    }, [cloud.signedIn, isOffline, refreshTasks, supabaseConfigured, tasksTableName]);
 
     useEffect(() => {
         void attemptHydrateFromCloud();
@@ -576,9 +580,9 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
             }
             return;
         }
-        if (!cloud.signedIn || !cloud.accessToken) {
+        if (!cloud.signedIn || !supabaseConfigured) {
             if (reason === 'manual') {
-                setToast({ message: 'Sign in to cloud sync before syncing tasks.', tone: 'info' });
+                setToast({ message: 'Configure Supabase sync before syncing tasks.', tone: 'info' });
             }
             return;
         }
@@ -595,11 +599,11 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
             }
             const syncTimestamp = new Date().toISOString();
             for (const task of dirtyTasks) {
-                const remoteId = await upsertTaskToSharePoint(task, cloud.accessToken);
+                const remoteId = await upsertTaskToSupabase(task, tasksTableName);
                 await markTaskSynced(task.id, syncTimestamp, remoteId);
             }
             for (const deletion of queuedDeletions) {
-                await deleteTaskFromSharePoint({ id: deletion.id, spId: deletion.spId }, cloud.accessToken);
+                await deleteTaskFromSupabase({ id: deletion.id, spId: deletion.spId }, tasksTableName);
                 await clearQueuedTaskDeletion(deletion.id);
             }
             await persistLastSyncedAt(syncTimestamp);
@@ -612,7 +616,7 @@ const TasksTab: React.FC<TasksTabProps> = ({ currentUser, users, cloud, isOfflin
         } finally {
             setIsSyncing(false);
         }
-    }, [cloud.accessToken, cloud.signedIn, isOffline, isSyncing, refreshTasks]);
+    }, [cloud.signedIn, isOffline, isSyncing, refreshTasks, supabaseConfigured, tasksTableName]);
 
     useEffect(() => {
         if (isOffline) return;
