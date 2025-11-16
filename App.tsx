@@ -1107,30 +1107,6 @@ const App: React.FC = () => {
         }
     }, [isOffline]);
 
-    useEffect(() => {
-        if (!cloud.signedIn || !cloud.accessToken) {
-            lastCloudHydrationSignatureRef.current = null;
-            return;
-        }
-
-        const signatureParts = [
-            cloud.account?.homeAccountId,
-            cloud.account?.localAccountId,
-            cloud.account?.username,
-            cloud.accessToken,
-        ].filter(Boolean);
-        const signature = signatureParts.join('|');
-
-        if (lastCloudHydrationSignatureRef.current === signature) {
-            return;
-        }
-
-        lastCloudHydrationSignatureRef.current = signature;
-        setSyncMessage('Sign-in successful. Loading SharePoint records…');
-        setRecordsDataSource('local');
-        setShouldResync(prev => prev + 1);
-    }, [cloud.signedIn, cloud.accessToken, cloud.account]);
-
     const handleBulkAddMembers = (importedMembers: Member[]) => {
         setMembers(prev => {
             const existingIds = new Set(prev.map(member => sanitizeString(member.id)));
@@ -1414,6 +1390,7 @@ const App: React.FC = () => {
                         setCloud={setCloud}
                         onExport={handleFullExport}
                         onImport={handleFullImport}
+                        onCloudSignInSuccess={handleCloudSignInSuccess}
                     />
                 );
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} onAttendanceSaved={setLastAttendanceSavedAt} />;

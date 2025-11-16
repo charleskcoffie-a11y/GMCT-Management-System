@@ -9,9 +9,10 @@ interface SettingsProps {
     setCloud: React.Dispatch<React.SetStateAction<CloudState>>;
     onExport: () => void;
     onImport: (file: File) => void;
+    onCloudSignInSuccess?: () => void;
 }
 
-const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport }) => {
+const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, onCloudSignInSuccess }) => {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [shareEmail, setShareEmail] = useState('');
     const [authToast, setAuthToast] = useState<{ tone: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -44,6 +45,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
                 message: successMessage,
             }));
             setAuthToast({ tone: 'success', message: successMessage });
+            onCloudSignInSuccess?.();
         } catch (error) {
             console.error('Microsoft sign-in failed', error);
             const failureMessage = error instanceof Error && error.message
