@@ -154,6 +154,7 @@ const App: React.FC = () => {
     const presenceIntervalRef = useRef<number | null>(null);
     const presenceStateRef = useRef<{ id: string | null }>({ id: null });
     const financeImportInputRef = useRef<HTMLInputElement | null>(null);
+    const lastCloudHydrationSignatureRef = useRef<string | null>(null);
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
