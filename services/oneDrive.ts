@@ -17,6 +17,8 @@ type AuthenticationResult = {
 type PopupRequest = {
     scopes?: string[];
     prompt?: 'select_account' | 'login' | 'consent';
+    popupWindowAttributes?: string;
+    popupName?: string;
 };
 
 type SilentRequest = {
@@ -77,7 +79,194 @@ const isBrowserEnvironment = () => typeof window !== 'undefined';
 
 const getAuthority = () => `https://login.microsoftonline.com/${MSAL_TENANT_ID}`;
 
+const MSAL_BROWSER_CDN_URL = 'https://alcdn.msauth.net/browser/2.40.0/js/msal-browser.min.js';
+const AUTH_POPUP_NAME = 'gmct-msal-signin';
+const AUTH_POPUP_FEATURES = 'width=620,height=720,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes';
+
+let msalModulePromise: Promise<MsalModule | null> | null = null;
 let clientPromise: Promise<PublicClientApplication | null> | null = null;
+
+const safelyDescribePopup = (popup: Window) => {
+    try {
+        if (!popup.document) {
+            return;
+        }
+        popup.document.open();
+        popup.document.write(`<!doctype html><html><head><title>Microsoft sign-in</title><style>
+            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; background: #f4f6fb; color: #1f2937; }
+            .card { text-align: center; padding: 2rem; border-radius: 1rem; background: white; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12); }
+            h1 { font-size: 1.25rem; margin-bottom: 0.5rem; }
+            p { font-size: 0.95rem; line-height: 1.4; }
+        </style></head><body><div class="card"><h1>Loading Microsoft sign-in…</h1><p>If nothing appears, please allow pop-ups for this site.</p></div></body></html>`);
+        popup.document.close();
+    } catch (error) {
+        console.warn('Unable to render placeholder sign-in window', error);
+    }
+};
+
+const openAuthPopup = (): Window | null => {
+    if (!isBrowserEnvironment()) {
+        return null;
+    }
+    try {
+        const popup = window.open('', AUTH_POPUP_NAME, AUTH_POPUP_FEATURES);
+        if (!popup) {
+            return null;
+        }
+        safelyDescribePopup(popup);
+        popup.focus();
+        return popup;
+    } catch (error) {
+        console.warn('Unable to open authentication popup window', error);
+        return null;
+    }
+};
+
+const closePopup = (popup: Window | null) => {
+    if (popup && !popup.closed) {
+        popup.close();
+    }
+};
+
+const resolveGlobalMsal = (): MsalModule | null => {
+    if (!isBrowserEnvironment()) {
+        return null;
+    }
+    const module = window.msal;
+    if (module && typeof module.PublicClientApplication === 'function') {
+        return module;
+    }
+    return null;
+};
+
+const loadMsalFromCdn = () => {
+    if (!isBrowserEnvironment() || typeof document === 'undefined') {
+        return Promise.reject(new Error('MSAL can only be loaded in the browser.'));
+    }
+
+    return new Promise<void>((resolve, reject) => {
+        let settled = false;
+        let retryTimer: number | undefined;
+
+        const finish = (action: () => void) => {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            if (typeof retryTimer !== 'undefined') {
+                window.clearTimeout(retryTimer);
+                retryTimer = undefined;
+            }
+            action();
+        };
+
+        const resolveIfGlobalReady = () => {
+            const module = resolveGlobalMsal();
+            if (module) {
+                finish(() => resolve());
+                return true;
+            }
+            return false;
+        };
+
+        const attachScriptHandlers = (script: HTMLScriptElement) => {
+            script.addEventListener('load', () => {
+                script.dataset.msalReady = 'true';
+                if (!resolveIfGlobalReady()) {
+                    console.warn('MSAL script loaded but global object is still unavailable.');
+                }
+                finish(() => resolve());
+            }, { once: true });
+
+            script.addEventListener('error', event => {
+                script.dataset.msalFailed = 'true';
+                const error = event instanceof ErrorEvent && event.message
+                    ? new Error(event.message)
+                    : new Error('Failed to load the Microsoft authentication script.');
+                finish(() => reject(error));
+            }, { once: true });
+        };
+
+        const insertFreshScript = () => {
+            if (settled) {
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = MSAL_BROWSER_CDN_URL;
+            script.async = true;
+            script.defer = false;
+            script.crossOrigin = 'anonymous';
+            script.referrerPolicy = 'no-referrer';
+            script.dataset.msalCdn = 'true';
+            script.dataset.msalManaged = 'true';
+            attachScriptHandlers(script);
+            document.head.appendChild(script);
+
+            retryTimer = window.setTimeout(() => {
+                if (settled) {
+                    return;
+                }
+                finish(() => reject(new Error('Timed out waiting for Microsoft authentication to load.')));
+            }, 10000);
+        };
+
+        const existingScript = document.querySelector<HTMLScriptElement>('script[data-msal-cdn="true"]');
+        if (existingScript) {
+            if (existingScript.dataset.msalReady === 'true' || resolveIfGlobalReady()) {
+                finish(() => resolve());
+                return;
+            }
+
+            attachScriptHandlers(existingScript);
+
+            const managedExternally = existingScript.dataset.msalManaged === 'true';
+            retryTimer = window.setTimeout(() => {
+                if (settled) {
+                    return;
+                }
+                if (resolveIfGlobalReady()) {
+                    return;
+                }
+                if (!managedExternally) {
+                    existingScript.parentElement?.removeChild(existingScript);
+                    insertFreshScript();
+                    return;
+                }
+                finish(() => reject(new Error('Timed out waiting for Microsoft authentication to load.')));
+            }, managedExternally ? 10000 : 5000);
+            return;
+        }
+
+        insertFreshScript();
+    });
+};
+
+async function loadMsalModule(): Promise<MsalModule | null> {
+    if (msalModulePromise) {
+        return msalModulePromise;
+    }
+    if (!isBrowserEnvironment()) {
+        return null;
+    }
+    msalModulePromise = (async () => {
+        const globalModule = resolveGlobalMsal();
+        if (globalModule) {
+            return globalModule;
+        }
+        try {
+            await loadMsalFromCdn();
+        } catch (error) {
+            console.error('Failed to load MSAL browser bundle from CDN.', error);
+            return null;
+        }
+        const module = resolveGlobalMsal();
+        if (!module) {
+            console.warn('MSAL browser bundle loaded, but global object was not initialised.');
+        }
+        return module ?? null;
+    })();
+    return msalModulePromise;
+}
 
 async function ensureMsalClient(): Promise<PublicClientApplication | null> {
     if (clientPromise) {
@@ -90,16 +279,16 @@ async function ensureMsalClient(): Promise<PublicClientApplication | null> {
         console.warn('MSAL configuration missing client or tenant id.');
         return null;
     }
-    const module = window.msal;
-    if (!module || typeof module.PublicClientApplication !== 'function') {
-        console.warn('Microsoft authentication library is not available on window.');
+    const module = await loadMsalModule();
+    if (!module) {
+        console.warn('Microsoft authentication library is not available in this environment.');
         return null;
     }
     const instance = new module.PublicClientApplication({
         auth: {
             clientId: MSAL_CLIENT_ID,
             authority: getAuthority(),
-            redirectUri: window.location.origin,
+            redirectUri: isBrowserEnvironment() ? window.location.origin : undefined,
         },
         cache: {
             cacheLocation: 'sessionStorage',
@@ -194,12 +383,18 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
     if (!isBrowserEnvironment()) {
         throw new Error('Sign in is only available in the browser.');
     }
+    const authPopup = openAuthPopup();
+    if (!authPopup) {
+        throw new Error('Your browser blocked the Microsoft sign-in popup. Please allow pop-ups for this site and try again.');
+    }
     const client = await ensureMsalClient();
     assertClient(client);
     try {
         const loginResult = await client.loginPopup({
             scopes: GRAPH_SCOPES,
             prompt: 'select_account',
+            popupName: AUTH_POPUP_NAME,
+            popupWindowAttributes: AUTH_POPUP_FEATURES,
         });
         assertAllowedAccount(loginResult.account);
         const tokenResult = await client.acquireTokenSilent({
@@ -219,5 +414,7 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
             ? error.message
             : 'Sign in failed. Please check your credentials or network connection.';
         throw new Error(message);
+    } finally {
+        closePopup(authPopup);
     }
 }
