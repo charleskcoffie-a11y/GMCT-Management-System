@@ -77,7 +77,79 @@ const isBrowserEnvironment = () => typeof window !== 'undefined';
 
 const getAuthority = () => `https://login.microsoftonline.com/${MSAL_TENANT_ID}`;
 
+const MSAL_BROWSER_CDN_URL = 'https://alcdn.msauth.net/browser/2.40.0/js/msal-browser.min.js';
+
+let msalModulePromise: Promise<MsalModule | null> | null = null;
 let clientPromise: Promise<PublicClientApplication | null> | null = null;
+
+const resolveGlobalMsal = (): MsalModule | null => {
+    if (!isBrowserEnvironment()) {
+        return null;
+    }
+    const module = window.msal;
+    if (module && typeof module.PublicClientApplication === 'function') {
+        return module;
+    }
+    return null;
+};
+
+const loadMsalFromCdn = () => {
+    if (!isBrowserEnvironment() || typeof document === 'undefined') {
+        return Promise.reject(new Error('MSAL can only be loaded in the browser.'));
+    }
+    return new Promise<void>((resolve, reject) => {
+        const existingScript = document.querySelector<HTMLScriptElement>(`script[data-msal-cdn="true"]`);
+        if (existingScript) {
+            if (existingScript.dataset.msalReady === 'true') {
+                resolve();
+                return;
+            }
+            existingScript.addEventListener('load', () => resolve(), { once: true });
+            existingScript.addEventListener('error', event => reject(event), { once: true });
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = MSAL_BROWSER_CDN_URL;
+        script.async = true;
+        script.defer = false;
+        script.crossOrigin = 'anonymous';
+        script.referrerPolicy = 'no-referrer';
+        script.dataset.msalCdn = 'true';
+        script.addEventListener('load', () => {
+            script.dataset.msalReady = 'true';
+            resolve();
+        }, { once: true });
+        script.addEventListener('error', event => reject(event), { once: true });
+        document.head.appendChild(script);
+    });
+};
+
+async function loadMsalModule(): Promise<MsalModule | null> {
+    if (msalModulePromise) {
+        return msalModulePromise;
+    }
+    if (!isBrowserEnvironment()) {
+        return null;
+    }
+    msalModulePromise = (async () => {
+        const globalModule = resolveGlobalMsal();
+        if (globalModule) {
+            return globalModule;
+        }
+        try {
+            await loadMsalFromCdn();
+        } catch (error) {
+            console.error('Failed to load MSAL browser bundle from CDN.', error);
+            return null;
+        }
+        const module = resolveGlobalMsal();
+        if (!module) {
+            console.warn('MSAL browser bundle loaded, but global object was not initialised.');
+        }
+        return module ?? null;
+    })();
+    return msalModulePromise;
+}
 
 async function ensureMsalClient(): Promise<PublicClientApplication | null> {
     if (clientPromise) {
@@ -90,16 +162,16 @@ async function ensureMsalClient(): Promise<PublicClientApplication | null> {
         console.warn('MSAL configuration missing client or tenant id.');
         return null;
     }
-    const module = window.msal;
-    if (!module || typeof module.PublicClientApplication !== 'function') {
-        console.warn('Microsoft authentication library is not available on window.');
+    const module = await loadMsalModule();
+    if (!module) {
+        console.warn('Microsoft authentication library is not available in this environment.');
         return null;
     }
     const instance = new module.PublicClientApplication({
         auth: {
             clientId: MSAL_CLIENT_ID,
             authority: getAuthority(),
-            redirectUri: window.location.origin,
+            redirectUri: isBrowserEnvironment() ? window.location.origin : undefined,
         },
         cache: {
             cacheLocation: 'sessionStorage',
