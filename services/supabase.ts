@@ -3,10 +3,11 @@ import {
     SUPABASE_ENTRIES_TABLE,
     SUPABASE_HISTORY_TABLE,
     SUPABASE_MEMBERS_TABLE,
+    SUPABASE_TASKS_TABLE,
     SUPABASE_URL,
 } from '../constants';
-import type { Entry, Member, WeeklyHistoryRecord } from '../types';
-import { sanitizeEntry, sanitizeMember, sanitizeWeeklyHistoryRecord } from '../utils';
+import type { Entry, Member, Task, WeeklyHistoryRecord } from '../types';
+import { sanitizeEntry, sanitizeMember, sanitizeTask, sanitizeWeeklyHistoryRecord } from '../utils';
 
 export type ConnectionResult = { success: true; message: string } | { success: false; message: string };
 
@@ -15,6 +16,7 @@ type SupabaseRow = Record<string, unknown>;
 type MutableEntry = Entry & { spId?: string };
 type MutableMember = Member & { spId?: string };
 type MutableHistoryRecord = WeeklyHistoryRecord & { spId?: string };
+type MutableTask = Task & { spId?: string };
 
 const REST_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1` : '';
 
@@ -103,6 +105,11 @@ const normaliseWeeklyHistory = (row: SupabaseRow): WeeklyHistoryRecord => {
     return { ...parsed, spId: parsed.spId ?? parsed.id };
 };
 
+const normaliseTask = (row: SupabaseRow): Task => {
+    const parsed = sanitizeTask({ ...row, spId: typeof row.spId === 'string' ? row.spId : row.id });
+    return { ...parsed, spId: parsed.spId ?? parsed.id };
+};
+
 const buildDeleteFilter = (id: string): string => {
     const encoded = encodeURIComponent(id);
     return `id=eq.${encoded}`;
@@ -124,6 +131,12 @@ export async function loadWeeklyHistoryFromSupabase(tableName?: string): Promise
     const table = tablePath(tableName, SUPABASE_HISTORY_TABLE, 'weekly history');
     const rows = await supabaseRequest<SupabaseRow[]>(`${table}?select=*`);
     return Array.isArray(rows) ? rows.map(normaliseWeeklyHistory) : [];
+}
+
+export async function loadTasksFromSupabase(tableName?: string): Promise<Task[]> {
+    const table = tablePath(tableName, SUPABASE_TASKS_TABLE, 'tasks');
+    const rows = await supabaseRequest<SupabaseRow[]>(`${table}?select=*`);
+    return Array.isArray(rows) ? rows.map(normaliseTask) : [];
 }
 
 export async function upsertEntryToSupabase(entry: Entry, tableName?: string): Promise<string | undefined> {
@@ -199,6 +212,32 @@ export async function deleteMemberFromSupabase(member: Member, tableName?: strin
 export async function deleteWeeklyHistoryFromSupabase(record: WeeklyHistoryRecord, tableName?: string): Promise<void> {
     const table = tablePath(tableName, SUPABASE_HISTORY_TABLE, 'weekly history');
     const id = record.spId ?? record.id;
+    if (!id) {
+        return;
+    }
+    await supabaseRequest(`${table}?${buildDeleteFilter(id)}`, {
+        method: 'DELETE',
+        headers: buildHeaders({ Prefer: 'return=minimal' }),
+    });
+}
+
+export async function upsertTaskToSupabase(task: Task, tableName?: string): Promise<string | undefined> {
+    const table = tablePath(tableName, SUPABASE_TASKS_TABLE, 'tasks');
+    const sanitized: MutableTask = { ...sanitizeTask(task) };
+    sanitized.spId = sanitized.spId ?? sanitized.id;
+    const body = JSON.stringify({ ...sanitized, id: sanitized.id });
+    const result = await supabaseRequest<SupabaseRow[]>(`${table}?on_conflict=id`, {
+        method: 'POST',
+        headers: buildHeaders({ Prefer: 'resolution=merge-duplicates,return=representation' }),
+        body,
+    });
+    const saved = Array.isArray(result) ? result[0] : result;
+    return typeof saved?.id === 'string' ? saved.id : sanitized.id;
+}
+
+export async function deleteTaskFromSupabase(task: Task | { id: string; spId?: string }, tableName?: string): Promise<void> {
+    const table = tablePath(tableName, SUPABASE_TASKS_TABLE, 'tasks');
+    const id = task.spId ?? task.id;
     if (!id) {
         return;
     }

@@ -49,7 +49,7 @@ const SyncStatus: React.FC<SyncStatusProps> = ({
                 </div>
                 <div className="flex flex-col items-stretch sm:items-end gap-2 text-xs font-medium text-slate-600">
                     <div className="space-y-1 text-right">
-                        <p>Status: {cloudReady ? (cloudSignedIn ? 'Connected' : 'Ready to sign in') : 'Initialising'}</p>
+                        <p>Status: {cloudReady ? (cloudSignedIn ? 'Connected to Supabase' : 'Supabase not configured') : 'Initialising Supabase'}</p>
                         <p>{activeSyncTasks > 0 ? `Syncing ${activeSyncTasks} task${activeSyncTasks > 1 ? 's' : ''}…` : 'No background sync running'}</p>
                     </div>
                     <button
