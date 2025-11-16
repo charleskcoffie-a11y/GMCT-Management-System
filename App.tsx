@@ -1114,72 +1114,11 @@ const App: React.FC = () => {
             return;
         }
         setShouldResync(prev => prev + 1);
-        setSyncMessage('Manual sync requested. Checking Supabase…');
+        setSyncMessage('Manual sync requested. Checking SharePoint…');
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new Event(MANUAL_SYNC_EVENT));
         }
     }, [isOffline]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') {
-            return;
-        }
-
-        const externalHandler = (payload?: ExternalCloudSignInPayload | string) => {
-            setCloud(prev => {
-                const detail = typeof payload === 'object' && payload !== null ? payload : undefined;
-                const message = typeof payload === 'string'
-                    ? payload
-                    : typeof detail?.message === 'string'
-                    ? detail.message
-                    : 'Microsoft sign-in successful.';
-                const nextAccount = detail?.account !== undefined ? detail.account : prev.account;
-                const nextAccessToken = typeof detail?.accessToken === 'string'
-                    ? detail.accessToken
-                    : prev.accessToken;
-
-                return {
-                    ...prev,
-                    ready: true,
-                    signedIn: true,
-                    account: nextAccount,
-                    accessToken: nextAccessToken,
-                    message,
-                };
-            });
-        };
-
-        window.handleCloudSignInSuccess = externalHandler;
-
-        return () => {
-            if (window.handleCloudSignInSuccess === externalHandler) {
-                delete window.handleCloudSignInSuccess;
-            }
-        };
-    }, [setCloud]);
-
-    useEffect(() => {
-        if (!cloud.signedIn) {
-            lastCloudHydrationSignatureRef.current = null;
-            return;
-        }
-
-        const signatureParts = [
-            cloud.account?.homeAccountId,
-            cloud.account?.localAccountId,
-            cloud.account?.username,
-        ].filter(Boolean);
-        const signature = signatureParts.join('|');
-
-        if (lastCloudHydrationSignatureRef.current === signature) {
-            return;
-        }
-
-        lastCloudHydrationSignatureRef.current = signature;
-        setSyncMessage('Sign-in successful. Loading Supabase records…');
-        setRecordsDataSource('local');
-        setShouldResync(prev => prev + 1);
-    }, [cloud.signedIn, cloud.account]);
 
     const handleBulkAddMembers = (importedMembers: Member[]) => {
         setMembers(prev => {
@@ -1464,6 +1403,7 @@ const App: React.FC = () => {
                         setCloud={setCloud}
                         onExport={handleFullExport}
                         onImport={handleFullImport}
+                        onCloudSignInSuccess={handleCloudSignInSuccess}
                     />
                 );
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} onAttendanceSaved={setLastAttendanceSavedAt} />;
