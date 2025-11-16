@@ -51,26 +51,27 @@ import type {
 } from './types';
 import { msalSilentSignIn } from './services/oneDrive';
 import {
-    loadEntriesFromSharePoint,
-    loadMembersFromSharePoint,
-    loadWeeklyHistoryFromSharePoint,
-    upsertEntryToSharePoint,
-    deleteEntryFromSharePoint,
-    upsertMemberToSharePoint,
-    deleteMemberFromSharePoint,
-    upsertWeeklyHistoryToSharePoint,
-    deleteWeeklyHistoryFromSharePoint,
-    resetContextCache,
-} from './services/sharepoint';
+    deleteEntryFromSupabase,
+    deleteMemberFromSupabase,
+    deleteWeeklyHistoryFromSupabase,
+    isSupabaseConfigured,
+    loadEntriesFromSupabase,
+    loadMembersFromSupabase,
+    loadWeeklyHistoryFromSupabase,
+    resetSupabaseCache,
+    upsertEntryToSupabase,
+    upsertMemberToSupabase,
+    upsertWeeklyHistoryToSupabase,
+} from './services/supabase';
 import { clearAllTaskData } from './services/tasksStorage';
 import {
     DEFAULT_CURRENCY,
     DEFAULT_MAX_CLASSES,
-    DEFAULT_SHAREPOINT_SITE_URL,
-    DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
-    DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
-    DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
-    DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
+    DEFAULT_SUPABASE_ENTRIES_TABLE,
+    DEFAULT_SUPABASE_HISTORY_TABLE,
+    DEFAULT_SUPABASE_MEMBERS_TABLE,
+    DEFAULT_SUPABASE_TASKS_TABLE,
+    DEFAULT_SUPABASE_URL,
     MANUAL_SYNC_EVENT,
 } from './constants';
 
@@ -85,15 +86,21 @@ const INITIAL_SETTINGS: Settings = {
     currency: DEFAULT_CURRENCY,
     maxClasses: DEFAULT_MAX_CLASSES,
     enforceDirectory: true,
-    sharePointSiteUrl: DEFAULT_SHAREPOINT_SITE_URL,
-    sharePointEntriesListName: DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
-    sharePointMembersListName: DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
-    sharePointHistoryListName: DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
-    sharePointTasksListName: DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
+    supabaseUrl: DEFAULT_SUPABASE_URL,
+    supabaseEntriesTable: DEFAULT_SUPABASE_ENTRIES_TABLE,
+    supabaseMembersTable: DEFAULT_SUPABASE_MEMBERS_TABLE,
+    supabaseHistoryTable: DEFAULT_SUPABASE_HISTORY_TABLE,
+    supabaseTasksTable: DEFAULT_SUPABASE_TASKS_TABLE,
 };
 
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
+
+type ExternalCloudSignInPayload = {
+    account?: unknown;
+    accessToken?: string;
+    message?: string;
+};
 
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
@@ -101,6 +108,7 @@ const PRESENCE_TIMEOUT_MS = 60_000;
 declare global {
     interface Window {
         handleRecordImportClick?: () => void;
+        handleCloudSignInSuccess?: (payload?: ExternalCloudSignInPayload | string) => void;
     }
 }
 
@@ -132,9 +140,10 @@ const App: React.FC = () => {
     });
     const [shouldResync, setShouldResync] = useState(0);
     const [activeSyncTasks, setActiveSyncTasks] = useState(0);
-    const [recordsDataSource, setRecordsDataSource] = useState<'sharepoint' | 'local'>('local');
+    const [recordsDataSource, setRecordsDataSource] = useState<'supabase' | 'local'>('local');
     const [currentDate, setCurrentDate] = useState(() => new Date());
     const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
+    const supabaseConfigured = isSupabaseConfigured();
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -154,6 +163,7 @@ const App: React.FC = () => {
     const presenceIntervalRef = useRef<number | null>(null);
     const presenceStateRef = useRef<{ id: string | null }>({ id: null });
     const financeImportInputRef = useRef<HTMLInputElement | null>(null);
+    const lastCloudHydrationSignatureRef = useRef<string | null>(null);
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
@@ -503,11 +513,11 @@ const App: React.FC = () => {
     }, [currentUser, getStoredPresenceId, removePresenceRecord, setStoredPresenceId, touchPresence, updatePresenceCount]);
 
     useEffect(() => {
-        if (!cloud.signedIn || !cloud.accessToken) {
+        if (!cloud.signedIn || !supabaseConfigured) {
             entrySyncRef.current.clear();
             memberSyncRef.current.clear();
             historySyncRef.current.clear();
-            resetContextCache();
+            resetSupabaseCache();
             setSyncMessage(null);
             setLastSyncedAt(null);
             setActiveSyncTasks(0);
@@ -523,14 +533,16 @@ const App: React.FC = () => {
 
         let active = true;
 
-        const hydrateFromSharePoint = async () => {
+        const hydrateFromSupabase = async () => {
             beginSync();
             try {
-                const historyListName = settings.sharePointHistoryListName || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME;
+                const historyTable = settings.supabaseHistoryTable || DEFAULT_SUPABASE_HISTORY_TABLE;
+                const entriesTable = settings.supabaseEntriesTable || DEFAULT_SUPABASE_ENTRIES_TABLE;
+                const membersTable = settings.supabaseMembersTable || DEFAULT_SUPABASE_MEMBERS_TABLE;
                 const [remoteEntries, remoteMembers, remoteHistory] = await Promise.all([
-                    loadEntriesFromSharePoint(cloud.accessToken!),
-                    loadMembersFromSharePoint(cloud.accessToken!),
-                    loadWeeklyHistoryFromSharePoint(cloud.accessToken!, historyListName),
+                    loadEntriesFromSupabase(entriesTable),
+                    loadMembersFromSupabase(membersTable),
+                    loadWeeklyHistoryFromSupabase(historyTable),
                 ]);
                 if (!active) return;
                 setEntries(prev => mergeEntriesFromCloud(prev, remoteEntries));
@@ -538,11 +550,11 @@ const App: React.FC = () => {
                 setWeeklyHistory(prev => mergeWeeklyHistoryFromCloud(prev, remoteHistory));
                 setSyncMessage(null);
                 setLastSyncedAt(Date.now());
-                setRecordsDataSource('sharepoint');
+                setRecordsDataSource('supabase');
             } catch (error) {
                 if (!active) return;
-                console.error('Initial SharePoint sync failed', error);
-                setSyncMessage(error instanceof Error ? error.message : 'Unable to sync with SharePoint right now.');
+                console.error('Initial Supabase sync failed', error);
+                setSyncMessage(error instanceof Error ? error.message : 'Unable to sync with Supabase right now.');
                 setRecordsDataSource('local');
             } finally {
                 if (active) {
@@ -551,19 +563,20 @@ const App: React.FC = () => {
             }
         };
 
-        hydrateFromSharePoint();
+        hydrateFromSupabase();
 
         return () => {
             active = false;
         };
-    }, [cloud.signedIn, cloud.accessToken, mergeEntriesFromCloud, mergeMembersFromCloud, mergeWeeklyHistoryFromCloud, isOffline, shouldResync, settings.sharePointHistoryListName]);
+    }, [cloud.signedIn, supabaseConfigured, mergeEntriesFromCloud, mergeMembersFromCloud, mergeWeeklyHistoryFromCloud, isOffline, shouldResync, settings.supabaseHistoryTable, settings.supabaseEntriesTable, settings.supabaseMembersTable]);
 
     useEffect(() => {
-        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
+        if (!cloud.signedIn || !supabaseConfigured || isOffline) {
             return;
         }
 
         let active = true;
+        const entriesTable = settings.supabaseEntriesTable || DEFAULT_SUPABASE_ENTRIES_TABLE;
 
         const pushEntryChanges = async () => {
             beginSync();
@@ -575,9 +588,9 @@ const App: React.FC = () => {
                 if (!currentMap.has(id)) {
                     if (stored.entry.spId) {
                         try {
-                            await deleteEntryFromSharePoint(stored.entry, cloud.accessToken!);
+                            await deleteEntryFromSupabase(stored.entry, entriesTable);
                         } catch (error) {
-                            console.error('Failed to remove SharePoint entry', error);
+                            console.error('Failed to remove Supabase entry', error);
                         }
                     }
                     known.delete(id);
@@ -592,19 +605,19 @@ const App: React.FC = () => {
                     const cached = known.get(sanitized.id);
                     if (!cached || cached.signature !== signature) {
                         try {
-                            const spId = await upsertEntryToSharePoint(sanitized, cloud.accessToken!);
+                            const remoteId = await upsertEntryToSupabase(sanitized, entriesTable);
                             if (!active) return;
-                            const updatedEntry = { ...sanitized, spId: spId ?? sanitized.spId };
+                            const updatedEntry = { ...sanitized, spId: remoteId ?? sanitized.spId };
                             known.set(updatedEntry.id, { signature: computeEntrySignature(updatedEntry), entry: updatedEntry });
-                            if (spId && sanitized.spId !== spId) {
-                                setEntries(prev => prev.map(existing => existing.id === updatedEntry.id ? { ...existing, spId } : existing));
+                            if (remoteId && sanitized.spId !== remoteId) {
+                                setEntries(prev => prev.map(existing => existing.id === updatedEntry.id ? { ...existing, spId: remoteId } : existing));
                             }
                             setSyncMessage(null);
                             setLastSyncedAt(Date.now());
                         } catch (error) {
                             if (!active) return;
-                            console.error('Failed to sync entry to SharePoint', error);
-                            setSyncMessage('Unable to upload some financial entries to SharePoint. They remain saved locally.');
+                            console.error('Failed to sync entry to Supabase', error);
+                            setSyncMessage('Unable to upload some financial entries to Supabase. They remain saved locally.');
                         }
                     }
                 }
@@ -620,14 +633,15 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [entries, cloud.signedIn, cloud.accessToken, computeEntrySignature, setEntries, isOffline, shouldResync]);
+    }, [entries, cloud.signedIn, supabaseConfigured, computeEntrySignature, setEntries, isOffline, shouldResync, settings.supabaseEntriesTable]);
 
     useEffect(() => {
-        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
+        if (!cloud.signedIn || !supabaseConfigured || isOffline) {
             return;
         }
 
         let active = true;
+        const membersTable = settings.supabaseMembersTable || DEFAULT_SUPABASE_MEMBERS_TABLE;
 
         const pushMemberChanges = async () => {
             beginSync();
@@ -639,9 +653,9 @@ const App: React.FC = () => {
                 if (!currentMap.has(id)) {
                     if (stored.member.spId) {
                         try {
-                            await deleteMemberFromSharePoint(stored.member, cloud.accessToken!);
+                            await deleteMemberFromSupabase(stored.member, membersTable);
                         } catch (error) {
-                            console.error('Failed to remove SharePoint member', error);
+                            console.error('Failed to remove Supabase member', error);
                         }
                     }
                     known.delete(id);
@@ -656,19 +670,19 @@ const App: React.FC = () => {
                     const cached = known.get(sanitized.id);
                     if (!cached || cached.signature !== signature) {
                         try {
-                            const spId = await upsertMemberToSharePoint(sanitized, cloud.accessToken!);
+                            const remoteId = await upsertMemberToSupabase(sanitized, membersTable);
                             if (!active) return;
-                            const updatedMember = { ...sanitized, spId: spId ?? sanitized.spId };
+                            const updatedMember = { ...sanitized, spId: remoteId ?? sanitized.spId };
                             known.set(updatedMember.id, { signature: computeMemberSignature(updatedMember), member: updatedMember });
-                            if (spId && sanitized.spId !== spId) {
-                                setMembers(prev => prev.map(existing => existing.id === updatedMember.id ? { ...existing, spId } : existing));
+                            if (remoteId && sanitized.spId !== remoteId) {
+                                setMembers(prev => prev.map(existing => existing.id === updatedMember.id ? { ...existing, spId: remoteId } : existing));
                             }
                             setSyncMessage(null);
                             setLastSyncedAt(Date.now());
                         } catch (error) {
                             if (!active) return;
-                            console.error('Failed to sync member to SharePoint', error);
-                            setSyncMessage('Unable to sync some members to SharePoint. Data remains saved locally.');
+                            console.error('Failed to sync member to Supabase', error);
+                            setSyncMessage('Unable to sync some members to Supabase. Data remains saved locally.');
                         }
                     }
                 }
@@ -684,15 +698,15 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [members, cloud.signedIn, cloud.accessToken, computeMemberSignature, setMembers, isOffline, shouldResync]);
+    }, [members, cloud.signedIn, supabaseConfigured, computeMemberSignature, setMembers, isOffline, shouldResync, settings.supabaseMembersTable]);
 
     useEffect(() => {
-        if (!cloud.signedIn || !cloud.accessToken || isOffline) {
+        if (!cloud.signedIn || !supabaseConfigured || isOffline) {
             return;
         }
 
         let active = true;
-        const listName = settings.sharePointHistoryListName || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME;
+        const historyTable = settings.supabaseHistoryTable || DEFAULT_SUPABASE_HISTORY_TABLE;
 
         const pushHistoryChanges = async () => {
             beginSync();
@@ -704,9 +718,9 @@ const App: React.FC = () => {
                 if (!currentMap.has(id)) {
                     if (stored.record.spId) {
                         try {
-                            await deleteWeeklyHistoryFromSharePoint(stored.record, cloud.accessToken!, listName);
+                            await deleteWeeklyHistoryFromSupabase(stored.record, historyTable);
                         } catch (error) {
-                            console.error('Failed to remove SharePoint weekly history record', error);
+                            console.error('Failed to remove Supabase weekly history record', error);
                         }
                     }
                     known.delete(id);
@@ -721,19 +735,19 @@ const App: React.FC = () => {
                     const cached = known.get(sanitized.id);
                     if (!cached || cached.signature !== signature) {
                         try {
-                            const spId = await upsertWeeklyHistoryToSharePoint(sanitized, cloud.accessToken!, listName);
+                            const remoteId = await upsertWeeklyHistoryToSupabase(sanitized, historyTable);
                             if (!active) return;
-                            const updated = { ...sanitized, spId: spId ?? sanitized.spId };
+                            const updated = { ...sanitized, spId: remoteId ?? sanitized.spId };
                             known.set(updated.id, { signature: computeWeeklyHistorySignature(updated), record: updated });
-                            if (spId && sanitized.spId !== spId) {
-                                setWeeklyHistory(prev => prev.map(existing => existing.id === updated.id ? { ...existing, spId } : existing));
+                            if (remoteId && sanitized.spId !== remoteId) {
+                                setWeeklyHistory(prev => prev.map(existing => existing.id === updated.id ? { ...existing, spId: remoteId } : existing));
                             }
                             setSyncMessage(null);
                             setLastSyncedAt(Date.now());
                         } catch (error) {
                             if (!active) return;
-                            console.error('Failed to sync weekly history to SharePoint', error);
-                            setSyncMessage('Unable to sync some weekly history records to SharePoint. They remain saved locally.');
+                            console.error('Failed to sync weekly history to Supabase', error);
+                            setSyncMessage('Unable to sync some weekly history records to Supabase. They remain saved locally.');
                         }
                     }
                 }
@@ -749,7 +763,7 @@ const App: React.FC = () => {
         return () => {
             active = false;
         };
-    }, [weeklyHistory, cloud.signedIn, cloud.accessToken, computeWeeklyHistorySignature, isOffline, shouldResync, settings.sharePointHistoryListName]);
+    }, [weeklyHistory, cloud.signedIn, supabaseConfigured, computeWeeklyHistorySignature, isOffline, shouldResync, settings.supabaseHistoryTable]);
 
     // --- Derived State ---
     const membersMap = useMemo(() => new Map(members.map(m => [m.id, m])), [members]);
@@ -1050,10 +1064,122 @@ const App: React.FC = () => {
         setIsFinanceImportConfirmOpen(true);
     };
 
+    const handleExport = useCallback((format: 'csv' | 'json') => {
+        if (filteredAndSortedEntries.length === 0) {
+            alert('No financial records match the current filters to export.');
+            return;
+        }
+
+        const rows = filteredAndSortedEntries.map(entry => ({
+            id: entry.id,
+            date: entry.date,
+            memberName: entry.memberName,
+            memberId: entry.memberId ?? '',
+            classNumber: entry.classNumber ?? '',
+            type: entry.type,
+            fund: entry.fund ?? '',
+            method: entry.method ?? '',
+            amount: entry.amount,
+            note: entry.note ?? '',
+            spId: entry.spId ?? '',
+        }));
+
+        const filename = `gmct-financial-records-${new Date().toISOString().slice(0, 10)}`;
+
+        if (format === 'csv') {
+            const csv = toCsv(rows);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${filename}.csv`;
+            link.click();
+        } else {
+            const json = JSON.stringify(rows, null, 2);
+            const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${filename}.json`;
+            link.click();
+        }
+    }, [filteredAndSortedEntries]);
+
     const confirmFinanceImport = () => {
         setIsFinanceImportConfirmOpen(false);
         financeImportInputRef.current?.click();
     };
+
+    const handleManualSync = useCallback(() => {
+        if (isOffline) {
+            setSyncMessage('Offline: changes will sync when connection returns.');
+            return;
+        }
+        setShouldResync(prev => prev + 1);
+        setSyncMessage('Manual sync requested. Checking Supabase…');
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event(MANUAL_SYNC_EVENT));
+        }
+    }, [isOffline]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const externalHandler = (payload?: ExternalCloudSignInPayload | string) => {
+            setCloud(prev => {
+                const detail = typeof payload === 'object' && payload !== null ? payload : undefined;
+                const message = typeof payload === 'string'
+                    ? payload
+                    : typeof detail?.message === 'string'
+                    ? detail.message
+                    : 'Microsoft sign-in successful.';
+                const nextAccount = detail?.account !== undefined ? detail.account : prev.account;
+                const nextAccessToken = typeof detail?.accessToken === 'string'
+                    ? detail.accessToken
+                    : prev.accessToken;
+
+                return {
+                    ...prev,
+                    ready: true,
+                    signedIn: true,
+                    account: nextAccount,
+                    accessToken: nextAccessToken,
+                    message,
+                };
+            });
+        };
+
+        window.handleCloudSignInSuccess = externalHandler;
+
+        return () => {
+            if (window.handleCloudSignInSuccess === externalHandler) {
+                delete window.handleCloudSignInSuccess;
+            }
+        };
+    }, [setCloud]);
+
+    useEffect(() => {
+        if (!cloud.signedIn) {
+            lastCloudHydrationSignatureRef.current = null;
+            return;
+        }
+
+        const signatureParts = [
+            cloud.account?.homeAccountId,
+            cloud.account?.localAccountId,
+            cloud.account?.username,
+        ].filter(Boolean);
+        const signature = signatureParts.join('|');
+
+        if (lastCloudHydrationSignatureRef.current === signature) {
+            return;
+        }
+
+        lastCloudHydrationSignatureRef.current = signature;
+        setSyncMessage('Sign-in successful. Loading Supabase records…');
+        setRecordsDataSource('local');
+        setShouldResync(prev => prev + 1);
+    }, [cloud.signedIn, cloud.account]);
 
     const handleBulkAddMembers = (importedMembers: Member[]) => {
         setMembers(prev => {
@@ -1165,11 +1291,11 @@ const App: React.FC = () => {
         switch (activeTab) {
             case 'home': return currentUser.role === 'admin' || currentUser.role === 'finance' ? <AdminLandingPage onNavigate={setActiveTab} currentUser={currentUser} /> : <Dashboard entries={filteredAndSortedEntries} settings={settings} />;
             case 'records': {
-                const isSharePointLive = recordsDataSource === 'sharepoint';
-                const dataSourceText = isSharePointLive
-                    ? 'Data source: SharePoint (live)'
+                const isSupabaseLive = recordsDataSource === 'supabase';
+                const dataSourceText = isSupabaseLive
+                    ? 'Data source: Supabase (live)'
                     : 'Data source: Local records (not synced)';
-                const dataSourceTone = isSharePointLive
+                const dataSourceTone = isSupabaseLive
                     ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
                     : 'border border-amber-200 bg-amber-50 text-amber-700';
                 return (
@@ -1221,9 +1347,9 @@ const App: React.FC = () => {
                         />
                         <div className={`rounded-2xl px-4 py-3 text-sm font-semibold ${dataSourceTone}`} role="status">
                             <div>{dataSourceText}</div>
-                            {!isSharePointLive && (
+                            {!isSupabaseLive && (
                                 <p className="text-xs font-medium text-slate-500 mt-1">
-                                    Updates will sync to SharePoint once a connection is restored.
+                                    Updates will sync to Supabase once a connection is restored.
                                 </p>
                             )}
                         </div>
@@ -1329,7 +1455,17 @@ const App: React.FC = () => {
                     />
                 );
             case 'users': return <UsersTab users={users} setUsers={setUsers} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} />;
+            case 'settings':
+                return (
+                    <SettingsTab
+                        settings={settings}
+                        setSettings={setSettings}
+                        cloud={cloud}
+                        setCloud={setCloud}
+                        onExport={handleFullExport}
+                        onImport={handleFullImport}
+                    />
+                );
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} onAttendanceSaved={setLastAttendanceSavedAt} />;
             case 'admin-attendance': return <AdminAttendanceView members={members} attendance={attendance} settings={settings} currentUser={currentUser} />;
             case 'utilities':
@@ -1338,7 +1474,6 @@ const App: React.FC = () => {
                         entries={entries}
                         members={members}
                         settings={settings}
-                        cloud={cloud}
                         onImportMembers={handleBulkAddMembers}
                         onResetData={handleResetAllData}
                         onSaveTotalClasses={handleSaveTotalClasses}

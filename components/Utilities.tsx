@@ -1,17 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CloudState, Entry, EntryType, Member, Settings } from '../types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { Entry, EntryType, Member, Settings } from '../types';
 import { formatCurrency, fromCsv, sanitizeMember, toCsv, ENTRY_TYPE_VALUES, entryTypeLabel } from '../utils';
-import { testSharePointConnection } from '../services/sharepoint';
-import {
-    SHAREPOINT_ENTRIES_LIST_NAME,
-    SHAREPOINT_MEMBERS_LIST_NAME,
-} from '../constants';
+import { testSupabaseConnection } from '../services/supabase';
 
 type UtilitiesProps = {
     entries: Entry[];
     members: Member[];
     settings: Settings;
-    cloud: CloudState;
     onImportMembers: (members: Member[]) => void;
     onResetData: () => void;
     onSaveTotalClasses: (total: number) => void;
@@ -21,7 +16,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
     entries,
     members,
     settings,
-    cloud,
     onImportMembers,
     onResetData,
     onSaveTotalClasses,
@@ -37,80 +31,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
     const [connectionMessage, setConnectionMessage] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null);
     const [totalClassesInput, setTotalClassesInput] = useState<string>(String(settings.maxClasses));
     const [totalClassesStatus, setTotalClassesStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
-
-    const buildSharePointListUrl = useCallback((siteUrl: string, listName: string) => {
-        if (!siteUrl || !listName) {
-            return null;
-        }
-        try {
-            const url = new URL(siteUrl);
-            const trimmedPath = url.pathname.replace(/\/$/, '');
-            url.pathname = `${trimmedPath}/_layouts/15/start.aspx`;
-            url.hash = `#/Lists/${encodeURIComponent(listName)}/AllItems.aspx`;
-            return url.toString();
-        } catch (error) {
-            console.error('Invalid SharePoint configuration for list shortcuts', error);
-            return null;
-        }
-    }, []);
-
-    const sharePointEntriesUrl = useMemo(
-        () => buildSharePointListUrl(settings.sharePointSiteUrl, settings.sharePointEntriesListName ?? SHAREPOINT_ENTRIES_LIST_NAME),
-        [buildSharePointListUrl, settings.sharePointEntriesListName, settings.sharePointSiteUrl],
-    );
-
-    const sharePointMembersUrl = useMemo(
-        () => buildSharePointListUrl(settings.sharePointSiteUrl, settings.sharePointMembersListName ?? SHAREPOINT_MEMBERS_LIST_NAME),
-        [buildSharePointListUrl, settings.sharePointMembersListName, settings.sharePointSiteUrl],
-    );
-
-    const openSharePointList = useCallback(
-        async (targetUrl: string | null, listLabel: 'finance' | 'members') => {
-            if (!targetUrl) {
-                setConnectionMessage({
-                    tone: 'error',
-                    text: `SharePoint ${listLabel} list URL is not configured. Update the settings and try again.`,
-                });
-                return;
-            }
-
-            if (!cloud.signedIn) {
-                setConnectionMessage({ tone: 'info', text: 'Sign in with Microsoft to open SharePoint lists.' });
-                return;
-            }
-
-            try {
-                const response = await fetch(targetUrl, {
-                    method: 'HEAD',
-                    mode: 'cors',
-                    credentials: 'include',
-                    headers: cloud.accessToken ? { Authorization: `Bearer ${cloud.accessToken}` } : undefined,
-                });
-                if (!response.ok) {
-                    setConnectionMessage({
-                        tone: 'error',
-                        text:
-                            response.status === 403
-                                ? 'Access denied opening the SharePoint list. Confirm that your account has permission.'
-                                : 'The SharePoint list returned an unexpected response. Check the list name or your permissions.',
-                    });
-                    return;
-                }
-            } catch (error) {
-                console.warn('Unable to verify SharePoint list access', error);
-                setConnectionMessage({
-                    tone: 'info',
-                    text: 'Opening SharePoint in a new tab. If the page reports a 404, confirm the site URL and list name.',
-                });
-            }
-
-            const opened = window.open(targetUrl, '_blank', 'noopener');
-            if (!opened) {
-                setConnectionMessage({ tone: 'info', text: 'Please allow pop-ups to open the SharePoint list.' });
-            }
-        },
-        [cloud.accessToken, cloud.signedIn],
-    );
 
     const membersMap = useMemo(() => new Map(members.map(member => [member.id, member])), [members]);
 
@@ -202,14 +122,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
     const handleMemberFile = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-        if (
-            sharePointMembersUrl &&
-            !window.confirm('Manual imports bypass SharePoint safeguards. Continue with a local file import?')
-        ) {
-            event.target.value = '';
-            window.open(sharePointMembersUrl, '_blank', 'noopener');
-            return;
-        }
         const reader = new FileReader();
         reader.onload = () => {
             try {
@@ -230,22 +142,22 @@ const Utilities: React.FC<UtilitiesProps> = ({
     return (
         <div className="space-y-6">
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-6 space-y-4">
-                <h2 className="text-2xl font-bold text-slate-800">SharePoint Tools</h2>
-                <p className="text-sm text-slate-500">Verify your Microsoft 365 connection and keep your class configuration in sync.</p>
+                <h2 className="text-2xl font-bold text-slate-800">Supabase Tools</h2>
+                <p className="text-sm text-slate-500">Verify the cloud database connection and keep your class configuration in sync.</p>
                 <div className="flex flex-col lg:flex-row gap-4">
                     <div className="flex-1 bg-white/80 border border-emerald-200 rounded-2xl p-4 space-y-3">
                         <h3 className="text-lg font-semibold text-slate-700">Test connection</h3>
-                        <p className="text-sm text-slate-500">Make sure the app can reach your SharePoint lists with the current sign-in.</p>
+                        <p className="text-sm text-slate-500">Ensure the configured Supabase project is reachable from this device.</p>
                         <button
                             onClick={async () => {
                                 setConnectionMessage({ tone: 'info', text: 'Checking connection…' });
                                 setIsTestingConnection(true);
                                 try {
-                                    const result = await testSharePointConnection(cloud.accessToken);
+                                    const result = await testSupabaseConnection();
                                     setConnectionMessage({ tone: result.success ? 'success' : 'error', text: result.message });
                                 } catch (error) {
-                                    console.error('Unexpected error while testing SharePoint connection', error);
-                                    setConnectionMessage({ tone: 'error', text: 'Unable to confirm the SharePoint connection right now.' });
+                                    console.error('Unexpected error while testing Supabase connection', error);
+                                    setConnectionMessage({ tone: 'error', text: 'Unable to confirm the Supabase connection right now.' });
                                 } finally {
                                     setIsTestingConnection(false);
                                 }
@@ -253,8 +165,13 @@ const Utilities: React.FC<UtilitiesProps> = ({
                             disabled={isTestingConnection}
                             className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-lg w-full sm:w-auto"
                         >
-                            {isTestingConnection ? 'Testing…' : 'Test SharePoint Connection'}
+                            {isTestingConnection ? 'Testing…' : 'Test Supabase Connection'}
                         </button>
+                        <div className="text-xs text-slate-500 space-y-1">
+                            <p><span className="font-semibold text-slate-700">Project URL:</span> {settings.supabaseUrl || 'Not configured'}</p>
+                            <p><span className="font-semibold text-slate-700">Entries table:</span> {settings.supabaseEntriesTable || 'entries'}</p>
+                            <p><span className="font-semibold text-slate-700">Members table:</span> {settings.supabaseMembersTable || 'members'}</p>
+                        </div>
                         {connectionMessage && (
                             <p
                                 className={`text-sm font-medium ${
@@ -314,24 +231,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
                 <p className="text-slate-500 text-sm">Maintain your member directory and capture lightweight backups of the local dataset.</p>
                 <div className="flex flex-wrap gap-3">
                     <button onClick={() => memberFileRef.current?.click()} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white">Import Members</button>
-                    {sharePointEntriesUrl && (
-                        <button
-                            type="button"
-                            onClick={() => void openSharePointList(sharePointEntriesUrl, 'finance')}
-                            className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
-                        >
-                            Open SharePoint Finance List
-                        </button>
-                    )}
-                    {sharePointMembersUrl && (
-                        <button
-                            type="button"
-                            onClick={() => void openSharePointList(sharePointMembersUrl, 'members')}
-                            className="bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white"
-                        >
-                            Open SharePoint Members List
-                        </button>
-                    )}
                     <button
                         onClick={async () => {
                             try {
@@ -348,11 +247,6 @@ const Utilities: React.FC<UtilitiesProps> = ({
                     </button>
                 </div>
                 <p className="text-xs text-slate-500">CSV headers supported for members: <code>name</code>, <code>classNumber</code>, <code>spId</code>, <code>id</code>.</p>
-                {(sharePointEntriesUrl || sharePointMembersUrl) && (
-                    <p className="text-xs text-emerald-700 font-medium">
-                        Tip: Use the SharePoint shortcuts above to jump straight to the official lists before exporting or importing data.
-                    </p>
-                )}
                 <input ref={memberFileRef} type="file" accept=".csv" className="hidden" onChange={handleMemberFile} />
             </section>
 

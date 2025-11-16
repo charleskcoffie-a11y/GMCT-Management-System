@@ -19,11 +19,11 @@ import type {
     WeeklyHistoryRecord,
 } from './types';
 import {
-    DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
-    DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
-    DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
-    DEFAULT_SHAREPOINT_SITE_URL,
-    DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
+    DEFAULT_SUPABASE_ENTRIES_TABLE,
+    DEFAULT_SUPABASE_HISTORY_TABLE,
+    DEFAULT_SUPABASE_MEMBERS_TABLE,
+    DEFAULT_SUPABASE_TASKS_TABLE,
+    DEFAULT_SUPABASE_URL,
 } from './constants';
 
 export const ENTRY_TYPE_VALUES: EntryType[] = [
@@ -158,11 +158,11 @@ export function sanitizeSettings(raw: any): Settings {
         currency: typeof currencyRaw === 'string' ? sanitizeString(currencyRaw) || 'USD' : 'USD',
         maxClasses: Number.isFinite(parsedMaxClasses) && parsedMaxClasses > 0 ? parsedMaxClasses : 10,
         enforceDirectory,
-        sharePointSiteUrl: sanitizeString(source.sharePointSiteUrl) || DEFAULT_SHAREPOINT_SITE_URL,
-        sharePointEntriesListName: sanitizeString(source.sharePointEntriesListName) || DEFAULT_SHAREPOINT_ENTRIES_LIST_NAME,
-        sharePointMembersListName: sanitizeString(source.sharePointMembersListName) || DEFAULT_SHAREPOINT_MEMBERS_LIST_NAME,
-        sharePointHistoryListName: sanitizeString(source.sharePointHistoryListName) || DEFAULT_SHAREPOINT_HISTORY_LIST_NAME,
-        sharePointTasksListName: sanitizeString(source.sharePointTasksListName) || DEFAULT_SHAREPOINT_TASKS_LIST_NAME,
+        supabaseUrl: sanitizeString(source.supabaseUrl) || DEFAULT_SUPABASE_URL,
+        supabaseEntriesTable: sanitizeString(source.supabaseEntriesTable) || DEFAULT_SUPABASE_ENTRIES_TABLE,
+        supabaseMembersTable: sanitizeString(source.supabaseMembersTable) || DEFAULT_SUPABASE_MEMBERS_TABLE,
+        supabaseHistoryTable: sanitizeString(source.supabaseHistoryTable) || DEFAULT_SUPABASE_HISTORY_TABLE,
+        supabaseTasksTable: sanitizeString(source.supabaseTasksTable) || DEFAULT_SUPABASE_TASKS_TABLE,
     };
 }
 
