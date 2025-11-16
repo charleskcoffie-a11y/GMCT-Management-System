@@ -95,12 +95,19 @@ const INITIAL_SETTINGS: Settings = {
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
+type ExternalCloudSignInPayload = {
+    account?: unknown;
+    accessToken?: string;
+    message?: string;
+};
+
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
 
 declare global {
     interface Window {
         handleRecordImportClick?: () => void;
+        handleCloudSignInSuccess?: (payload?: ExternalCloudSignInPayload | string) => void;
     }
 }
 
@@ -154,6 +161,7 @@ const App: React.FC = () => {
     const presenceIntervalRef = useRef<number | null>(null);
     const presenceStateRef = useRef<{ id: string | null }>({ id: null });
     const financeImportInputRef = useRef<HTMLInputElement | null>(null);
+    const lastCloudHydrationSignatureRef = useRef<string | null>(null);
 
     const getStoredPresenceId = useCallback((): string | null => {
         if (typeof window === 'undefined') {
@@ -1050,10 +1058,123 @@ const App: React.FC = () => {
         setIsFinanceImportConfirmOpen(true);
     };
 
+    const handleExport = useCallback((format: 'csv' | 'json') => {
+        if (filteredAndSortedEntries.length === 0) {
+            alert('No financial records match the current filters to export.');
+            return;
+        }
+
+        const rows = filteredAndSortedEntries.map(entry => ({
+            id: entry.id,
+            date: entry.date,
+            memberName: entry.memberName,
+            memberId: entry.memberId ?? '',
+            classNumber: entry.classNumber ?? '',
+            type: entry.type,
+            fund: entry.fund ?? '',
+            method: entry.method ?? '',
+            amount: entry.amount,
+            note: entry.note ?? '',
+            spId: entry.spId ?? '',
+        }));
+
+        const filename = `gmct-financial-records-${new Date().toISOString().slice(0, 10)}`;
+
+        if (format === 'csv') {
+            const csv = toCsv(rows);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${filename}.csv`;
+            link.click();
+        } else {
+            const json = JSON.stringify(rows, null, 2);
+            const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${filename}.json`;
+            link.click();
+        }
+    }, [filteredAndSortedEntries]);
+
     const confirmFinanceImport = () => {
         setIsFinanceImportConfirmOpen(false);
         financeImportInputRef.current?.click();
     };
+
+    const handleManualSync = useCallback(() => {
+        if (isOffline) {
+            setSyncMessage('Offline: changes will sync when connection returns.');
+            return;
+        }
+        setShouldResync(prev => prev + 1);
+        setSyncMessage('Manual sync requested. Checking SharePoint…');
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event(MANUAL_SYNC_EVENT));
+        }
+    }, [isOffline]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const externalHandler = (payload?: ExternalCloudSignInPayload | string) => {
+            setCloud(prev => {
+                const detail = typeof payload === 'object' && payload !== null ? payload : undefined;
+                const message = typeof payload === 'string'
+                    ? payload
+                    : typeof detail?.message === 'string'
+                    ? detail.message
+                    : 'Microsoft sign-in successful.';
+                const nextAccount = detail?.account !== undefined ? detail.account : prev.account;
+                const nextAccessToken = typeof detail?.accessToken === 'string'
+                    ? detail.accessToken
+                    : prev.accessToken;
+
+                return {
+                    ...prev,
+                    ready: true,
+                    signedIn: true,
+                    account: nextAccount,
+                    accessToken: nextAccessToken,
+                    message,
+                };
+            });
+        };
+
+        window.handleCloudSignInSuccess = externalHandler;
+
+        return () => {
+            if (window.handleCloudSignInSuccess === externalHandler) {
+                delete window.handleCloudSignInSuccess;
+            }
+        };
+    }, [setCloud]);
+
+    useEffect(() => {
+        if (!cloud.signedIn || !cloud.accessToken) {
+            lastCloudHydrationSignatureRef.current = null;
+            return;
+        }
+
+        const signatureParts = [
+            cloud.account?.homeAccountId,
+            cloud.account?.localAccountId,
+            cloud.account?.username,
+            cloud.accessToken,
+        ].filter(Boolean);
+        const signature = signatureParts.join('|');
+
+        if (lastCloudHydrationSignatureRef.current === signature) {
+            return;
+        }
+
+        lastCloudHydrationSignatureRef.current = signature;
+        setSyncMessage('Sign-in successful. Loading SharePoint records…');
+        setRecordsDataSource('local');
+        setShouldResync(prev => prev + 1);
+    }, [cloud.signedIn, cloud.accessToken, cloud.account]);
 
     const handleBulkAddMembers = (importedMembers: Member[]) => {
         setMembers(prev => {
@@ -1329,7 +1450,17 @@ const App: React.FC = () => {
                     />
                 );
             case 'users': return <UsersTab users={users} setUsers={setUsers} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} />;
+            case 'settings':
+                return (
+                    <SettingsTab
+                        settings={settings}
+                        setSettings={setSettings}
+                        cloud={cloud}
+                        setCloud={setCloud}
+                        onExport={handleFullExport}
+                        onImport={handleFullImport}
+                    />
+                );
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} onAttendanceSaved={setLastAttendanceSavedAt} />;
             case 'admin-attendance': return <AdminAttendanceView members={members} attendance={attendance} settings={settings} currentUser={currentUser} />;
             case 'utilities':
