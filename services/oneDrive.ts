@@ -17,6 +17,8 @@ type AuthenticationResult = {
 type PopupRequest = {
     scopes?: string[];
     prompt?: 'select_account' | 'login' | 'consent';
+    popupWindowAttributes?: string;
+    popupName?: string;
 };
 
 type SilentRequest = {
@@ -266,12 +268,18 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
     if (!isBrowserEnvironment()) {
         throw new Error('Sign in is only available in the browser.');
     }
+    const authPopup = openAuthPopup();
+    if (!authPopup) {
+        throw new Error('Your browser blocked the Microsoft sign-in popup. Please allow pop-ups for this site and try again.');
+    }
     const client = await ensureMsalClient();
     assertClient(client);
     try {
         const loginResult = await client.loginPopup({
             scopes: GRAPH_SCOPES,
             prompt: 'select_account',
+            popupName: AUTH_POPUP_NAME,
+            popupWindowAttributes: AUTH_POPUP_FEATURES,
         });
         assertAllowedAccount(loginResult.account);
         const tokenResult = await client.acquireTokenSilent({
@@ -291,5 +299,7 @@ export async function msalInteractiveSignIn(): Promise<SilentSignInResult> {
             ? error.message
             : 'Sign in failed. Please check your credentials or network connection.';
         throw new Error(message);
+    } finally {
+        closePopup(authPopup);
     }
 }

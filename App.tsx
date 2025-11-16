@@ -1380,7 +1380,18 @@ const App: React.FC = () => {
                     />
                 );
             case 'users': return <UsersTab users={users} setUsers={setUsers} />;
-            case 'settings': return <SettingsTab settings={settings} setSettings={setSettings} cloud={cloud} setCloud={setCloud} onExport={handleFullExport} onImport={handleFullImport} />;
+            case 'settings':
+                return (
+                    <SettingsTab
+                        settings={settings}
+                        setSettings={setSettings}
+                        cloud={cloud}
+                        setCloud={setCloud}
+                        onExport={handleFullExport}
+                        onImport={handleFullImport}
+                        onCloudSignInSuccess={handleCloudSignInSuccess}
+                    />
+                );
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} onAttendanceSaved={setLastAttendanceSavedAt} />;
             case 'admin-attendance': return <AdminAttendanceView members={members} attendance={attendance} settings={settings} currentUser={currentUser} />;
             case 'utilities':
