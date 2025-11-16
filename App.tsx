@@ -1050,10 +1050,61 @@ const App: React.FC = () => {
         setIsFinanceImportConfirmOpen(true);
     };
 
+    const handleExport = useCallback((format: 'csv' | 'json') => {
+        if (filteredAndSortedEntries.length === 0) {
+            alert('No financial records match the current filters to export.');
+            return;
+        }
+
+        const rows = filteredAndSortedEntries.map(entry => ({
+            id: entry.id,
+            date: entry.date,
+            memberName: entry.memberName,
+            memberId: entry.memberId ?? '',
+            classNumber: entry.classNumber ?? '',
+            type: entry.type,
+            fund: entry.fund ?? '',
+            method: entry.method ?? '',
+            amount: entry.amount,
+            note: entry.note ?? '',
+            spId: entry.spId ?? '',
+        }));
+
+        const filename = `gmct-financial-records-${new Date().toISOString().slice(0, 10)}`;
+
+        if (format === 'csv') {
+            const csv = toCsv(rows);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${filename}.csv`;
+            link.click();
+        } else {
+            const json = JSON.stringify(rows, null, 2);
+            const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${filename}.json`;
+            link.click();
+        }
+    }, [filteredAndSortedEntries]);
+
     const confirmFinanceImport = () => {
         setIsFinanceImportConfirmOpen(false);
         financeImportInputRef.current?.click();
     };
+
+    const handleManualSync = useCallback(() => {
+        if (isOffline) {
+            setSyncMessage('Offline: changes will sync when connection returns.');
+            return;
+        }
+        setShouldResync(prev => prev + 1);
+        setSyncMessage('Manual sync requested. Checking SharePoint…');
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event(MANUAL_SYNC_EVENT));
+        }
+    }, [isOffline]);
 
     const handleBulkAddMembers = (importedMembers: Member[]) => {
         setMembers(prev => {
