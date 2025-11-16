@@ -49,7 +49,6 @@ import type {
     WeeklyHistoryRecord,
     UserRole,
 } from './types';
-import { msalSilentSignIn } from './services/oneDrive';
 import {
     deleteEntryFromSupabase,
     deleteMemberFromSupabase,
@@ -96,19 +95,12 @@ const INITIAL_SETTINGS: Settings = {
 // Define the keys we can sort the financial records table by
 type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
-type ExternalCloudSignInPayload = {
-    account?: unknown;
-    accessToken?: string;
-    message?: string;
-};
-
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
 
 declare global {
     interface Window {
         handleRecordImportClick?: () => void;
-        handleCloudSignInSuccess?: (payload?: ExternalCloudSignInPayload | string) => void;
     }
 }
 
@@ -154,7 +146,7 @@ const App: React.FC = () => {
     const [endDateFilter, setEndDateFilter] = useState('');
 
 
-    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: '' });
+    const [cloud, setCloud] = useState<CloudState>({ ready: false, signedIn: false, message: 'Initialising Supabase sync…' });
 
     const syncTaskCountRef = useRef(0);
     const entrySyncRef = useRef(new Map<string, { signature: string; entry: Entry }>());
@@ -379,16 +371,11 @@ const App: React.FC = () => {
     }, [readPresenceMap]);
 
     useEffect(() => {
-        const attemptSilentSignin = async () => {
-            const session = await msalSilentSignIn();
-            if (session) {
-                setCloud({ ready: true, signedIn: true, account: session.account, accessToken: session.accessToken, message: 'Signed in silently.' });
-            } else {
-                setCloud({ ready: true, signedIn: false, message: 'Ready for manual sign-in.' });
-            }
-        };
-        attemptSilentSignin();
-    }, []);
+        const message = supabaseConfigured
+            ? 'Supabase sync connected. Changes will sync automatically when online.'
+            : 'Supabase environment variables are missing. Update VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable sync.';
+        setCloud({ ready: true, signedIn: supabaseConfigured, message });
+    }, [supabaseConfigured]);
 
     useEffect(() => {
         setIsNavOpen(false);
@@ -919,7 +906,6 @@ const App: React.FC = () => {
         setActiveUserCount(null);
         setCurrentUser(null);
         setIsNavOpen(false);
-        setCloud(prev => ({ ...prev, signedIn: false, accessToken: undefined, account: undefined, message: 'Ready for manual sign-in.' }));
     };
 
     const handleSaveEntry = (entry: Entry) => {
@@ -1114,7 +1100,7 @@ const App: React.FC = () => {
             return;
         }
         setShouldResync(prev => prev + 1);
-        setSyncMessage('Manual sync requested. Checking SharePoint…');
+        setSyncMessage('Manual sync requested. Syncing with Supabase…');
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new Event(MANUAL_SYNC_EVENT));
         }
@@ -1150,7 +1136,10 @@ const App: React.FC = () => {
         setAttendance([]);
         setWeeklyHistory([]);
         setCurrentUser(null);
-        setCloud({ ready: false, signedIn: false, message: 'Local data cleared. Sign in again to continue.' });
+        const resetMessage = supabaseConfigured
+            ? 'Local data cleared. Supabase sync remains connected.'
+            : 'Local data cleared. Configure Supabase to re-enable sync.';
+        setCloud({ ready: true, signedIn: supabaseConfigured, message: resetMessage });
     };
     
     const handleFullExport = () => {
@@ -1390,6 +1379,7 @@ const App: React.FC = () => {
                         currentUser={currentUser}
                         users={users}
                         cloud={cloud}
+                        settings={settings}
                         isOffline={isOffline}
                     />
                 );
@@ -1400,10 +1390,8 @@ const App: React.FC = () => {
                         settings={settings}
                         setSettings={setSettings}
                         cloud={cloud}
-                        setCloud={setCloud}
                         onExport={handleFullExport}
                         onImport={handleFullImport}
-                        onCloudSignInSuccess={handleCloudSignInSuccess}
                     />
                 );
             case 'attendance': return <Attendance members={members} attendance={attendance} setAttendance={setAttendance} currentUser={currentUser} settings={settings} onAttendanceSaved={setLastAttendanceSavedAt} />;

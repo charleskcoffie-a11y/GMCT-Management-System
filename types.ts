@@ -128,9 +128,7 @@ export interface Task {
 export type Tab = 'home' | 'records' | 'members' | 'insights' | 'users' | 'settings' | 'attendance' | 'admin-attendance' | 'utilities' | 'history' | 'tasks';
 
 export interface CloudState {
-  ready: boolean;
-  signedIn: boolean;
-  account?: any;
-  accessToken?: string;
-  message: string;
+    ready: boolean;
+    signedIn: boolean;
+    message: string;
 }

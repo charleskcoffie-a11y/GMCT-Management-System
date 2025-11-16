@@ -1,21 +1,16 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import type { CloudState, Settings } from '../types';
-import { msalInteractiveSignIn } from '../services/oneDrive';
 
 interface SettingsProps {
     settings: Settings;
     setSettings: React.Dispatch<React.SetStateAction<Settings>>;
     cloud: CloudState;
-    setCloud: React.Dispatch<React.SetStateAction<CloudState>>;
     onExport: () => void;
     onImport: (file: File) => void;
-    onCloudSignInSuccess?: () => void;
 }
 
-const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, setCloud, onExport, onImport, onCloudSignInSuccess }) => {
+const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, onExport, onImport }) => {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
-    const [shareEmail, setShareEmail] = useState('');
-    const [authToast, setAuthToast] = useState<{ tone: 'success' | 'error' | 'info'; message: string } | null>(null);
 
     const handleChange = <K extends keyof Settings>(key: K, value: Settings[K]) => {
         setSettings(prev => ({ ...prev, [key]: value }));
@@ -26,51 +21,6 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
         if (!file) return;
         onImport(file);
         event.target.value = '';
-    };
-
-    const handleManualSignIn = async () => {
-        const preparingMessage = 'Preparing secure sign-in. Complete the Microsoft prompt in the pop-up window.';
-        setAuthToast({ tone: 'info', message: preparingMessage });
-        setCloud(prev => ({ ...prev, ready: true, message: 'Awaiting authentication response…' }));
-        try {
-            const session = await msalInteractiveSignIn();
-            const username = session.account.username ?? 'connected account';
-            const successMessage = `You are now signed in as ${username}.`;
-            setCloud(prev => ({
-                ...prev,
-                ready: true,
-                signedIn: true,
-                account: session.account,
-                accessToken: session.accessToken,
-                message: successMessage,
-            }));
-            setAuthToast({ tone: 'success', message: successMessage });
-            onCloudSignInSuccess?.();
-        } catch (error) {
-            console.error('Microsoft sign-in failed', error);
-            const failureMessage = error instanceof Error && error.message
-                ? error.message
-                : 'Sign in failed. Please check your credentials or network connection.';
-            setCloud(prev => ({
-                ...prev,
-                ready: true,
-                signedIn: false,
-                account: undefined,
-                accessToken: undefined,
-                message: failureMessage,
-            }));
-            setAuthToast({ tone: 'error', message: failureMessage });
-        }
-    };
-
-    const handleShareAccess = () => {
-        const email = shareEmail.trim();
-        if (!email) {
-            setAuthToast({ tone: 'info', message: 'Enter an email address to send an access invite.' });
-            return;
-        }
-        setAuthToast({ tone: 'success', message: `Invitation sent to ${email}. They will receive setup instructions shortly.` });
-        setShareEmail('');
     };
 
     return (
@@ -104,47 +54,67 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, se
             </section>
 
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-emerald-50 to-teal-100/70 p-6 space-y-4">
-                <h2 className="text-2xl font-bold text-slate-800">Cloud Sync Status</h2>
+                <h2 className="text-2xl font-bold text-slate-800">Supabase Sync Status</h2>
                 <div className="border border-dashed border-emerald-200 rounded-xl p-4 bg-white/70 backdrop-blur">
-                    <p className="font-semibold text-slate-700">{cloud.message || 'Cloud sync initialising...'}</p>
-                    <p className="text-sm text-slate-500 mt-1">Signed in: {cloud.signedIn ? 'Yes' : 'No'}</p>
-                    {cloud.account && <p className="text-sm text-slate-500">Account: {cloud.account.username ?? 'Unknown account'}</p>}
+                    <p className="font-semibold text-slate-700">{cloud.message || 'Supabase sync initialising…'}</p>
+                    <p className="text-sm text-slate-500 mt-1">Connected: {cloud.signedIn ? 'Yes' : 'No'}</p>
+                    <p className="text-sm text-slate-500">Ready: {cloud.ready ? 'Yes' : 'No'}</p>
                 </div>
-                <button onClick={() => setCloud(prev => ({ ...prev, message: 'Ready for manual sign-in.', ready: true }))} className="bg-white/80 border border-emerald-200 text-emerald-700 font-semibold px-4 py-2 rounded-lg hover:bg-white w-full md:w-auto">
-                    Update Status
-                </button>
+                <p className="text-xs text-slate-500">Supabase credentials are provided via environment variables when building the app.</p>
             </section>
 
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-indigo-50 to-sky-100/70 p-6 space-y-4">
-                <h2 className="text-2xl font-bold text-slate-800">Sign In &amp; Share Access</h2>
-                <p className="text-sm text-slate-500">Link your Microsoft account or invite a teammate to collaborate securely.</p>
-                <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-                    <button type="button" onClick={handleManualSignIn} className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg shadow-sm w-full lg:w-auto">Sign in with Microsoft</button>
-                    <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                <h2 className="text-2xl font-bold text-slate-800">Supabase Configuration</h2>
+                <p className="text-sm text-slate-500">Define the Supabase project references used throughout the app. Table names must match the tables you created in Supabase.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="flex flex-col gap-2">
+                        <span className="text-sm font-semibold text-slate-600">Project URL</span>
                         <input
-                            value={shareEmail}
-                            onChange={e => setShareEmail(e.target.value)}
-                            type="email"
-                            placeholder="Invite collaborator (email)"
-                            className="border border-slate-300 rounded-lg px-3 py-2 w-full"
+                            type="url"
+                            value={settings.supabaseUrl}
+                            onChange={e => handleChange('supabaseUrl', e.target.value)}
+                            placeholder="https://your-project.supabase.co"
+                            className="border border-slate-300 rounded-lg px-3 py-2"
                         />
-                        <button type="button" onClick={handleShareAccess} className="bg-white/80 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg hover:bg-white w-full sm:w-auto">Send Invite</button>
-                    </div>
+                    </label>
+                    <label className="flex flex-col gap-2">
+                        <span className="text-sm font-semibold text-slate-600">Entries Table</span>
+                        <input
+                            value={settings.supabaseEntriesTable}
+                            onChange={e => handleChange('supabaseEntriesTable', e.target.value)}
+                            placeholder="entries"
+                            className="border border-slate-300 rounded-lg px-3 py-2"
+                        />
+                    </label>
+                    <label className="flex flex-col gap-2">
+                        <span className="text-sm font-semibold text-slate-600">Members Table</span>
+                        <input
+                            value={settings.supabaseMembersTable}
+                            onChange={e => handleChange('supabaseMembersTable', e.target.value)}
+                            placeholder="members"
+                            className="border border-slate-300 rounded-lg px-3 py-2"
+                        />
+                    </label>
+                    <label className="flex flex-col gap-2">
+                        <span className="text-sm font-semibold text-slate-600">Weekly History Table</span>
+                        <input
+                            value={settings.supabaseHistoryTable}
+                            onChange={e => handleChange('supabaseHistoryTable', e.target.value)}
+                            placeholder="weekly_history"
+                            className="border border-slate-300 rounded-lg px-3 py-2"
+                        />
+                    </label>
+                    <label className="flex flex-col gap-2 md:col-span-2">
+                        <span className="text-sm font-semibold text-slate-600">Tasks Table</span>
+                        <input
+                            value={settings.supabaseTasksTable}
+                            onChange={e => handleChange('supabaseTasksTable', e.target.value)}
+                            placeholder="tasks"
+                            className="border border-slate-300 rounded-lg px-3 py-2"
+                        />
+                    </label>
                 </div>
-                {authToast && (
-                    <div
-                        role="status"
-                        className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
-                            authToast.tone === 'success'
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : authToast.tone === 'error'
-                                ? 'border-rose-200 bg-rose-50 text-rose-700'
-                                : 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                        }`}
-                    >
-                        {authToast.message}
-                    </div>
-                )}
+                <p className="text-xs text-slate-500">Update <code className="font-mono">VITE_SUPABASE_URL</code> and <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> in your environment to authorise API calls.</p>
             </section>
         </div>
     );
