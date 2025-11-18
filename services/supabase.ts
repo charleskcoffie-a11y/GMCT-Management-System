@@ -141,55 +141,21 @@ const describeSupabaseError = async (response: Response): Promise<string> => {
 };
 
 const missingTablePattern = /Could not find the table '([^']+)' in the schema cache/i;
-const relationMissingPattern = /relation\s+"([^"]+)"\s+does not exist/i;
-const quotedSegmentRelationPattern = /relation\s+"([^"]+)"\."([^"]+)"\s+does not exist/i;
-const bareRelationPattern = /relation\s+([^\s]+)\s+does not exist/i;
-
-const extractRelationName = (message: string): string | undefined => {
-    const missingTableMatch = missingTablePattern.exec(message);
-    if (missingTableMatch?.[1]) {
-        return missingTableMatch[1];
-    }
-    const quotedSegmentMatch = quotedSegmentRelationPattern.exec(message);
-    if (quotedSegmentMatch) {
-        return `${quotedSegmentMatch[1]}.${quotedSegmentMatch[2]}`;
-    }
-    const relationMatch = relationMissingPattern.exec(message);
-    if (relationMatch?.[1]) {
-        return relationMatch[1];
-    }
-    const bareRelationMatch = bareRelationPattern.exec(message);
-    if (bareRelationMatch?.[1]) {
-        return bareRelationMatch[1];
-    }
-    return undefined;
-};
-
-const ensureSentenceBoundary = (message: string): string => {
-    const trimmed = message.trimEnd();
-    if (!trimmed) {
-        return '';
-    }
-    const lastChar = trimmed.at(-1);
-    if (lastChar && /[.!?]/.test(lastChar)) {
-        return `${trimmed} `;
-    }
-    return `${trimmed}. `;
-};
+const relationMissingPattern = /relation "([^"]+)" does not exist/i;
 
 export const enhanceSupabaseErrorMessage = (message: string): string => {
-    const relation = extractRelationName(message);
-    if (!relation) {
+    const match = missingTablePattern.exec(message) ?? relationMissingPattern.exec(message);
+    if (!match) {
         return message;
     }
 
-    const { schema, table } = parseQualifiedIdentifier(relation);
-    const displayTarget = schema ? `${schema}.${table}` : table;
-    const prefix = ensureSentenceBoundary(message);
-    return `${prefix}Ensure the "${displayTarget}" table exists in Supabase (Settings → Supabase Configuration shows the expected table names).`;
+    const relation = match[1];
+    const segments = relation.split('.');
+    const tableName = segments[segments.length - 1] || relation;
+    return `${message} Ensure the "${tableName}" table exists in Supabase (Settings → Supabase Configuration shows the expected table names).`;
 };
 
-type SupabaseRequestInit = RequestInit & { schema?: string; tableContext?: TableContext };
+type SupabaseRequestInit = RequestInit & { schema?: string };
 
 async function supabaseRequest<T>(path: string, init: SupabaseRequestInit = {}): Promise<T> {
     assertSupabaseConfigured('communicate with Supabase');
@@ -203,11 +169,7 @@ async function supabaseRequest<T>(path: string, init: SupabaseRequestInit = {}):
         headers: mergedHeaders,
     });
     if (!response.ok) {
-        let detail = enhanceSupabaseErrorMessage(await describeSupabaseError(response));
-        if (tableContext) {
-            const prefix = ensureSentenceBoundary(detail);
-            detail = `${prefix}Supabase is configured to use the "${tableContext.displayName}" ${tableContext.label} table. Confirm it exists in your project or update the table names in Settings → Supabase Configuration.`;
-        }
+        const detail = enhanceSupabaseErrorMessage(await describeSupabaseError(response));
         throw new Error(`Supabase request failed: ${detail}`);
     }
     if (response.status === 204) {
