@@ -1,10 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import {
-    configureSupabase,
-    enhanceSupabaseErrorMessage,
-    loadEntriesFromSupabase,
-    resolveTableTarget,
-} from './supabase';
+import { describe, it, expect } from 'vitest';
+import { enhanceSupabaseErrorMessage, resolveTableTarget } from './supabase';
 
 const defaultTable = 'entries';
 
@@ -120,5 +115,18 @@ describe('Supabase request guidance', () => {
             throw new Error('Expected Supabase request to throw an Error');
         }
         expect(caughtError.message).toMatch(/Supabase is configured to use the "public\.entries" entries table/i);
+    });
+});
+
+describe('enhanceSupabaseErrorMessage', () => {
+    it('appends guidance when Supabase reports a missing table', () => {
+        const detail = "Could not find the table 'public.entries' in the schema cache";
+        const enhanced = enhanceSupabaseErrorMessage(detail);
+        expect(enhanced).toContain('Ensure the "entries" table exists in Supabase');
+    });
+
+    it('leaves unrelated error messages unchanged', () => {
+        const detail = 'JWT expired';
+        expect(enhanceSupabaseErrorMessage(detail)).toBe(detail);
     });
 });
