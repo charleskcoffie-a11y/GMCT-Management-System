@@ -45,7 +45,20 @@ export const resetSupabaseCache = () => {
     // no client-side caches yet, placeholder for API parity
 };
 
-type TableTarget = { path: string; schema?: string };
+type TableTarget = {
+    path: string;
+    schema?: string;
+    label: string;
+    displayName: string;
+    table: string;
+};
+
+type TableContext = Pick<TableTarget, 'label' | 'displayName'>;
+
+const buildTableContext = (table: TableTarget): TableContext => ({
+    label: table.label,
+    displayName: table.displayName,
+});
 
 const stripIdentifierQuotes = (segment: string): string => {
     const trimmed = segment.trim();
@@ -56,7 +69,12 @@ const stripIdentifierQuotes = (segment: string): string => {
 };
 
 const parseQualifiedIdentifier = (value: string): { schema?: string; table: string } => {
-    const quotedMatch = value.match(/^"([^"]+)"\."([^"]+)"$/);
+    const trimmed = value.trim();
+    if (trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length >= 2) {
+        return parseQualifiedIdentifier(trimmed.slice(1, -1));
+    }
+
+    const quotedMatch = trimmed.match(/^"([^"]+)"\."([^"]+)"$/);
     if (quotedMatch) {
         return {
             schema: stripIdentifierQuotes(quotedMatch[1]),
@@ -64,16 +82,16 @@ const parseQualifiedIdentifier = (value: string): { schema?: string; table: stri
         };
     }
 
-    const dotIndex = value.lastIndexOf('.');
-    if (dotIndex > 0 && dotIndex < value.length - 1) {
-        const schema = stripIdentifierQuotes(value.slice(0, dotIndex));
-        const table = stripIdentifierQuotes(value.slice(dotIndex + 1));
+    const dotIndex = trimmed.lastIndexOf('.');
+    if (dotIndex > 0 && dotIndex < trimmed.length - 1) {
+        const schema = stripIdentifierQuotes(trimmed.slice(0, dotIndex));
+        const table = stripIdentifierQuotes(trimmed.slice(dotIndex + 1));
         if (schema && table) {
             return { schema, table };
         }
     }
 
-    return { table: stripIdentifierQuotes(value) };
+    return { table: stripIdentifierQuotes(trimmed) };
 };
 
 export const resolveTableTarget = (tableName: string | undefined, fallback: string, label: string): TableTarget => {
@@ -88,10 +106,11 @@ export const resolveTableTarget = (tableName: string | undefined, fallback: stri
     }
 
     const encoded = encodeURIComponent(table);
+    const displayName = schema ? `${schema}.${table}` : table;
     if (schema) {
-        return { path: encoded, schema };
+        return { path: encoded, schema, label, displayName, table };
     }
-    return { path: encoded };
+    return { path: encoded, label, displayName, table };
 };
 
 const buildHeaders = (extra?: Record<string, string>): HeadersInit => ({
@@ -141,7 +160,7 @@ type SupabaseRequestInit = RequestInit & { schema?: string };
 async function supabaseRequest<T>(path: string, init: SupabaseRequestInit = {}): Promise<T> {
     assertSupabaseConfigured('communicate with Supabase');
     const restEndpoint = getRestEndpoint();
-    const { schema, headers, ...requestInit } = init;
+    const { schema, tableContext, headers, ...requestInit } = init;
     const schemaHeaders = schema ? { 'Accept-Profile': schema, 'Content-Profile': schema } : undefined;
     const baseHeaders = buildHeaders(schemaHeaders);
     const mergedHeaders = headers ? { ...baseHeaders, ...headers } : baseHeaders;
@@ -190,25 +209,37 @@ const buildDeleteFilter = (id: string): string => {
 
 export async function loadEntriesFromSupabase(tableName?: string): Promise<Entry[]> {
     const table = resolveTableTarget(tableName, SUPABASE_ENTRIES_TABLE, 'entries');
-    const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, { schema: table.schema });
+    const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, {
+        schema: table.schema,
+        tableContext: buildTableContext(table),
+    });
     return Array.isArray(rows) ? rows.map(normaliseEntry) : [];
 }
 
 export async function loadMembersFromSupabase(tableName?: string): Promise<Member[]> {
     const table = resolveTableTarget(tableName, SUPABASE_MEMBERS_TABLE, 'members');
-    const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, { schema: table.schema });
+    const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, {
+        schema: table.schema,
+        tableContext: buildTableContext(table),
+    });
     return Array.isArray(rows) ? rows.map(normaliseMember) : [];
 }
 
 export async function loadWeeklyHistoryFromSupabase(tableName?: string): Promise<WeeklyHistoryRecord[]> {
     const table = resolveTableTarget(tableName, SUPABASE_HISTORY_TABLE, 'weekly history');
-    const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, { schema: table.schema });
+    const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, {
+        schema: table.schema,
+        tableContext: buildTableContext(table),
+    });
     return Array.isArray(rows) ? rows.map(normaliseWeeklyHistory) : [];
 }
 
 export async function loadTasksFromSupabase(tableName?: string): Promise<Task[]> {
     const table = resolveTableTarget(tableName, SUPABASE_TASKS_TABLE, 'tasks');
-    const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, { schema: table.schema });
+    const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, {
+        schema: table.schema,
+        tableContext: buildTableContext(table),
+    });
     return Array.isArray(rows) ? rows.map(normaliseTask) : [];
 }
 
@@ -220,6 +251,7 @@ export async function upsertEntryToSupabase(entry: Entry, tableName?: string): P
     const result = await supabaseRequest<SupabaseRow[]>(`${table.path}?on_conflict=id`, {
         method: 'POST',
         schema: table.schema,
+        tableContext: buildTableContext(table),
         headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
         body,
     });
@@ -236,6 +268,7 @@ export async function upsertMemberToSupabase(member: Member, tableName?: string)
     const result = await supabaseRequest<SupabaseRow[]>(`${table.path}?on_conflict=id`, {
         method: 'POST',
         schema: table.schema,
+        tableContext: buildTableContext(table),
         headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
         body,
     });
@@ -254,6 +287,7 @@ export async function upsertWeeklyHistoryToSupabase(
     const result = await supabaseRequest<SupabaseRow[]>(`${table.path}?on_conflict=id`, {
         method: 'POST',
         schema: table.schema,
+        tableContext: buildTableContext(table),
         headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
         body,
     });
@@ -270,6 +304,7 @@ export async function deleteEntryFromSupabase(entry: Entry, tableName?: string):
     await supabaseRequest(`${table.path}?${buildDeleteFilter(id)}`, {
         method: 'DELETE',
         schema: table.schema,
+        tableContext: buildTableContext(table),
         headers: { Prefer: 'return=minimal' },
     });
 }
@@ -283,6 +318,7 @@ export async function deleteMemberFromSupabase(member: Member, tableName?: strin
     await supabaseRequest(`${table.path}?${buildDeleteFilter(id)}`, {
         method: 'DELETE',
         schema: table.schema,
+        tableContext: buildTableContext(table),
         headers: { Prefer: 'return=minimal' },
     });
 }
@@ -296,6 +332,7 @@ export async function deleteWeeklyHistoryFromSupabase(record: WeeklyHistoryRecor
     await supabaseRequest(`${table.path}?${buildDeleteFilter(id)}`, {
         method: 'DELETE',
         schema: table.schema,
+        tableContext: buildTableContext(table),
         headers: { Prefer: 'return=minimal' },
     });
 }
@@ -308,6 +345,7 @@ export async function upsertTaskToSupabase(task: Task, tableName?: string): Prom
     const result = await supabaseRequest<SupabaseRow[]>(`${table.path}?on_conflict=id`, {
         method: 'POST',
         schema: table.schema,
+        tableContext: buildTableContext(table),
         headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
         body,
     });
@@ -324,6 +362,7 @@ export async function deleteTaskFromSupabase(task: Task | { id: string; spId?: s
     await supabaseRequest(`${table.path}?${buildDeleteFilter(id)}`, {
         method: 'DELETE',
         schema: table.schema,
+        tableContext: buildTableContext(table),
         headers: { Prefer: 'return=minimal' },
     });
 }
@@ -334,7 +373,10 @@ export async function testSupabaseConnection(): Promise<ConnectionResult> {
     }
     try {
         const table = resolveTableTarget(undefined, SUPABASE_ENTRIES_TABLE, 'entries');
-        await supabaseRequest(`${table.path}?select=id&limit=1`, { schema: table.schema });
+        await supabaseRequest(`${table.path}?select=id&limit=1`, {
+            schema: table.schema,
+            tableContext: buildTableContext(table),
+        });
         return { success: true, message: 'Successfully connected to Supabase.' };
     } catch (error) {
         console.error('Supabase connectivity check failed', error);
