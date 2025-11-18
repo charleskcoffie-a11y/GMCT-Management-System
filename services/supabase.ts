@@ -121,6 +121,21 @@ const describeSupabaseError = async (response: Response): Promise<string> => {
     return `status ${response.status}`;
 };
 
+const missingTablePattern = /Could not find the table '([^']+)' in the schema cache/i;
+const relationMissingPattern = /relation "([^"]+)" does not exist/i;
+
+export const enhanceSupabaseErrorMessage = (message: string): string => {
+    const match = missingTablePattern.exec(message) ?? relationMissingPattern.exec(message);
+    if (!match) {
+        return message;
+    }
+
+    const relation = match[1];
+    const segments = relation.split('.');
+    const tableName = segments[segments.length - 1] || relation;
+    return `${message} Ensure the "${tableName}" table exists in Supabase (Settings → Supabase Configuration shows the expected table names).`;
+};
+
 type SupabaseRequestInit = RequestInit & { schema?: string };
 
 async function supabaseRequest<T>(path: string, init: SupabaseRequestInit = {}): Promise<T> {
@@ -135,7 +150,7 @@ async function supabaseRequest<T>(path: string, init: SupabaseRequestInit = {}):
         headers: mergedHeaders,
     });
     if (!response.ok) {
-        const detail = await describeSupabaseError(response);
+        const detail = enhanceSupabaseErrorMessage(await describeSupabaseError(response));
         throw new Error(`Supabase request failed: ${detail}`);
     }
     if (response.status === 204) {
