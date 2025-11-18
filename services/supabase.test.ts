@@ -29,24 +29,11 @@ describe('enhanceSupabaseErrorMessage', () => {
     it('appends guidance when Supabase reports a missing table', () => {
         const detail = "Could not find the table 'public.entries' in the schema cache";
         const enhanced = enhanceSupabaseErrorMessage(detail);
-        expect(enhanced).toContain('Ensure the "public.entries" table exists in Supabase');
-        expect(enhanced).toContain('. Ensure the');
+        expect(enhanced).toContain('Ensure the "entries" table exists in Supabase');
     });
 
     it('leaves unrelated error messages unchanged', () => {
         const detail = 'JWT expired';
         expect(enhanceSupabaseErrorMessage(detail)).toBe(detail);
-    });
-
-    it('derives table names from relation missing errors', () => {
-        const detail = 'relation "custom.entries" does not exist';
-        const enhanced = enhanceSupabaseErrorMessage(detail);
-        expect(enhanced).toContain('Ensure the "custom.entries" table exists in Supabase');
-    });
-
-    it('avoids duplicate punctuation when the original message ends with a sentence terminator', () => {
-        const detail = "Could not find the table 'public.entries' in the schema cache.";
-        const enhanced = enhanceSupabaseErrorMessage(detail);
-        expect(enhanced).toContain('schema cache. Ensure');
     });
 });
