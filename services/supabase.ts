@@ -18,18 +18,28 @@ type MutableMember = Member & { spId?: string };
 type MutableHistoryRecord = WeeklyHistoryRecord & { spId?: string };
 type MutableTask = Task & { spId?: string };
 
-const REST_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1` : '';
+const normalizeSupabaseValue = (value?: string): string => (typeof value === 'string' ? value.trim() : '');
+
+let supabaseUrl = normalizeSupabaseValue(SUPABASE_URL);
+let supabaseAnonKey = normalizeSupabaseValue(SUPABASE_ANON_KEY);
+
+const getRestEndpoint = (): string => (supabaseUrl ? `${supabaseUrl.replace(/\/$/, '')}/rest/v1` : '');
+
+export const configureSupabase = (url?: string, anonKey?: string) => {
+    supabaseUrl = normalizeSupabaseValue(url);
+    supabaseAnonKey = normalizeSupabaseValue(anonKey);
+};
 
 const assertSupabaseConfigured = (action: string) => {
-    if (!REST_ENDPOINT) {
-        throw new Error(`Supabase URL is not configured. Unable to ${action}. Set VITE_SUPABASE_URL in your environment.`);
+    if (!getRestEndpoint()) {
+        throw new Error(`Supabase URL is not configured. Unable to ${action}. Add it in Settings.`);
     }
-    if (!SUPABASE_ANON_KEY) {
-        throw new Error(`Supabase anonymous key is not configured. Unable to ${action}. Set VITE_SUPABASE_ANON_KEY.`);
+    if (!supabaseAnonKey) {
+        throw new Error(`Supabase anonymous key is not configured. Unable to ${action}. Add it in Settings.`);
     }
 };
 
-export const isSupabaseConfigured = (): boolean => Boolean(REST_ENDPOINT && SUPABASE_ANON_KEY);
+export const isSupabaseConfigured = (): boolean => Boolean(getRestEndpoint() && supabaseAnonKey);
 
 export const resetSupabaseCache = () => {
     // no client-side caches yet, placeholder for API parity
@@ -44,8 +54,8 @@ const tablePath = (tableName: string | undefined, fallback: string, label: strin
 };
 
 const buildHeaders = (extra?: Record<string, string>): HeadersInit => ({
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    apikey: supabaseAnonKey,
+    Authorization: `Bearer ${supabaseAnonKey}`,
     Accept: 'application/json',
     'Content-Type': 'application/json',
     ...(extra ?? {}),
@@ -72,7 +82,8 @@ const describeSupabaseError = async (response: Response): Promise<string> => {
 
 async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
     assertSupabaseConfigured('communicate with Supabase');
-    const response = await fetch(`${REST_ENDPOINT}/${path}`, {
+    const restEndpoint = getRestEndpoint();
+    const response = await fetch(`${restEndpoint}/${path}`, {
         ...init,
         headers: init.headers ?? buildHeaders(),
     });
@@ -249,7 +260,7 @@ export async function deleteTaskFromSupabase(task: Task | { id: string; spId?: s
 
 export async function testSupabaseConnection(): Promise<ConnectionResult> {
     if (!isSupabaseConfigured()) {
-        return { success: false, message: 'Supabase environment variables are missing. Update VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.' };
+        return { success: false, message: 'Supabase credentials are missing. Add your project URL and anon key in Settings.' };
     }
     try {
         const table = tablePath(undefined, SUPABASE_ENTRIES_TABLE, 'entries');

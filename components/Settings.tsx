@@ -60,7 +60,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, on
                     <p className="text-sm text-slate-500 mt-1">Connected: {cloud.signedIn ? 'Yes' : 'No'}</p>
                     <p className="text-sm text-slate-500">Ready: {cloud.ready ? 'Yes' : 'No'}</p>
                 </div>
-                <p className="text-xs text-slate-500">Supabase credentials are provided via environment variables when building the app.</p>
+                <p className="text-xs text-slate-500">Enter your Supabase project URL and anon key below (stored locally on this device).</p>
             </section>
 
             <section className="rounded-3xl shadow-lg border border-white/60 bg-gradient-to-br from-white via-indigo-50 to-sky-100/70 p-6 space-y-4">
@@ -76,6 +76,16 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, on
                             placeholder="https://your-project.supabase.co"
                             className="border border-slate-300 rounded-lg px-3 py-2"
                         />
+                    </label>
+                    <label className="flex flex-col gap-2 md:col-span-2">
+                        <span className="text-sm font-semibold text-slate-600">Anon/Public API Key</span>
+                        <textarea
+                            value={settings.supabaseAnonKey}
+                            onChange={e => handleChange('supabaseAnonKey', e.target.value)}
+                            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                            className="border border-slate-300 rounded-lg px-3 py-2 min-h-[64px] font-mono text-xs"
+                        />
+                        <span className="text-xs text-slate-500">The anon key is safe to share with end-users and required for the REST API.</span>
                     </label>
                     <label className="flex flex-col gap-2">
                         <span className="text-sm font-semibold text-slate-600">Entries Table</span>
@@ -114,7 +124,7 @@ const SettingsTab: React.FC<SettingsProps> = ({ settings, setSettings, cloud, on
                         />
                     </label>
                 </div>
-                <p className="text-xs text-slate-500">Update <code className="font-mono">VITE_SUPABASE_URL</code> and <code className="font-mono">VITE_SUPABASE_ANON_KEY</code> in your environment to authorise API calls.</p>
+                <p className="text-xs text-slate-500">These values are encrypted at rest in your browser storage. Updating the URL or anon key immediately reconfigures Supabase sync.</p>
             </section>
         </div>
     );

@@ -26,6 +26,7 @@ export interface Settings {
     maxClasses: number;
     enforceDirectory: boolean; // if true, member names must be selected from the directory
     supabaseUrl: string;
+    supabaseAnonKey: string;
     supabaseEntriesTable: string;
     supabaseMembersTable: string;
     supabaseHistoryTable: string;

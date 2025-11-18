@@ -65,7 +65,7 @@ The single-page application exposes dedicated modules through a navigation sideb
 * **Styling** – Tailwind CSS provides responsive, utility-first styling across the interface.
 * **Data Persistence** – Local Storage serves as the offline-first datastore for all records.
 * **Data Integrity** – All persisted or imported data flows through sanitizer utilities to enforce expected shapes and prevent corruption.
-* **Optional Cloud Sync** – A Supabase REST integration keeps financial records, members, weekly reports, and tasks in sync. Configure your Supabase URL, anon key, and table names via environment variables in `constants.ts`.
+* **Optional Cloud Sync** – A Supabase REST integration keeps financial records, members, weekly reports, and tasks in sync. Configure your Supabase URL, anon key, and table names from the **Settings → Supabase Configuration** panel (environment variables simply provide the initial defaults).
 
 ### 4. Deployment & Setup
 
@@ -174,7 +174,7 @@ If you prefer to restrict access further, create policies that only allow reques
 
 ## Part 2: Application Code Configuration
 
-The app reads Supabase credentials and default table names from Vite environment variables. Define them in a local `.env` file for development and as GitHub secrets for deployment:
+The app reads Supabase credentials and default table names from Vite environment variables to pre-populate the values shown in **Settings → Supabase Configuration**. Define them in a local `.env` file for development and as GitHub secrets for deployment:
 
 ```bash
 VITE_SUPABASE_URL=https://your-project.supabase.co
@@ -185,7 +185,7 @@ VITE_SUPABASE_HISTORY_TABLE=weekly_history
 VITE_SUPABASE_TASKS_TABLE=tasks
 ```
 
-Only the URL and anon key are strictly required—the table variables let you point the app at differently named tables if needed. After the app boots, administrators can also adjust the saved table names inside **Settings → Supabase Configuration** without rebuilding the code.
+Only the URL and anon key are strictly required—the table variables let you point the app at differently named tables if needed. Once the app loads, administrators can adjust the URL, anon key, and table names inside **Settings → Supabase Configuration** without rebuilding the code. Any edits are persisted locally in the browser and take effect immediately.
 
 ---
 

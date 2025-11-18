@@ -19,6 +19,7 @@ import type {
     WeeklyHistoryRecord,
 } from './types';
 import {
+    DEFAULT_SUPABASE_ANON_KEY,
     DEFAULT_SUPABASE_ENTRIES_TABLE,
     DEFAULT_SUPABASE_HISTORY_TABLE,
     DEFAULT_SUPABASE_MEMBERS_TABLE,
@@ -159,6 +160,7 @@ export function sanitizeSettings(raw: any): Settings {
         maxClasses: Number.isFinite(parsedMaxClasses) && parsedMaxClasses > 0 ? parsedMaxClasses : 10,
         enforceDirectory,
         supabaseUrl: sanitizeString(source.supabaseUrl) || DEFAULT_SUPABASE_URL,
+        supabaseAnonKey: sanitizeString(source.supabaseAnonKey) || DEFAULT_SUPABASE_ANON_KEY,
         supabaseEntriesTable: sanitizeString(source.supabaseEntriesTable) || DEFAULT_SUPABASE_ENTRIES_TABLE,
         supabaseMembersTable: sanitizeString(source.supabaseMembersTable) || DEFAULT_SUPABASE_MEMBERS_TABLE,
         supabaseHistoryTable: sanitizeString(source.supabaseHistoryTable) || DEFAULT_SUPABASE_HISTORY_TABLE,

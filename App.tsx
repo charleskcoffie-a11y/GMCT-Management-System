@@ -50,6 +50,7 @@ import type {
     UserRole,
 } from './types';
 import {
+    configureSupabase,
     deleteEntryFromSupabase,
     deleteMemberFromSupabase,
     deleteWeeklyHistoryFromSupabase,
@@ -66,6 +67,7 @@ import { clearAllTaskData } from './services/tasksStorage';
 import {
     DEFAULT_CURRENCY,
     DEFAULT_MAX_CLASSES,
+    DEFAULT_SUPABASE_ANON_KEY,
     DEFAULT_SUPABASE_ENTRIES_TABLE,
     DEFAULT_SUPABASE_HISTORY_TABLE,
     DEFAULT_SUPABASE_MEMBERS_TABLE,
@@ -86,6 +88,7 @@ const INITIAL_SETTINGS: Settings = {
     maxClasses: DEFAULT_MAX_CLASSES,
     enforceDirectory: true,
     supabaseUrl: DEFAULT_SUPABASE_URL,
+    supabaseAnonKey: DEFAULT_SUPABASE_ANON_KEY,
     supabaseEntriesTable: DEFAULT_SUPABASE_ENTRIES_TABLE,
     supabaseMembersTable: DEFAULT_SUPABASE_MEMBERS_TABLE,
     supabaseHistoryTable: DEFAULT_SUPABASE_HISTORY_TABLE,
@@ -135,7 +138,10 @@ const App: React.FC = () => {
     const [recordsDataSource, setRecordsDataSource] = useState<'supabase' | 'local'>('local');
     const [currentDate, setCurrentDate] = useState(() => new Date());
     const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
-    const supabaseConfigured = isSupabaseConfigured();
+    const supabaseConfigured = useMemo(() => {
+        configureSupabase(settings.supabaseUrl, settings.supabaseAnonKey);
+        return isSupabaseConfigured();
+    }, [settings.supabaseUrl, settings.supabaseAnonKey]);
     
     // -- Sorting & Filtering State for Financial Records --
     const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
@@ -373,7 +379,7 @@ const App: React.FC = () => {
     useEffect(() => {
         const message = supabaseConfigured
             ? 'Supabase sync connected. Changes will sync automatically when online.'
-            : 'Supabase environment variables are missing. Update VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable sync.';
+            : 'Supabase credentials are missing. Add your project URL and anon key in Settings to enable sync.';
         setCloud({ ready: true, signedIn: supabaseConfigured, message });
     }, [supabaseConfigured]);
 
