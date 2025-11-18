@@ -47,22 +47,51 @@ export const resetSupabaseCache = () => {
 
 type TableTarget = { path: string; schema?: string };
 
-const tablePath = (tableName: string | undefined, fallback: string, label: string): TableTarget => {
+const stripIdentifierQuotes = (segment: string): string => {
+    const trimmed = segment.trim();
+    if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
+        return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+};
+
+const parseQualifiedIdentifier = (value: string): { schema?: string; table: string } => {
+    const quotedMatch = value.match(/^"([^"]+)"\."([^"]+)"$/);
+    if (quotedMatch) {
+        return {
+            schema: stripIdentifierQuotes(quotedMatch[1]),
+            table: stripIdentifierQuotes(quotedMatch[2]),
+        };
+    }
+
+    const dotIndex = value.lastIndexOf('.');
+    if (dotIndex > 0 && dotIndex < value.length - 1) {
+        const schema = stripIdentifierQuotes(value.slice(0, dotIndex));
+        const table = stripIdentifierQuotes(value.slice(dotIndex + 1));
+        if (schema && table) {
+            return { schema, table };
+        }
+    }
+
+    return { table: stripIdentifierQuotes(value) };
+};
+
+export const resolveTableTarget = (tableName: string | undefined, fallback: string, label: string): TableTarget => {
     const trimmed = (tableName ?? fallback ?? '').trim();
     if (!trimmed) {
         throw new Error(`Supabase ${label} table is not configured.`);
     }
 
-    const dotIndex = trimmed.indexOf('.');
-    if (dotIndex > 0 && dotIndex < trimmed.length - 1) {
-        const schema = trimmed.slice(0, dotIndex).trim();
-        const table = trimmed.slice(dotIndex + 1).trim();
-        if (schema && table) {
-            return { path: encodeURIComponent(table), schema };
-        }
+    const { schema, table } = parseQualifiedIdentifier(trimmed);
+    if (!table) {
+        throw new Error(`Supabase ${label} table is not configured.`);
     }
 
-    return { path: encodeURIComponent(trimmed) };
+    const encoded = encodeURIComponent(table);
+    if (schema) {
+        return { path: encoded, schema };
+    }
+    return { path: encoded };
 };
 
 const buildHeaders = (extra?: Record<string, string>): HeadersInit => ({
@@ -145,31 +174,31 @@ const buildDeleteFilter = (id: string): string => {
 };
 
 export async function loadEntriesFromSupabase(tableName?: string): Promise<Entry[]> {
-    const table = tablePath(tableName, SUPABASE_ENTRIES_TABLE, 'entries');
+    const table = resolveTableTarget(tableName, SUPABASE_ENTRIES_TABLE, 'entries');
     const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, { schema: table.schema });
     return Array.isArray(rows) ? rows.map(normaliseEntry) : [];
 }
 
 export async function loadMembersFromSupabase(tableName?: string): Promise<Member[]> {
-    const table = tablePath(tableName, SUPABASE_MEMBERS_TABLE, 'members');
+    const table = resolveTableTarget(tableName, SUPABASE_MEMBERS_TABLE, 'members');
     const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, { schema: table.schema });
     return Array.isArray(rows) ? rows.map(normaliseMember) : [];
 }
 
 export async function loadWeeklyHistoryFromSupabase(tableName?: string): Promise<WeeklyHistoryRecord[]> {
-    const table = tablePath(tableName, SUPABASE_HISTORY_TABLE, 'weekly history');
+    const table = resolveTableTarget(tableName, SUPABASE_HISTORY_TABLE, 'weekly history');
     const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, { schema: table.schema });
     return Array.isArray(rows) ? rows.map(normaliseWeeklyHistory) : [];
 }
 
 export async function loadTasksFromSupabase(tableName?: string): Promise<Task[]> {
-    const table = tablePath(tableName, SUPABASE_TASKS_TABLE, 'tasks');
+    const table = resolveTableTarget(tableName, SUPABASE_TASKS_TABLE, 'tasks');
     const rows = await supabaseRequest<SupabaseRow[]>(`${table.path}?select=*`, { schema: table.schema });
     return Array.isArray(rows) ? rows.map(normaliseTask) : [];
 }
 
 export async function upsertEntryToSupabase(entry: Entry, tableName?: string): Promise<string | undefined> {
-    const table = tablePath(tableName, SUPABASE_ENTRIES_TABLE, 'entries');
+    const table = resolveTableTarget(tableName, SUPABASE_ENTRIES_TABLE, 'entries');
     const sanitized: MutableEntry = { ...sanitizeEntry(entry) };
     sanitized.spId = sanitized.spId ?? sanitized.id;
     const body = JSON.stringify({ ...sanitized, id: sanitized.id });
@@ -185,7 +214,7 @@ export async function upsertEntryToSupabase(entry: Entry, tableName?: string): P
 }
 
 export async function upsertMemberToSupabase(member: Member, tableName?: string): Promise<string | undefined> {
-    const table = tablePath(tableName, SUPABASE_MEMBERS_TABLE, 'members');
+    const table = resolveTableTarget(tableName, SUPABASE_MEMBERS_TABLE, 'members');
     const sanitized: MutableMember = { ...sanitizeMember(member) };
     sanitized.spId = sanitized.spId ?? sanitized.id;
     const body = JSON.stringify({ ...sanitized, id: sanitized.id });
@@ -203,7 +232,7 @@ export async function upsertWeeklyHistoryToSupabase(
     record: WeeklyHistoryRecord,
     tableName?: string,
 ): Promise<string | undefined> {
-    const table = tablePath(tableName, SUPABASE_HISTORY_TABLE, 'weekly history');
+    const table = resolveTableTarget(tableName, SUPABASE_HISTORY_TABLE, 'weekly history');
     const sanitized: MutableHistoryRecord = { ...sanitizeWeeklyHistoryRecord(record) };
     sanitized.spId = sanitized.spId ?? sanitized.id;
     const body = JSON.stringify({ ...sanitized, id: sanitized.id });
@@ -218,7 +247,7 @@ export async function upsertWeeklyHistoryToSupabase(
 }
 
 export async function deleteEntryFromSupabase(entry: Entry, tableName?: string): Promise<void> {
-    const table = tablePath(tableName, SUPABASE_ENTRIES_TABLE, 'entries');
+    const table = resolveTableTarget(tableName, SUPABASE_ENTRIES_TABLE, 'entries');
     const id = entry.spId ?? entry.id;
     if (!id) {
         return;
@@ -231,7 +260,7 @@ export async function deleteEntryFromSupabase(entry: Entry, tableName?: string):
 }
 
 export async function deleteMemberFromSupabase(member: Member, tableName?: string): Promise<void> {
-    const table = tablePath(tableName, SUPABASE_MEMBERS_TABLE, 'members');
+    const table = resolveTableTarget(tableName, SUPABASE_MEMBERS_TABLE, 'members');
     const id = member.spId ?? member.id;
     if (!id) {
         return;
@@ -244,7 +273,7 @@ export async function deleteMemberFromSupabase(member: Member, tableName?: strin
 }
 
 export async function deleteWeeklyHistoryFromSupabase(record: WeeklyHistoryRecord, tableName?: string): Promise<void> {
-    const table = tablePath(tableName, SUPABASE_HISTORY_TABLE, 'weekly history');
+    const table = resolveTableTarget(tableName, SUPABASE_HISTORY_TABLE, 'weekly history');
     const id = record.spId ?? record.id;
     if (!id) {
         return;
@@ -257,7 +286,7 @@ export async function deleteWeeklyHistoryFromSupabase(record: WeeklyHistoryRecor
 }
 
 export async function upsertTaskToSupabase(task: Task, tableName?: string): Promise<string | undefined> {
-    const table = tablePath(tableName, SUPABASE_TASKS_TABLE, 'tasks');
+    const table = resolveTableTarget(tableName, SUPABASE_TASKS_TABLE, 'tasks');
     const sanitized: MutableTask = { ...sanitizeTask(task) };
     sanitized.spId = sanitized.spId ?? sanitized.id;
     const body = JSON.stringify({ ...sanitized, id: sanitized.id });
@@ -272,7 +301,7 @@ export async function upsertTaskToSupabase(task: Task, tableName?: string): Prom
 }
 
 export async function deleteTaskFromSupabase(task: Task | { id: string; spId?: string }, tableName?: string): Promise<void> {
-    const table = tablePath(tableName, SUPABASE_TASKS_TABLE, 'tasks');
+    const table = resolveTableTarget(tableName, SUPABASE_TASKS_TABLE, 'tasks');
     const id = task.spId ?? task.id;
     if (!id) {
         return;
@@ -289,7 +318,7 @@ export async function testSupabaseConnection(): Promise<ConnectionResult> {
         return { success: false, message: 'Supabase credentials are missing. Add your project URL and anon key in Settings.' };
     }
     try {
-        const table = tablePath(undefined, SUPABASE_ENTRIES_TABLE, 'entries');
+        const table = resolveTableTarget(undefined, SUPABASE_ENTRIES_TABLE, 'entries');
         await supabaseRequest(`${table.path}?select=id&limit=1`, { schema: table.schema });
         return { success: true, message: 'Successfully connected to Supabase.' };
     } catch (error) {
