@@ -101,11 +101,6 @@ type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
 
-const formatShortId = (value?: string | null): string => {
-    if (!value) return '—';
-    return value.slice(0, 8);
-};
-
 const describeSyncError = (error: unknown, fallback: string): string => {
     if (error instanceof Error && error.message.trim()) {
         return error.message.trim();
