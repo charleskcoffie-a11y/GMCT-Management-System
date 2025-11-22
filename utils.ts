@@ -93,6 +93,11 @@ export function capitalize(str: string): string {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+export function formatShortId(value?: string | null): string {
+    if (!value) return '—';
+    return value.slice(0, 8);
+}
+
 
 // --- Data Type Sanitizers ---
 

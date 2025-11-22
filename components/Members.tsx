@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { Member, Settings } from '../types';
-import { fromCsv, generateId, sanitizeMember, toCsv } from '../utils';
+import { formatShortId, fromCsv, generateId, sanitizeMember, toCsv } from '../utils';
 
 const formatShortId = (value?: string | null): string => {
     if (!value) return '—';
