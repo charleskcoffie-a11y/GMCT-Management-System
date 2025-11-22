@@ -101,6 +101,13 @@ type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
 
+const describeSyncError = (error: unknown, fallback: string): string => {
+    if (error instanceof Error && error.message.trim()) {
+        return error.message.trim();
+    }
+    return fallback;
+};
+
 declare global {
     interface Window {
         handleRecordImportClick?: () => void;
@@ -610,7 +617,8 @@ const App: React.FC = () => {
                         } catch (error) {
                             if (!active) return;
                             console.error('Failed to sync entry to Supabase', error);
-                            setSyncMessage('Unable to upload some financial entries to Supabase. They remain saved locally.');
+                            const detail = describeSyncError(error, 'They remain saved locally.');
+                            setSyncMessage(`Unable to upload some financial entries to Supabase. ${detail}`);
                         }
                     }
                 }
@@ -675,7 +683,8 @@ const App: React.FC = () => {
                         } catch (error) {
                             if (!active) return;
                             console.error('Failed to sync member to Supabase', error);
-                            setSyncMessage('Unable to sync some members to Supabase. Data remains saved locally.');
+                            const detail = describeSyncError(error, 'Data remains saved locally.');
+                            setSyncMessage(`Unable to sync some members to Supabase. ${detail}`);
                         }
                     }
                 }
@@ -740,7 +749,8 @@ const App: React.FC = () => {
                         } catch (error) {
                             if (!active) return;
                             console.error('Failed to sync weekly history to Supabase', error);
-                            setSyncMessage('Unable to sync some weekly history records to Supabase. They remain saved locally.');
+                            const detail = describeSyncError(error, 'They remain saved locally.');
+                            setSyncMessage(`Unable to sync some weekly history records to Supabase. ${detail}`);
                         }
                     }
                 }
