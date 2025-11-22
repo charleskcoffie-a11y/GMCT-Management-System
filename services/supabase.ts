@@ -328,12 +328,12 @@ export async function deleteTaskFromSupabase(task: Task | { id: string; spId?: s
     });
 }
 
-export async function testSupabaseConnection(): Promise<ConnectionResult> {
+export async function testSupabaseConnection(tableName?: string): Promise<ConnectionResult> {
     if (!isSupabaseConfigured()) {
         return { success: false, message: 'Supabase credentials are missing. Add your project URL and anon key in Settings.' };
     }
     try {
-        const table = resolveTableTarget(undefined, SUPABASE_ENTRIES_TABLE, 'entries');
+        const table = resolveTableTarget(tableName, SUPABASE_ENTRIES_TABLE, 'entries');
         await supabaseRequest(`${table.path}?select=id&limit=1`, { schema: table.schema });
         return { success: true, message: 'Successfully connected to Supabase.' };
     } catch (error) {
