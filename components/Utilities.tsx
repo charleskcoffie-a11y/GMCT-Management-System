@@ -153,7 +153,7 @@ const Utilities: React.FC<UtilitiesProps> = ({
                                 setConnectionMessage({ tone: 'info', text: 'Checking connection…' });
                                 setIsTestingConnection(true);
                                 try {
-                                    const result = await testSupabaseConnection();
+                                    const result = await testSupabaseConnection(settings.supabaseEntriesTable);
                                     setConnectionMessage({ tone: result.success ? 'success' : 'error', text: result.message });
                                 } catch (error) {
                                     console.error('Unexpected error while testing Supabase connection', error);

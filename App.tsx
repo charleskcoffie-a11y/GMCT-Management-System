@@ -33,6 +33,7 @@ import {
     sanitizeString,
     ENTRY_TYPE_VALUES,
     entryTypeLabel,
+    formatShortId,
     generateId,
     fromCsv,
     toCsv,
@@ -100,6 +101,13 @@ type SortKey = 'date' | 'memberName' | 'type' | 'amount' | 'classNumber';
 
 const PRESENCE_STORAGE_KEY = 'gmct-presence';
 const PRESENCE_TIMEOUT_MS = 60_000;
+
+const describeSyncError = (error: unknown, fallback: string): string => {
+    if (error instanceof Error && error.message.trim()) {
+        return error.message.trim();
+    }
+    return fallback;
+};
 
 declare global {
     interface Window {
@@ -224,18 +232,51 @@ const App: React.FC = () => {
 
     const mergeEntriesFromCloud = useCallback((localEntries: Entry[], remoteEntries: Entry[]) => {
         const sanitizedRemote = remoteEntries.map(remote => sanitizeEntry(remote));
-        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+        const remoteById = new Map<string, Entry>();
+        const remoteBySpId = new Map<string, Entry>();
+
+        for (const remote of sanitizedRemote) {
+            if (remote.id) {
+                remoteById.set(remote.id, remote);
+            }
+            if (remote.spId) {
+                remoteBySpId.set(remote.spId, remote);
+            }
+        }
+
+        const consumeRemote = (remote?: Entry | null) => {
+            if (!remote) return null;
+            remoteById.delete(remote.id);
+            if (remote.spId) {
+                remoteBySpId.delete(remote.spId);
+            }
+            return remote;
+        };
 
         const merged = localEntries.map(local => {
-            const remote = remoteMap.get(local.id);
-            if (remote) {
-                remoteMap.delete(local.id);
-                return { ...local, ...remote };
+            const remote = consumeRemote(
+                remoteById.get(local.id)
+                || (local.spId ? remoteById.get(local.spId) : undefined)
+                || remoteBySpId.get(local.id),
+            );
+
+            if (!remote) {
+                return local;
             }
-            return local;
+
+            const mergedEntry = { ...local, ...remote };
+
+            if (remote.id && remote.spId && remote.spId === local.id && remote.id !== local.id) {
+                mergedEntry.id = local.id;
+                mergedEntry.spId = remote.id;
+            } else if (remote.id && !local.spId && remote.id !== local.id) {
+                mergedEntry.spId = remote.id;
+            }
+
+            return mergedEntry;
         });
 
-        for (const remote of remoteMap.values()) {
+        for (const remote of remoteById.values()) {
             merged.push(remote);
         }
 
@@ -251,18 +292,51 @@ const App: React.FC = () => {
 
     const mergeMembersFromCloud = useCallback((localMembers: Member[], remoteMembers: Member[]) => {
         const sanitizedRemote = remoteMembers.map(remote => sanitizeMember(remote));
-        const remoteMap = new Map(sanitizedRemote.map(remote => [remote.id, remote]));
+        const remoteById = new Map<string, Member>();
+        const remoteBySpId = new Map<string, Member>();
+
+        for (const remote of sanitizedRemote) {
+            if (remote.id) {
+                remoteById.set(remote.id, remote);
+            }
+            if (remote.spId) {
+                remoteBySpId.set(remote.spId, remote);
+            }
+        }
+
+        const consumeRemote = (remote?: Member | null) => {
+            if (!remote) return null;
+            remoteById.delete(remote.id);
+            if (remote.spId) {
+                remoteBySpId.delete(remote.spId);
+            }
+            return remote;
+        };
 
         const merged = localMembers.map(local => {
-            const remote = remoteMap.get(local.id);
-            if (remote) {
-                remoteMap.delete(local.id);
-                return { ...local, ...remote };
+            const remote = consumeRemote(
+                remoteById.get(local.id)
+                || (local.spId ? remoteById.get(local.spId) : undefined)
+                || remoteBySpId.get(local.id),
+            );
+
+            if (!remote) {
+                return local;
             }
-            return local;
+
+            const mergedMember = { ...local, ...remote };
+
+            if (remote.id && remote.spId && remote.spId === local.id && remote.id !== local.id) {
+                mergedMember.id = local.id;
+                mergedMember.spId = remote.id;
+            } else if (remote.id && !local.spId && remote.id !== local.id) {
+                mergedMember.spId = remote.id;
+            }
+
+            return mergedMember;
         });
 
-        for (const remote of remoteMap.values()) {
+        for (const remote of remoteById.values()) {
             merged.push(remote);
         }
 
@@ -610,7 +684,8 @@ const App: React.FC = () => {
                         } catch (error) {
                             if (!active) return;
                             console.error('Failed to sync entry to Supabase', error);
-                            setSyncMessage('Unable to upload some financial entries to Supabase. They remain saved locally.');
+                            const detail = describeSyncError(error, 'They remain saved locally.');
+                            setSyncMessage(`Unable to upload some financial entries to Supabase. ${detail}`);
                         }
                     }
                 }
@@ -675,7 +750,8 @@ const App: React.FC = () => {
                         } catch (error) {
                             if (!active) return;
                             console.error('Failed to sync member to Supabase', error);
-                            setSyncMessage('Unable to sync some members to Supabase. Data remains saved locally.');
+                            const detail = describeSyncError(error, 'Data remains saved locally.');
+                            setSyncMessage(`Unable to sync some members to Supabase. ${detail}`);
                         }
                     }
                 }
@@ -740,7 +816,8 @@ const App: React.FC = () => {
                         } catch (error) {
                             if (!active) return;
                             console.error('Failed to sync weekly history to Supabase', error);
-                            setSyncMessage('Unable to sync some weekly history records to Supabase. They remain saved locally.');
+                            const detail = describeSyncError(error, 'They remain saved locally.');
+                            setSyncMessage(`Unable to sync some weekly history records to Supabase. ${detail}`);
                         }
                     }
                 }
@@ -864,7 +941,7 @@ const App: React.FC = () => {
             <tr key={entry.id} className="bg-white border-b hover:bg-slate-50">
                 <td className="px-6 py-4">{entry.date}</td>
                 <td className="px-6 py-4 font-medium text-slate-900">{entry.memberName || '—'}</td>
-                <td className="px-6 py-4 font-mono text-sm text-slate-600">{entry.memberID?.substring(0, 8) || '—'}</td>
+                <td className="px-6 py-4 font-mono text-sm text-slate-600" title={entry.memberID || undefined}>{formatShortId(entry.memberID)}</td>
                 <td className="px-6 py-4 text-center">{member?.classNumber ? `Class ${member.classNumber}` : '—'}</td>
                 <td className="px-6 py-4">{entryTypeLabel(entry.type)}</td>
                 <td className="px-6 py-4">{formatCurrency(entry.amount, settings.currency)}</td>

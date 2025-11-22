@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { Member, Settings } from '../types';
-import { fromCsv, generateId, sanitizeMember, toCsv } from '../utils';
+import { formatShortId, fromCsv, generateId, sanitizeMember, toCsv } from '../utils';
 
 interface MembersProps {
     members: Member[];
@@ -26,7 +26,8 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                 if (!query) return true;
                 const nameMatch = member.name.toLowerCase().includes(query);
                 const idMatch = member.id.toLowerCase().includes(query);
-                return nameMatch || idMatch;
+                const spIdMatch = (member.spId ?? '').toLowerCase().includes(query);
+                return nameMatch || idMatch || spIdMatch;
             })
             .filter(member => (classFilter === 'all' ? true : (member.classNumber ?? '') === classFilter));
     }, [members, search, classFilter]);
@@ -181,7 +182,7 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
                     <h2 className="text-xl font-bold text-slate-800">Member Directory</h2>
                     <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or ID" className="border border-slate-300 rounded-lg px-3 py-2 w-full sm:w-64" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, member number, or ID" className="border border-slate-300 rounded-lg px-3 py-2 w-full sm:w-64" />
                         <select value={classFilter} onChange={e => setClassFilter(e.target.value as typeof classFilter)} className="border border-slate-300 rounded-lg px-3 py-2 w-full sm:w-40">
                             <option value="all">All classes</option>
                             {Array.from({ length: settings.maxClasses }, (_, i) => String(i + 1)).map(num => (
@@ -194,8 +195,9 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                     <table className="w-full text-left text-slate-600">
                         <thead className="uppercase text-sm text-slate-500 border-b">
                             <tr>
-                                <th className="px-4 py-2">Member ID</th>
                                 <th className="px-4 py-2">Name</th>
+                                <th className="px-4 py-2">Member Number</th>
+                                <th className="px-4 py-2">Directory ID</th>
                                 <th className="px-4 py-2">Class</th>
                                 <th className="px-4 py-2">Actions</th>
                             </tr>
@@ -203,7 +205,6 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                         <tbody>
                             {filteredMembers.map(member => (
                                 <tr key={member.id} className="border-b last:border-0">
-                                    <td className="px-4 py-2 font-mono text-xs text-slate-500 break-all">{member.id}</td>
                                     <td className="px-4 py-2 font-medium text-slate-800">
                                         {editingId === member.id ? (
                                             <input value={editName} onChange={e => setEditName(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1 w-full" />
@@ -211,6 +212,8 @@ const Members: React.FC<MembersProps> = ({ members, setMembers, settings }) => {
                                             member.name
                                         )}
                                     </td>
+                                    <td className="px-4 py-2 font-mono text-xs text-slate-600" title={member.spId || member.id}>{formatShortId(member.spId ?? member.id)}</td>
+                                    <td className="px-4 py-2 font-mono text-xs text-slate-600" title={member.id}>{formatShortId(member.id)}</td>
                                     <td className="px-4 py-2">
                                         {editingId === member.id ? (
                                             <select value={editClassNumber} onChange={e => setEditClassNumber(e.target.value)} className="border border-slate-300 rounded-lg px-2 py-1">
